@@ -72,6 +72,9 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
             issuer_url=AnyHttpUrl(settings.auth_issuer_url),
             resource_server_url=AnyHttpUrl(f"{settings.public_base_url.rstrip('/')}/mcp"),
             required_scopes=[],
+            # The verifier authenticates scoped opaque LAN tokens, while the public adapter
+            # validates the Cloudflare JWT issuer and audience before MCP dispatch.
+            validate_token_resource=False,
         ),
         token_verifier=MCPTokenVerifier(container.authenticator),
     )
