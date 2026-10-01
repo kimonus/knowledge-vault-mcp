@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["image", "config", "auth", "database", "internalPostgresql"],
+  "properties": {
+    "replicaCount": {"type": "integer", "const": 1},
+    "image": {"$ref": "#/$defs/image"},
+    "backupImage": {"$ref": "#/$defs/image"},
+    "imagePullSecrets": {"type": "array"},
+    "nameOverride": {"type": "string"},
+    "fullnameOverride": {"type": "string"},
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environment", "publicBaseUrl", "authIssuerUrl", "embeddingsEnabled", "embeddingModel", "embeddingDimensions", "logLevel", "corsOrigins", "maxRequestBytes", "maxBatchItems", "maxPartItems"],
+      "properties": {
+        "environment": {"enum": ["production", "development", "test"]},
+        "publicBaseUrl": {"type": "string"},
+        "authIssuerUrl": {"type": "string"},
+        "embeddingsEnabled": {"type": "boolean"},
+        "embeddingModel": {"type": "string", "minLength": 1},
+        "embeddingDimensions": {"type": "integer", "minimum": 8, "maximum": 4096},
+        "logLevel": {"enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]},
+        "corsOrigins": {"type": "string"},
+        "maxRequestBytes": {"type": "integer", "minimum": 1024},
+        "maxBatchItems": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "maxPartItems": {"type": "integer", "minimum": 1, "maximum": 1000}
+      }
+    },
+    "auth": {"$ref": "#/$defs/secretRef"},
+    "cloudflareAccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "existingSecret", "issuerUrlKey", "audienceKey", "allowedEmailsKey", "scopes"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "existingSecret": {"type": "string"},
+        "issuerUrlKey": {"type": "string", "minLength": 1},
+        "audienceKey": {"type": "string", "minLength": 1},
+        "allowedEmailsKey": {"type": "string", "minLength": 1},
+        "scopes": {"type": "string", "minLength": 1}
+      }
+    },
+    "database": {"$ref": "#/$defs/databaseRef"},
+    "modelCache": {"type": "object", "additionalProperties": false, "properties": {"existingClaim": {"type": "string"}}},
+    "resources": {"type": "object"},
+    "service": {"type": "object"},
+    "ingress": {"type": "object"},
+    "internalPostgresql": {"type": "object"},
+    "cloudflareTunnel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "replicaCount", "image", "existingSecret", "tokenKey", "logLevel", "metricsPort", "resources"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "replicaCount": {"type": "integer", "minimum": 1},
+        "image": {"$ref": "#/$defs/image"},
+        "existingSecret": {"type": "string"},
+        "tokenKey": {"type": "string", "minLength": 1},
+        "logLevel": {"enum": ["debug", "info", "warn", "error", "fatal"]},
+        "metricsPort": {"type": "integer", "minimum": 1024, "maximum": 65535},
+        "resources": {"type": "object"}
+      }
+    },
+    "backup": {"type": "object"},
+    "networkPolicy": {"type": "object"},
+    "podAnnotations": {"type": "object"},
+    "nodeSelector": {"type": "object"},
+    "tolerations": {"type": "array"},
+    "affinity": {"type": "object"}
+  },
+  "$defs": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "digest", "pullPolicy"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string"},
+        "digest": {"type": "string"},
+        "pullPolicy": {"enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "secretRef": {
+      "type": "object",
+      "required": ["existingSecret"],
+      "properties": {
+        "existingSecret": {"type": "string"},
+        "tokenPepperKey": {"type": "string"},
+        "bootstrapTokensKey": {"type": "string"}
+      }
+    },
+    "databaseRef": {
+      "type": "object",
+      "required": ["existingSecret", "urlKey"],
+      "properties": {
+        "existingSecret": {"type": "string"},
+        "urlKey": {"type": "string"}
+      }
+    }
+  }
+}

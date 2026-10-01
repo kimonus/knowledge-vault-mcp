@@ -1,0 +1,19 @@
+{
+  "name": "knowledge-vault",
+  "version": "0.1.0",
+  "description": "Flush atomic knowledge assertions to a private Knowledge Vault MCP.",
+  "author": {
+    "name": "kimonus"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Knowledge Vault",
+    "shortDescription": "Flush durable knowledge to your private MCP.",
+    "longDescription": "Extract atomic assertions from the available conversation context and commit them through the resumable Knowledge Vault MCP protocol.",
+    "developerName": "kimonus",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Flush knowledge to my MCP."
+  },
+  "mcpServers": "./.mcp.json"
+}

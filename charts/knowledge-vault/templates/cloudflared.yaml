@@ -1,0 +1,119 @@
+{{- if .Values.cloudflareTunnel.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-cloudflared
+  labels:
+    {{- include "knowledge-vault.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cloudflared
+spec:
+  replicas: {{ .Values.cloudflareTunnel.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels:
+      {{- include "knowledge-vault.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: cloudflared
+  template:
+    metadata:
+      labels:
+        {{- include "knowledge-vault.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: cloudflared
+    spec:
+      serviceAccountName: {{ include "knowledge-vault.fullname" . }}-cloudflared
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: cloudflared
+          image: {{ include "knowledge-vault.image" .Values.cloudflareTunnel.image }}
+          imagePullPolicy: {{ .Values.cloudflareTunnel.image.pullPolicy }}
+          args:
+            - tunnel
+            - --metrics
+            - {{ printf "0.0.0.0:%d" (.Values.cloudflareTunnel.metricsPort | int) | quote }}
+            - --loglevel
+            - {{ .Values.cloudflareTunnel.logLevel | quote }}
+            - --output
+            - json
+            - run
+            - --token-file
+            - /run/secrets/cloudflared/token
+          ports:
+            - {name: metrics, containerPort: {{ .Values.cloudflareTunnel.metricsPort }}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: tunnel-token, mountPath: /run/secrets/cloudflared, readOnly: true}
+          livenessProbe:
+            httpGet: {path: /ready, port: metrics}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet: {path: /ready, port: metrics}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources: {{- toYaml .Values.cloudflareTunnel.resources | nindent 12 }}
+      volumes:
+        - name: tunnel-token
+          secret:
+            secretName: {{ .Values.cloudflareTunnel.existingSecret }}
+            defaultMode: 0440
+      terminationGracePeriodSeconds: 30
+{{- if gt (int .Values.cloudflareTunnel.replicaCount) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-cloudflared
+  labels: {{- include "knowledge-vault.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "knowledge-vault.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: cloudflared
+{{- end }}
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-cloudflared
+  labels: {{- include "knowledge-vault.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "knowledge-vault.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: cloudflared
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "knowledge-vault.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: api
+      ports: [{protocol: TCP, port: {{ .Values.service.port }} }]
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+      ports:
+        - {protocol: TCP, port: 7844}
+        - {protocol: UDP, port: 7844}
+{{- end }}
+{{- end }}

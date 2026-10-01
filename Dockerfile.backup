@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1.11
+FROM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36 AS restic-builder
+ARG RESTIC_COMMIT=6aa3a516ce654808a1f28f9fa21e9b7c8e6e90bf
+WORKDIR /src
+# All upgraded modules below are explicitly version-pinned.
+# hadolint ignore=DL3062
+RUN git clone --filter=blob:none https://github.com/restic/restic.git . \
+    && git checkout --detach "${RESTIC_COMMIT}" \
+    && go get golang.org/x/crypto@v0.55.0 golang.org/x/net@v0.58.0 \
+      golang.org/x/text@v0.41.0 google.golang.org/grpc@v1.83.2 \
+    && go mod tidy \
+    && go run build.go \
+    && ./restic version
+
+FROM postgres:17-bookworm@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652 AS postgres-runtime
+RUN rm -f /usr/local/bin/gosu /etc/ssl/private/ssl-cert-snakeoil.key
+
+FROM scratch
+LABEL org.opencontainers.image.title="Knowledge Vault backup" \
+      org.opencontainers.image.description="Pinned pg_dump and restic backup helper" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.version="0.1.0"
+ENV PATH="/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin"
+# Flatten the sanitized stage so deleted upstream test keys and gosu are absent from every layer.
+# hadolint ignore=DL3067
+COPY --from=postgres-runtime / /
+COPY --from=restic-builder /src/restic /usr/local/bin/restic
+COPY --chown=999:999 scripts/backup.sh /usr/local/bin/knowledge-vault-backup
+USER 999:999
+ENTRYPOINT ["/usr/local/bin/knowledge-vault-backup"]

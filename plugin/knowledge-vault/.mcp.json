@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "knowledge-vault": {
+      "type": "http",
+      "url": "${KNOWLEDGE_VAULT_MCP_URL}",
+      "headers": {
+        "Authorization": "Bearer ${KNOWLEDGE_VAULT_MCP_TOKEN}"
+      }
+    }
+  }
+}

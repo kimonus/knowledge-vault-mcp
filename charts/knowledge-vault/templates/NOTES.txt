@@ -1,0 +1,11 @@
+Knowledge Vault is installed as a private ClusterIP service.
+
+Check migration and workload status:
+  kubectl get jobs,pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+MCP endpoint inside the cluster:
+  http://{{ include "knowledge-vault.fullname" . }}:{{ .Values.service.port }}/mcp
+
+No credentials were generated. The referenced auth, database, optional edge-transport, and backup
+Secrets must be created by the operator. Cloudflare is the included reference connector, not an MCP
+requirement. See docs/runbooks/minikube.md and docs/runbooks/cloudflare-access.md.

@@ -1,0 +1,68 @@
+{{- if .Values.internalPostgresql.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-postgresql
+  labels: {{- include "knowledge-vault.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "knowledge-vault.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+  ports: [{name: postgresql, port: 5432, targetPort: postgresql}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-postgresql
+  labels: {{- include "knowledge-vault.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "knowledge-vault.fullname" . }}-postgresql
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "knowledge-vault.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgresql
+  template:
+    metadata:
+      labels:
+        {{- include "knowledge-vault.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgresql
+    spec:
+      serviceAccountName: {{ include "knowledge-vault.fullname" . }}-ops
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, fsGroup: 999, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: postgresql
+          image: {{ include "knowledge-vault.image" .Values.internalPostgresql.image }}
+          ports: [{name: postgresql, containerPort: 5432}]
+          env:
+            - name: POSTGRES_USER
+              valueFrom: {secretKeyRef: {name: {{ .Values.internalPostgresql.existingSecret }}, key: {{ .Values.internalPostgresql.usernameKey }}}}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ .Values.internalPostgresql.existingSecret }}, key: {{ .Values.internalPostgresql.passwordKey }}}}
+            - name: POSTGRES_DB
+              valueFrom: {secretKeyRef: {name: {{ .Values.internalPostgresql.existingSecret }}, key: {{ .Values.internalPostgresql.databaseKey }}}}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: run, mountPath: /var/run/postgresql}
+            - {name: tmp, mountPath: /tmp}
+          readinessProbe: {exec: {command: ["/bin/sh", "-ec", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]}, initialDelaySeconds: 5, periodSeconds: 5}
+          livenessProbe: {exec: {command: ["/bin/sh", "-ec", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]}, initialDelaySeconds: 30, periodSeconds: 10}
+          resources: {{- toYaml .Values.internalPostgresql.resources | nindent 12 }}
+      volumes:
+        - name: run
+          emptyDir: {sizeLimit: 16Mi}
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if .Values.internalPostgresql.storageClass }}
+        storageClassName: {{ .Values.internalPostgresql.storageClass }}
+        {{- end }}
+        resources: {requests: {storage: {{ .Values.internalPostgresql.storage }}}}
+{{- end }}

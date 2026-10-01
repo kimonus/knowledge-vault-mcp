@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-api
+  labels: {{- include "knowledge-vault.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels:
+      {{- include "knowledge-vault.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
+      labels:
+        {{- include "knowledge-vault.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      serviceAccountName: {{ include "knowledge-vault.fullname" . }}-api
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
+      initContainers:
+        - name: wait-for-migration
+          image: {{ include "knowledge-vault.image" .Values.image }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args: ["until alembic current 2>/dev/null | grep -q 0001_initial; do sleep 2; done"]
+          envFrom:
+            - configMapRef: {name: {{ include "knowledge-vault.fullname" . }}}
+          env:
+            - name: KNOWLEDGE_VAULT_DATABASE_URL
+              valueFrom: {secretKeyRef: {name: {{ .Values.database.existingSecret }}, key: {{ .Values.database.urlKey }}}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+      containers:
+        - name: api
+          image: {{ include "knowledge-vault.image" .Values.image }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports: [{name: http, containerPort: 8000, protocol: TCP}]
+          envFrom:
+            - configMapRef: {name: {{ include "knowledge-vault.fullname" . }}}
+          env:
+            - name: KNOWLEDGE_VAULT_DATABASE_URL
+              valueFrom: {secretKeyRef: {name: {{ .Values.database.existingSecret }}, key: {{ .Values.database.urlKey }}}}
+            - name: KNOWLEDGE_VAULT_TOKEN_PEPPER
+              valueFrom: {secretKeyRef: {name: {{ .Values.auth.existingSecret }}, key: {{ .Values.auth.tokenPepperKey }}}}
+            - name: KNOWLEDGE_VAULT_BOOTSTRAP_TOKENS
+              valueFrom: {secretKeyRef: {name: {{ .Values.auth.existingSecret }}, key: {{ .Values.auth.bootstrapTokensKey }}}}
+            {{- if .Values.cloudflareAccess.enabled }}
+            - name: KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_ENABLED
+              value: "true"
+            - name: KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_ISSUER_URL
+              valueFrom: {secretKeyRef: {name: {{ .Values.cloudflareAccess.existingSecret }}, key: {{ .Values.cloudflareAccess.issuerUrlKey }}}}
+            - name: KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_AUDIENCE
+              valueFrom: {secretKeyRef: {name: {{ .Values.cloudflareAccess.existingSecret }}, key: {{ .Values.cloudflareAccess.audienceKey }}}}
+            - name: KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_ALLOWED_EMAILS
+              valueFrom: {secretKeyRef: {name: {{ .Values.cloudflareAccess.existingSecret }}, key: {{ .Values.cloudflareAccess.allowedEmailsKey }}}}
+            - name: KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_SCOPES
+              value: {{ .Values.cloudflareAccess.scopes | quote }}
+            {{- end }}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            {{- if .Values.modelCache.existingClaim }}
+            - {name: model-cache, mountPath: /models, readOnly: true}
+            {{- end }}
+          livenessProbe: {httpGet: {path: /health/live, port: http}, initialDelaySeconds: 10, periodSeconds: 10}
+          readinessProbe: {httpGet: {path: /health/ready, port: http}, initialDelaySeconds: 5, periodSeconds: 5}
+          resources: {{- toYaml .Values.resources.api | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+        {{- if .Values.modelCache.existingClaim }}
+        - name: model-cache
+          persistentVolumeClaim: {claimName: {{ .Values.modelCache.existingClaim }}}
+        {{- end }}
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.nodeSelector }}nodeSelector: {{- toYaml . | nindent 8 }}{{- end }}
+      {{- with .Values.tolerations }}tolerations: {{- toYaml . | nindent 8 }}{{- end }}
+      {{- with .Values.affinity }}affinity: {{- toYaml . | nindent 8 }}{{- end }}

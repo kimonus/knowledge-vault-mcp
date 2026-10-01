@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/kimonus/knowledge-vault-mcp/security/advisories/new
+    about: Report vulnerabilities privately. Never include exploit or secret details in a public issue.
+  - name: Support policy
+    url: https://github.com/kimonus/knowledge-vault-mcp/blob/main/SUPPORT.md
+    about: Review supported configurations, safe diagnostics, and support boundaries.

@@ -1,0 +1,114 @@
+[project]
+name = "knowledge-vault"
+version = "0.1.0"
+description = "Private single-user personal knowledge MCP server"
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+license = { text = "Apache-2.0" }
+authors = [{ name = "kimonus" }]
+dependencies = [
+  "alembic>=1.16,<2",
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "mcp==2.1.1",
+  "orjson>=3.10,<4",
+  "pgvector>=0.4,<1",
+  "prometheus-client>=0.22,<1",
+  "psycopg[binary,pool]>=3.2,<4",
+  "PyJWT[crypto]>=2.15,<3",
+  "pydantic>=2.11,<3",
+  "pydantic-settings>=2.10,<3",
+  "python-json-logger>=3.3,<4",
+  "sqlalchemy[asyncio]>=2.0,<3",
+  "structlog>=25.4,<26",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[project.urls]
+Homepage = "https://github.com/kimonus/knowledge-vault-mcp"
+Repository = "https://github.com/kimonus/knowledge-vault-mcp"
+Issues = "https://github.com/kimonus/knowledge-vault-mcp/issues"
+Changelog = "https://github.com/kimonus/knowledge-vault-mcp/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+embeddings = ["sentence-transformers>=5.1,<6", "torch>=2.9,<3"]
+
+[dependency-groups]
+dev = [
+  "bandit>=1.8,<2",
+  "hypothesis>=6.138,<7",
+  "pip-audit>=2.9,<3",
+  "pre-commit>=4.3,<5",
+  "pyright>=1.1.404,<2",
+  "pytest>=9.0.3,<10",
+  "pytest-asyncio>=1.1,<2",
+  "pytest-cov>=6.2,<7",
+  "ruff>=0.12,<1",
+  "testcontainers[postgres]>=4.12,<5",
+]
+
+[project.scripts]
+knowledge-vault-api = "knowledge_vault.main:run_api"
+knowledge-vault-worker = "knowledge_vault.worker.main:run_worker"
+knowledge-vault-reembed = "knowledge_vault.worker.main:run_reembed"
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "S", "ASYNC", "RUF"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"migrations/*" = ["E501"]
+"tests/*" = ["S105", "S106", "S107", "RUF001"]
+"src/knowledge_vault/api/*.py" = ["B008"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+include = ["src"]
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportUnusedFunction = false
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers -ra"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+  "integration: requires a disposable PostgreSQL with pgvector",
+  "contract: exercises MCP or HTTP contracts",
+  "e2e: exercises the deployed application boundary",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["knowledge_vault"]
+omit = ["src/knowledge_vault/main.py", "src/knowledge_vault/worker/main.py"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true

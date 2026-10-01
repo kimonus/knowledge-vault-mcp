@@ -1,0 +1,15 @@
+apiVersion: v2
+name: knowledge-vault
+description: Private single-user personal knowledge MCP service
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.29.0-0"
+home: https://github.com/kimonus/knowledge-vault-mcp
+sources:
+  - https://github.com/kimonus/knowledge-vault-mcp
+maintainers:
+  - name: kimonus
+    url: https://github.com/kimonus
+annotations:
+  artifacthub.io/license: Apache-2.0

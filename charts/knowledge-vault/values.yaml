@@ -1,0 +1,127 @@
+replicaCount: 1
+
+image:
+  repository: knowledge-vault
+  tag: "0.1.0"
+  digest: ""
+  pullPolicy: IfNotPresent
+
+backupImage:
+  repository: knowledge-vault-backup
+  tag: "0.1.0"
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+config:
+  environment: production
+  publicBaseUrl: ""
+  authIssuerUrl: ""
+  embeddingsEnabled: true
+  embeddingModel: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  embeddingDimensions: 384
+  logLevel: INFO
+  corsOrigins: ""
+  maxRequestBytes: 2000000
+  maxBatchItems: 1000
+  maxPartItems: 100
+
+auth:
+  existingSecret: ""
+  tokenPepperKey: token-pepper
+  bootstrapTokensKey: bootstrap-tokens
+
+cloudflareAccess:
+  enabled: false
+  existingSecret: ""
+  issuerUrlKey: issuer-url
+  audienceKey: audience
+  allowedEmailsKey: allowed-emails
+  scopes: knowledge:read,knowledge:write
+
+database:
+  existingSecret: ""
+  urlKey: database-url
+
+modelCache:
+  existingClaim: ""
+
+resources:
+  api:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 1Gi}
+  worker:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {cpu: "2", memory: 2Gi}
+  migration:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+
+service:
+  port: 8000
+
+ingress:
+  enabled: false
+  className: nginx
+  host: ""
+  tlsSecret: ""
+  annotations: {}
+
+internalPostgresql:
+  enabled: false
+  image:
+    repository: pgvector/pgvector
+    tag: 0.8.1-pg17-trixie
+    digest: sha256:137f044b0efe3d57f39b972b9b53641b1f2045b99d879e298bbf514a25787dcf
+  existingSecret: ""
+  usernameKey: username
+  passwordKey: password
+  databaseKey: database
+  storageClass: ""
+  storage: 20Gi
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {cpu: "2", memory: 2Gi}
+
+cloudflareTunnel:
+  enabled: false
+  replicaCount: 2
+  image:
+    repository: cloudflare/cloudflared
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+  existingSecret: ""
+  tokenKey: token
+  logLevel: info
+  metricsPort: 2000
+  resources:
+    requests: {cpu: 25m, memory: 32Mi}
+    limits: {cpu: 250m, memory: 128Mi}
+
+backup:
+  enabled: false
+  schedule: "17 2 * * *"
+  existingSecret: ""
+  databaseUrlKey: database-url
+  repositoryKey: repository
+  passwordKey: password
+  keepDaily: 7
+  keepWeekly: 4
+  keepMonthly: 6
+  checkSubset: 5%
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 1Gi}
+
+networkPolicy:
+  enabled: true
+  additionalEgress: []
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

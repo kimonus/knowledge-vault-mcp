@@ -1,0 +1,13 @@
+config:
+  publicBaseUrl: https://KNOWLEDGE_VAULT_LAN_HOST
+  authIssuerUrl: https://KNOWLEDGE_VAULT_LAN_HOST
+auth:
+  existingSecret: knowledge-vault-auth
+database:
+  existingSecret: knowledge-vault-external-database
+internalPostgresql:
+  enabled: false
+ingress:
+  enabled: true
+  host: KNOWLEDGE_VAULT_LAN_HOST
+  tlsSecret: knowledge-vault-lan-tls

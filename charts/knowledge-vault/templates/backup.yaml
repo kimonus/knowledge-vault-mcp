@@ -1,0 +1,51 @@
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-backup
+  labels: {{- include "knowledge-vault.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            {{- include "knowledge-vault.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: {{ include "knowledge-vault.fullname" . }}-ops
+          automountServiceAccountToken: false
+          securityContext: {runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, fsGroup: 999, seccompProfile: {type: RuntimeDefault}}
+          containers:
+            - name: backup
+              image: {{ include "knowledge-vault.image" .Values.backupImage }}
+              imagePullPolicy: {{ .Values.backupImage.pullPolicy }}
+              env:
+                - name: DATABASE_URL
+                  valueFrom: {secretKeyRef: {name: {{ .Values.backup.existingSecret }}, key: {{ .Values.backup.databaseUrlKey }}}}
+                - name: RESTIC_REPOSITORY
+                  valueFrom: {secretKeyRef: {name: {{ .Values.backup.existingSecret }}, key: {{ .Values.backup.repositoryKey }}}}
+                - {name: RESTIC_PASSWORD_FILE, value: /secrets/restic/password}
+                - {name: BACKUP_KEEP_DAILY, value: {{ .Values.backup.keepDaily | quote }}}
+                - {name: BACKUP_KEEP_WEEKLY, value: {{ .Values.backup.keepWeekly | quote }}}
+                - {name: BACKUP_KEEP_MONTHLY, value: {{ .Values.backup.keepMonthly | quote }}}
+                - {name: BACKUP_CHECK_SUBSET, value: {{ .Values.backup.checkSubset | quote }}}
+              volumeMounts:
+                - {name: restic-password, mountPath: /secrets/restic, readOnly: true}
+                - {name: tmp, mountPath: /tmp}
+              securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+              resources: {{- toYaml .Values.backup.resources | nindent 16 }}
+          volumes:
+            - name: restic-password
+              secret:
+                secretName: {{ .Values.backup.existingSecret }}
+                items: [{key: {{ .Values.backup.passwordKey }}, path: password}]
+            - name: tmp
+              emptyDir: {sizeLimit: 2Gi}
+{{- end }}

@@ -1,0 +1,81 @@
+name: Bug report
+description: Report a reproducible defect using synthetic, non-sensitive data.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. Do not submit credentials, bearer tokens, Access assertions,
+        private hostnames, personal assertions, database URLs, or unsanitized logs.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety checks
+      options:
+        - label: I removed secrets, personal knowledge, and private infrastructure identifiers.
+          required: true
+        - label: This is not a security vulnerability or active-compromise report.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Release tag, image digest, or commit SHA.
+      placeholder: v0.1.0 or sha256:…
+    validations:
+      required: true
+  - type: dropdown
+    id: boundary
+    attributes:
+      label: Affected boundary
+      options:
+        - MCP tools or protocol
+        - HTTP API
+        - Authentication or authorization
+        - PostgreSQL or migrations
+        - Embedding worker or retrieval
+        - Backup or restore
+        - Helm or Kubernetes
+        - Documentation or client setup
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what impact does it have?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Use only synthetic assertions and sanitized configuration.
+      placeholder: Numbered commands or a minimal test case.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python, Kubernetes, PostgreSQL, client, and relevant deployment mode.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Content-free errors, Pod status, or event reasons only.
+      render: text
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context

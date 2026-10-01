@@ -1,0 +1,54 @@
+name: Feature request
+description: Propose a focused improvement to Knowledge Vault.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Knowledge Vault stores atomic assertions, not transcripts. Proposals must preserve the
+        security, privacy, idempotency, and deletion boundaries documented in the threat model.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Initial checks
+      options:
+        - label: I searched existing issues and architecture decisions.
+          required: true
+        - label: This proposal does not require storing secrets or raw conversation transcripts.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What operator or client problem needs to be solved?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe observable behavior and its intended users.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include simpler operational or client-side alternatives.
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: Security and data impact
+      description: Address authentication, scopes, retention, logging, backups, and migration risk.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List testable outcomes.
+    validations:
+      required: true
