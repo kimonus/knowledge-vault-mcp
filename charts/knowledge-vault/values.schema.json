@@ -13,11 +13,13 @@
     "config": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["environment", "publicBaseUrl", "authIssuerUrl", "embeddingsEnabled", "embeddingModel", "embeddingDimensions", "logLevel", "corsOrigins", "maxRequestBytes", "maxBatchItems", "maxPartItems"],
+      "required": ["environment", "publicBaseUrl", "authIssuerUrl", "ingestionPolicyVersion", "embeddingsEnabled", "embeddingModel", "embeddingDimensions", "logLevel", "corsOrigins", "maxRequestBytes", "maxBatchItems", "maxPartItems"],
       "properties": {
         "environment": {"enum": ["production", "development", "test"]},
         "publicBaseUrl": {"type": "string"},
         "authIssuerUrl": {"type": "string"},
+        "ingestionPolicyVersion": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+        "ingestionPolicy": {"type": ["string", "null"], "minLength": 1, "maxLength": 8192, "pattern": "\\S"},
         "embeddingsEnabled": {"type": "boolean"},
         "embeddingModel": {"type": "string", "minLength": 1},
         "embeddingDimensions": {"type": "integer", "minimum": 8, "maximum": 4096},

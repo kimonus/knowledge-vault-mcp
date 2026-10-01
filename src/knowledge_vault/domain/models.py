@@ -71,6 +71,13 @@ class AssertionInput(BaseModel):
         return content_hash(self.normalized_content)
 
 
+class SourceView(BaseModel):
+    url: str
+    title: str | None = None
+    publisher: str | None = None
+    retrieved_at: datetime | None = None
+
+
 class AssertionView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -91,6 +98,7 @@ class AssertionView(BaseModel):
     confirmation_count: int
     supersedes_id: UUID | None
     embedding_state: EmbeddingState
+    sources: list[SourceView] = Field(default_factory=list)
 
 
 class RejectedItem(BaseModel):

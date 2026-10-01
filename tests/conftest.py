@@ -13,6 +13,9 @@ from knowledge_vault.config import Settings
 from knowledge_vault.container import Container, build_container
 from knowledge_vault.embeddings.providers import DeterministicFakeProvider
 
+# Tests must never inherit an operator's local `.env`.
+Settings.model_config["env_file"] = None
+
 POSTGRES_IMAGE = (
     "pgvector/pgvector:0.8.1-pg17-trixie@"
     "sha256:137f044b0efe3d57f39b972b9b53641b1f2045b99d879e298bbf514a25787dcf"

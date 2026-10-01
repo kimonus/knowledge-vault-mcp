@@ -23,3 +23,8 @@ dependencies and container digests are reviewed through automated update proposa
 rebuild rather than assuming an old image receives fixes.
 
 See [the threat model](docs/threat-model.md) for guarantees, assumptions, and explicit exclusions.
+
+Client ingestion guidance is trusted operator configuration delivered in MCP initialization, not
+an authorization boundary. Keep it free of secrets and restrict ConfigMap/Helm edits. Fixed rules
+remain in code; server-side scopes, input validation and secret detection apply independently.
+Neither instructions nor readback can guarantee that a client has seen or extracted an entire chat.

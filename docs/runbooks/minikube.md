@@ -124,6 +124,57 @@ Perform an authenticated flush, record its assertion ID, replace only the API an
 fetch the same assertion after their replacements become ready. Confirm that the PostgreSQL PVC
 remains bound.
 
+## Configure client ingestion guidance
+
+The MCP server sends fixed workflow rules followed by the operator's extraction guidance during
+initialization. The packaged default preserves exact substantive details, reproducible procedures
+and alternatives, and requires readback of committed records. Customize it in an operator-local
+values file (non-secret text only):
+
+```yaml
+config:
+  ingestionPolicyVersion: "2026-10-01.1"
+  ingestionPolicy: |
+    Extract every independently useful durable assertion from available context. Preserve exact
+    names, versions, quantities, units, parameters and commands. Keep each procedure self-contained
+    with prerequisites, ordered steps, validation, outcomes and caveats. Retain decisions,
+    alternatives, reasons, uncertainties and provenance. Do not replace detail with a summary.
+```
+
+Set `ingestionPolicy: null` to use the policy packaged with the application; empty or whitespace-only
+overrides are invalid. Guidance is limited to 8192 characters. The version is a 1–64 character label
+that starts with a letter or digit and contains only letters, digits, dots, underscores or hyphens.
+The delivered instructions include that label and an automatic SHA-256 digest. Changing guidance
+cannot remove the fixed explicit-trigger, secret/transcript exclusion, idempotency, deletion and
+readback rules. These are client instructions; server authorization and validation remain enforced
+independently. Restrict edits to trusted operators; no MCP tool can update this policy.
+
+Use the release's existing complete operator values file so unrelated deployment settings are
+preserved. Build/load the new application image and pin it in that file before the first upgrade
+that introduces these settings. Render and validate before upgrading:
+
+```bash
+helm template knowledge-vault charts/knowledge-vault -n knowledge-vault \
+  -f /OPERATOR/knowledge-vault-values.yaml > /tmp/knowledge-vault-policy-rendered.yaml
+kubeconform -strict -summary /tmp/knowledge-vault-policy-rendered.yaml
+kubectl apply --dry-run=server -f /tmp/knowledge-vault-policy-rendered.yaml
+helm upgrade knowledge-vault charts/knowledge-vault -n knowledge-vault \
+  -f /OPERATOR/knowledge-vault-values.yaml
+kubectl -n knowledge-vault rollout status deployment/knowledge-vault-knowledge-vault-api --timeout=180s
+```
+
+The chart places the settings in its ConfigMap and changes the deployment configuration checksum,
+which rolls the API and worker Pods. Pod environment variables are startup snapshots: editing a
+ConfigMap alone does not update running Pods. Reconnect CLI/IDE clients and refresh the ChatGPT
+plugin connection after rollout; existing sessions can retain earlier instructions. Do not change
+policy midway through a flush. The policy version is informational and is not bound to stored
+batches. No live policy-update API, database policy table or background watcher is included.
+
+If a client ignores MCP server instructions, install the flush skill or the fallback agent rules
+in [client-setup.md](client-setup.md). Instructions cannot grant the server access to unseen chat
+history or guarantee that an LLM extracted every detail; readback confirms persistence and supports
+client-side comparison.
+
 ## Upgrade and removal
 
 Run the migration checks before upgrading. Never delete the PostgreSQL PVC, PV, namespace, or

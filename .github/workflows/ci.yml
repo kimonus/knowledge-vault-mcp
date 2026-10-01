@@ -99,6 +99,24 @@ jobs:
           "$RUNNER_TEMP/bin/kubeconform" -strict -summary -kubernetes-version 1.33.0 \
             "$RUNNER_TEMP/rendered-cloudflare.yaml"
 
+      - name: Render configurable ingestion guidance
+        run: |
+          "$RUNNER_TEMP/bin/helm" lint charts/knowledge-vault \
+            -f charts/knowledge-vault/values-minikube.yaml \
+            -f charts/knowledge-vault/values-ingestion-policy.yaml
+          "$RUNNER_TEMP/bin/helm" template knowledge-vault charts/knowledge-vault \
+            -f charts/knowledge-vault/values-minikube.yaml \
+            -f charts/knowledge-vault/values-ingestion-policy.yaml \
+            > "$RUNNER_TEMP/rendered-policy.yaml"
+          "$RUNNER_TEMP/bin/kubeconform" -strict -summary -kubernetes-version 1.33.0 \
+            "$RUNNER_TEMP/rendered-policy.yaml"
+          if "$RUNNER_TEMP/bin/helm" template knowledge-vault charts/knowledge-vault \
+            -f charts/knowledge-vault/values-minikube.yaml \
+            --set-string 'config.ingestionPolicy=   ' > /dev/null 2>&1; then
+            echo "values schema accepted whitespace-only ingestion guidance" >&2
+            exit 1
+          fi
+
   inspector:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

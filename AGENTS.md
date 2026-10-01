@@ -113,7 +113,15 @@ important code or add broad exclusions to satisfy coverage.
 - Security properties: `docs/threat-model.md` and `SECURITY.md`.
 - The magic flush trigger and batching behavior: `plugin/knowledge-vault/skills/flush-knowledge/`.
 
+Client ingestion guidance is delivered in MCP initialization: fixed workflow rules stay in code,
+and `config.ingestionPolicy` / `config.ingestionPolicyVersion` customize only operator extraction
+guidance. Do not add a live policy-update API or change persistence to bind policy versions without
+an explicit architecture decision. Policy updates require Pod rollout and client refresh.
+
 The flush skill activates only on the explicit phrase `flush knowledge to my MCP` or a clear
 natural variant. It must extract currently available context into atomic assertions, exclude
 secrets and transcript structure, use the resumable begin/append/commit sequence, retry
-idempotently, and report completion only after a successful commit.
+idempotently, and report persistence only after a successful commit. Preserve exact reproducible
+details and verify every distinct committed ID against the extraction checklist. Failed readback
+means committed but verification incomplete; never repeat writes just to retry a read. Report
+rejections, discrepancies and unavailable context without claiming lossless unseen-history capture.
