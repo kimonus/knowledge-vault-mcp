@@ -12,7 +12,7 @@ RUN git clone --filter=blob:none https://github.com/restic/restic.git . \
     && go run build.go \
     && ./restic version
 
-FROM postgres:17-bookworm@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652 AS postgres-runtime
+FROM postgres:18-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650 AS postgres-runtime
 RUN rm -f /usr/local/bin/gosu /etc/ssl/private/ssl-cert-snakeoil.key
 
 FROM scratch
