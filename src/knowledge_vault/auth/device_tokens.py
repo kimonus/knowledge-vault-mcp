@@ -50,6 +50,9 @@ def build_secret_patch(secret: dict[str, Any], record: dict[str, Any]) -> dict[s
         raise ValueError("Secret has no data.bootstrap-tokens value")
     decoded = base64.b64decode(encoded_records, validate=True)
     untyped_records: object = json.loads(decoded)
+    if isinstance(untyped_records, dict) and "principal_id" in untyped_records:
+        # A Secret created directly from one generated record file holds a bare object.
+        untyped_records = [untyped_records]
     if not isinstance(untyped_records, list):
         raise ValueError("bootstrap-tokens must contain a JSON array")
     records = cast(list[dict[str, Any]], untyped_records)

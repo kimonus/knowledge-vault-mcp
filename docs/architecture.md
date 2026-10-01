@@ -29,17 +29,24 @@ authentication or scope checks.
 
 ## Runtime components
 
-- API: one non-root process serving `/mcp`, `/api/v1`, health, and metrics. It is stateless.
+- API: one non-root process serving `/mcp`, `/api/v1`, health, and metrics. Durable state lives
+  only in PostgreSQL; MCP sessions and rate-limit windows are held in memory, which is why the
+  chart runs a single API replica and clients re-initialize after a restart.
 - Worker: claims persistent embedding jobs with `FOR UPDATE SKIP LOCKED`, batches local inference,
-  and retries with capped exponential backoff and jitter.
+  and retries with capped exponential backoff and jitter. Claims carry a lease: a claim that
+  outlives `KNOWLEDGE_VAULT_EMBEDDING_CLAIM_TIMEOUT_SECONDS` returns to the queue. The same
+  process periodically expires abandoned flush batches and purges staging metadata.
 - PostgreSQL: the source of truth for assertions, sources, lifecycle state, conflicts, flush state,
   deletion audit records, jobs, text indexes, and vectors.
-- Migration Job: executes Alembic before workloads leave their migration-wait init container.
+- Migration Job: executes Alembic; API and worker init containers wait until the database is at
+  the newest revision shipped in their image.
 - Optional tunnel, ingress, internal PostgreSQL, and backup workloads are separately enabled.
 
 In the reference profile, the public trust boundary ends at Cloudflare Access and the outbound-only
-tunnel; the origin also validates the signed Access assertion. The private trust boundary is the
-LAN/WireGuard route plus a unique scoped device token. An alternative edge must define and validate
+tunnel; the origin also validates the signed Access assertion and refuses any request for a
+published hostname that lacks one. The private trust boundary is the LAN/WireGuard route plus a
+unique scoped device token; with `cloudflareAccess.privateHosts` set, device tokens are accepted
+only for those hostnames. An alternative edge must define and validate
 an equivalent origin-verifiable identity boundary. PostgreSQL, model cache, and metrics stay
 cluster-private.
 Assertions retrieved from storage are always labeled and handled as untrusted data; they cannot

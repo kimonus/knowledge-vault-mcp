@@ -1,36 +1,52 @@
 import asyncio
 import signal
-from contextlib import suppress
 
 import structlog
+from prometheus_client import start_http_server
 
 from knowledge_vault.config import get_settings
 from knowledge_vault.container import build_container
 from knowledge_vault.embeddings.providers import SentenceTransformerProvider
 from knowledge_vault.observability.logging import configure_logging
 from knowledge_vault.worker.jobs import EmbeddingWorker
+from knowledge_vault.worker.runner import run_worker_loop
+
+
+def _provider() -> SentenceTransformerProvider:
+    settings = get_settings()
+    return SentenceTransformerProvider(
+        settings.embedding_model,
+        settings.embedding_dimensions,
+        allow_download=settings.embedding_allow_download,
+    )
 
 
 async def _worker() -> None:
     settings = get_settings()
-    configure_logging(settings.log_level)
-    provider = SentenceTransformerProvider(settings.embedding_model, settings.embedding_dimensions)
+    configure_logging(settings.log_level, service=settings.service_name, version=settings.version)
+    provider = _provider()
     container = build_container(settings, embedder=provider)
     worker = EmbeddingWorker(container.database.sessions, settings, provider)
+    if settings.worker_metrics_port:
+        start_http_server(settings.worker_metrics_port)
     stopping = asyncio.Event()
     loop = asyncio.get_running_loop()
     for signal_name in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(signal_name, stopping.set)
-    logger = structlog.get_logger()
+
+    async def maintenance() -> None:
+        await container.ingestion.expire_and_purge()
+        await container.administration.purge_confirmation_tokens()
+
     try:
-        while not stopping.is_set():
-            processed = await worker.process_once()
-            if not processed:
-                with suppress(TimeoutError):
-                    await asyncio.wait_for(stopping.wait(), timeout=settings.worker_poll_seconds)
+        await run_worker_loop(
+            worker,
+            maintenance,
+            stopping,
+            poll_seconds=settings.worker_poll_seconds,
+            maintenance_interval_seconds=settings.maintenance_interval_seconds,
+        )
     finally:
-        released = await worker.release_claims()
-        logger.info("worker_shutdown", operation="release_claims", released=released)
         await container.database.close()
 
 
@@ -40,7 +56,8 @@ def run_worker() -> None:
 
 async def _reembed() -> None:
     settings = get_settings()
-    provider = SentenceTransformerProvider(settings.embedding_model, settings.embedding_dimensions)
+    configure_logging(settings.log_level, service=settings.service_name, version=settings.version)
+    provider = _provider()
     container = build_container(settings, embedder=provider)
     worker = EmbeddingWorker(container.database.sessions, settings, provider)
     count = await worker.enqueue_rebuild(settings.embedding_model)

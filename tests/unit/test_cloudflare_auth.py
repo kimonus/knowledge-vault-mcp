@@ -201,3 +201,153 @@ def test_cloudflare_settings_fail_closed() -> None:
             cloudflare_access_allowed_emails="owner@example.com",
             cloudflare_access_scopes="knowledge:admin",
         )
+
+
+async def _status(
+    middleware: CloudflareAccessMiddleware,
+    headers: list[tuple[bytes, bytes]],
+    path: str = "/api/v1/search",
+) -> int:
+    sent: list[dict[str, Any]] = []
+
+    async def receive() -> dict[str, Any]:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict[str, Any]) -> None:
+        sent.append(message)
+
+    await middleware({"type": "http", "path": path, "headers": headers}, receive, send)  # type: ignore[arg-type]
+    return sent[0]["status"]
+
+
+async def _passthrough(scope: dict[str, Any], receive: Any, send: Any) -> None:
+    del scope, receive
+    await send({"type": "http.response.start", "status": 204, "headers": []})
+    await send({"type": "http.response.body", "body": b""})
+
+
+async def test_host_spelling_cannot_bypass_the_assertion_requirement() -> None:
+    authenticator, private_key = make_authenticator()
+    middleware = CloudflareAccessMiddleware(
+        _passthrough, authenticator, required_hosts=frozenset({"MCP.example.com"})
+    )
+    for host in (
+        b"mcp.example.com",
+        b"MCP.EXAMPLE.COM",
+        b"mcp.example.com:443",
+        b"mcp.example.com.",
+        b" mcp.example.com.:8000 ",
+    ):
+        assert await _status(middleware, [(b"host", host)]) == 401, host
+    assert await _status(middleware, [(b"host", b"lan.example.com")]) == 204
+    # A missing, repeated, or undecodable Host cannot be classified, so it is refused.
+    assert await _status(middleware, []) == 400
+    assert (
+        await _status(middleware, [(b"host", b"lan.example.com"), (b"host", b"mcp.example.com")])
+        == 400
+    )
+    assert await _status(middleware, [(b"host", "żółw.example".encode())]) == 400
+    # Health probes address the Pod by IP and may omit Host entirely.
+    assert await _status(middleware, [], path="/health/live") == 204
+    assert await _status(middleware, [(b"host", b"mcp.example.com")], path="/health/live") == 401
+    # A valid assertion is honoured on any host; more than one assertion never is.
+    token = assertion(private_key).encode()
+    assert (
+        await _status(
+            middleware, [(b"host", b"mcp.example.com"), (b"cf-access-jwt-assertion", token)]
+        )
+        == 204
+    )
+    assert (
+        await _status(
+            middleware, [(b"cf-access-jwt-assertion", token), (b"cf-access-jwt-assertion", token)]
+        )
+        == 401
+    )
+    assert (
+        await _status(
+            middleware, [(b"host", b"lan.example.com"), (b"cf-access-jwt-assertion", b"\xff")]
+        )
+        == 401
+    )
+
+
+async def test_private_host_allowlist_requires_assertions_everywhere_else() -> None:
+    authenticator, _ = make_authenticator()
+    middleware = CloudflareAccessMiddleware(
+        _passthrough,
+        authenticator,
+        required_hosts=frozenset({"mcp.example.com"}),
+        private_hosts=frozenset({"mcp-lan.example.com"}),
+    )
+    assert await _status(middleware, [(b"host", b"mcp-lan.example.com:8443")]) == 204
+    assert await _status(middleware, [(b"host", b"knowledge-vault:8000")]) == 401
+    assert await _status(middleware, [(b"host", b"10.0.0.7:8000")]) == 401
+    assert await _status(middleware, [(b"host", b"10.0.0.7:8000")], path="/health/ready") == 204
+
+
+def test_cloudflare_settings_require_a_real_published_hostname() -> None:
+    base = {
+        "environment": "test",
+        "cloudflare_access_enabled": True,
+        "cloudflare_access_issuer_url": "https://example.cloudflareaccess.com",
+        "cloudflare_access_audience": "audience",
+        "cloudflare_access_allowed_emails": "owner@example.com",
+    }
+    with pytest.raises(ValidationError, match="published hostname"):
+        Settings(**base)  # public_base_url is still the .invalid placeholder
+    derived = Settings(**base, public_base_url="https://MCP.Example.com./")
+    assert derived.cloudflare_access_public_host_set == frozenset({"mcp.example.com"})
+    explicit = Settings(
+        **base,
+        cloudflare_access_public_hosts="mcp.example.com, alt.example.com:443",
+        cloudflare_access_private_hosts="mcp-lan.example.com",
+    )
+    assert explicit.cloudflare_access_public_host_set == {"mcp.example.com", "alt.example.com"}
+    assert explicit.cloudflare_access_private_host_set == {"mcp-lan.example.com"}
+    with pytest.raises(ValidationError, match="both"):
+        Settings(
+            **base,
+            public_base_url="https://mcp.example.com",
+            cloudflare_access_private_hosts="mcp.example.com",
+        )
+
+
+async def test_jwks_refresh_is_throttled_for_unknown_key_ids() -> None:
+    _, private_key = make_authenticator()
+    jwk = jwt.algorithms.RSAAlgorithm.to_jwk(private_key.public_key(), as_dict=True)
+    jwk["kid"] = "test"
+    requests = 0
+
+    def handler(request: Request) -> Response:
+        nonlocal requests
+        requests += 1
+        return Response(200, json={"keys": [jwk]})
+
+    client = CloudflareJWKSClient(
+        "https://example.cloudflareaccess.com/cdn-cgi/access/certs",
+        transport=MockTransport(handler),
+    )
+    assert await client.get_signing_key(assertion(private_key)) is not None
+    for index in range(25):
+        forged = jwt.encode(
+            {"sub": "x"}, private_key, algorithm="RS256", headers={"kid": f"unknown-{index}"}
+        )
+        with pytest.raises(CloudflareAccessError, match="unknown"):
+            await client.get_signing_key(forged)
+    assert requests == 1
+    # The known key keeps working while unknown IDs are refused.
+    assert await client.get_signing_key(assertion(private_key)) is not None
+
+    rotating = CloudflareJWKSClient(
+        "https://example.cloudflareaccess.com/cdn-cgi/access/certs",
+        transport=MockTransport(handler),
+        min_refresh_interval=0,
+    )
+    for index in range(3):
+        forged = jwt.encode(
+            {"sub": "x"}, private_key, algorithm="RS256", headers={"kid": f"rotated-{index}"}
+        )
+        with pytest.raises(CloudflareAccessError, match="unknown"):
+            await rotating.get_signing_key(forged)
+    assert requests == 4

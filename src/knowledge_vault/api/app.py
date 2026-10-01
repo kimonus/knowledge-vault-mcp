@@ -1,18 +1,20 @@
 from contextlib import asynccontextmanager
 from typing import Any
-from urllib.parse import urlsplit
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from sqlalchemy.pool import QueuePool
 
 from knowledge_vault.api.auth import require_scope
 from knowledge_vault.api.middleware import (
     CloudflareAccessMiddleware,
+    OAuthDiscoveryMiddleware,
     ObservabilityMiddleware,
+    OriginValidationMiddleware,
     RequestSizeLimitMiddleware,
 )
 from knowledge_vault.api.schemas import (
@@ -27,7 +29,8 @@ from knowledge_vault.auth.tokens import Principal, Scope
 from knowledge_vault.container import Container
 from knowledge_vault.domain.models import ProblemDetail
 from knowledge_vault.mcp.server import create_mcp_server
-from knowledge_vault.services.errors import KnowledgeVaultError
+from knowledge_vault.observability.metrics import DB_POOL
+from knowledge_vault.services.errors import KnowledgeVaultError, RateLimitedError
 
 
 def create_app(container: Container) -> FastAPI:
@@ -55,15 +58,31 @@ def create_app(container: Container) -> FastAPI:
         openapi_url="/api/openapi.json",
     )
     app.state.container = container
+    # Middleware added later wraps middleware added earlier, so the request passes through
+    # CORS, observability, Origin validation, Access validation, OAuth discovery scoping, then
+    # the size limit.
     app.add_middleware(RequestSizeLimitMiddleware, max_bytes=container.settings.max_request_bytes)
-    app.add_middleware(ObservabilityMiddleware)
+    app.add_middleware(
+        OAuthDiscoveryMiddleware,
+        # Only the edge-published hostname has an OAuth authorization server in front of it.
+        advertised_hosts=(
+            container.settings.cloudflare_access_public_host_set
+            if container.cloudflare_authenticator is not None
+            else frozenset()
+        ),
+    )
     if container.cloudflare_authenticator is not None:
-        public_host = urlsplit(container.settings.public_base_url).hostname
         app.add_middleware(
             CloudflareAccessMiddleware,
             authenticator=container.cloudflare_authenticator,
-            required_hosts=frozenset({public_host}) if public_host else frozenset(),
+            required_hosts=container.settings.cloudflare_access_public_host_set,
+            private_hosts=container.settings.cloudflare_access_private_host_set,
         )
+    app.add_middleware(
+        OriginValidationMiddleware,
+        allowed_origins=frozenset(container.settings.cors_origin_list),
+    )
+    app.add_middleware(ObservabilityMiddleware, tracer=container.tracer)
     if container.settings.cors_origin_list:
         app.add_middleware(
             CORSMiddleware,
@@ -82,7 +101,11 @@ def create_app(container: Container) -> FastAPI:
             detail=str(exc),
             instance=str(request.url.path),
         )
-        headers = {"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None
+        headers: dict[str, str] | None = None
+        if exc.status_code == 401:
+            headers = {"WWW-Authenticate": "Bearer"}
+        elif isinstance(exc, RateLimitedError):
+            headers = {"Retry-After": str(exc.retry_after_seconds)}
         return JSONResponse(
             problem.model_dump(exclude_none=True),
             status_code=exc.status_code,
@@ -119,6 +142,9 @@ def create_app(container: Container) -> FastAPI:
         database_ready = await container.database.ready()
         status = 200 if database_ready else 503
         embedding = "enabled" if container.settings.embeddings_enabled else "disabled"
+        if embedding == "enabled" and getattr(container.embedder, "degraded", False):
+            # Serving continues on text search; this only reports the reduced capability.
+            embedding = "degraded"
         return JSONResponse(
             {
                 "status": "ready" if database_ready else "not_ready",
@@ -130,6 +156,11 @@ def create_app(container: Container) -> FastAPI:
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics() -> Response:
+        pool = container.database.engine.pool
+        if isinstance(pool, QueuePool):
+            DB_POOL.labels(state="checkedin").set(pool.checkedin())
+            DB_POOL.labels(state="checkedout").set(pool.checkedout())
+            DB_POOL.labels(state="overflow").set(pool.overflow())
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     @app.post("/api/v1/flushes", status_code=201)
@@ -148,6 +179,7 @@ def create_app(container: Container) -> FastAPI:
             "state": batch.state,
             "declared_parts": batch.declared_parts,
             "declared_items": batch.declared_items,
+            "replayed": batch.replayed,
         }
 
     @app.put("/api/v1/flushes/{batch_id}/parts/{part_number}")
@@ -203,7 +235,7 @@ def create_app(container: Container) -> FastAPI:
 
     @app.get("/api/v1/conflicts")
     async def conflicts(
-        limit: int = 50,
+        limit: int = Query(default=50, ge=1, le=100),
         principal: Principal = Depends(require_scope(Scope.READ)),
     ) -> dict[str, Any]:
         del principal
@@ -224,9 +256,7 @@ def create_app(container: Container) -> FastAPI:
         body: ForgetPreviewRequest,
         principal: Principal = Depends(require_scope(Scope.ADMIN)),
     ) -> dict[str, Any]:
-        return await container.administration.preview_forgetting(
-            principal.id, [UUID(item) for item in body.assertion_ids]
-        )
+        return await container.administration.preview_forgetting(principal.id, body.assertion_ids)
 
     @app.post("/api/v1/forget/confirm")
     async def forget_confirm(

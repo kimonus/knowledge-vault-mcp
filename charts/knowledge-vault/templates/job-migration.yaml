@@ -23,11 +23,12 @@ spec:
       containers:
         - name: migrate
           image: {{ include "knowledge-vault.image" .Values.image }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["alembic", "upgrade", "head"]
           env:
             - name: KNOWLEDGE_VAULT_ENVIRONMENT
               value: development
             - name: KNOWLEDGE_VAULT_DATABASE_URL
-              valueFrom: {secretKeyRef: {name: {{ .Values.database.existingSecret }}, key: {{ .Values.database.urlKey }}}}
+              valueFrom: {secretKeyRef: {name: {{ .Values.database.existingSecret | quote }}, key: {{ .Values.database.urlKey | quote }}}}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
           resources: {{- toYaml .Values.resources.migration | nindent 12 }}

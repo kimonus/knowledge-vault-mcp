@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import CursorResult, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from knowledge_vault.domain.enums import AssertionStatus
 from knowledge_vault.domain.models import AssertionInput, CommitResult
 from knowledge_vault.persistence.tables import (
     AssertionRow,
@@ -15,7 +16,7 @@ from knowledge_vault.persistence.tables import (
     DeletionAuditRow,
     EmbeddingJobRow,
 )
-from knowledge_vault.services.errors import ConflictError, NotFoundError
+from knowledge_vault.services.errors import ConflictError, InvalidRequestError, NotFoundError
 from knowledge_vault.services.ingestion import IngestionService
 
 
@@ -35,7 +36,7 @@ class AdministrationService:
         correction: AssertionInput,
     ) -> CommitResult:
         if not correction.supersedes_id:
-            raise ConflictError("a correction must identify supersedes_id")
+            raise InvalidRequestError("a correction must identify supersedes_id")
         batch = await self._ingestion.begin(principal_id, idempotency_key, 1, 1)
         await self._ingestion.append(
             principal_id, batch.id, 1, [correction.model_dump(mode="json")]
@@ -44,7 +45,7 @@ class AdministrationService:
 
     async def list_conflicts(self, *, limit: int = 50) -> list[dict[str, Any]]:
         if not 1 <= limit <= 100:
-            raise ValueError("limit must be between 1 and 100")
+            raise InvalidRequestError("limit must be between 1 and 100")
         async with self._sessions() as session:
             rows = list(
                 (
@@ -72,12 +73,28 @@ class AdministrationService:
     ) -> dict[str, Any]:
         unique_ids = list(dict.fromkeys(assertion_ids))
         if not unique_ids or len(unique_ids) > 100:
-            raise ValueError("provide a bounded list of 1 through 100 assertion IDs")
+            raise InvalidRequestError("provide a bounded list of 1 through 100 assertion IDs")
         async with self._sessions.begin() as session:
-            found = list(
+            rows = (
+                await session.execute(
+                    select(AssertionRow.id, AssertionRow.supersedes_id).where(
+                        AssertionRow.id.in_(unique_ids)
+                    )
+                )
+            ).all()
+            found = [row.id for row in rows]
+            predecessor_ids = {
+                row.supersedes_id for row in rows if row.supersedes_id is not None
+            } - set(found)
+            # Forgetting a correction does not bring the assertion it replaced back into the
+            # default search view; report those so the caller can decide what to do with them.
+            hidden_predecessors = list(
                 (
                     await session.scalars(
-                        select(AssertionRow.id).where(AssertionRow.id.in_(unique_ids))
+                        select(AssertionRow.id).where(
+                            AssertionRow.id.in_(predecessor_ids),
+                            AssertionRow.status == AssertionStatus.SUPERSEDED,
+                        )
                     )
                 ).all()
             )
@@ -93,6 +110,7 @@ class AdministrationService:
         return {
             "matched_ids": [str(item) for item in found],
             "matched_count": len(found),
+            "superseded_predecessor_ids": [str(item) for item in hidden_predecessors],
             "confirmation_token": token,
             "expires_in_seconds": 600,
             "warning": "Confirmation permanently deletes assertion content and derived embeddings.",
@@ -126,6 +144,16 @@ class AdministrationService:
                 )
             )
         return {"deleted_count": deleted_count, "correlation_id": correlation_id}
+
+    async def purge_confirmation_tokens(self) -> int:
+        """Delete confirmation tokens that can no longer be used."""
+        async with self._sessions.begin() as session:
+            result = await session.execute(
+                delete(ConfirmationTokenRow).where(
+                    ConfirmationTokenRow.expires_at <= datetime.now(UTC)
+                )
+            )
+        return int(cast(CursorResult[Any], result).rowcount or 0)
 
     async def statistics(self) -> dict[str, Any]:
         async with self._sessions() as session:

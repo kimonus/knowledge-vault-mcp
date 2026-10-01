@@ -14,10 +14,12 @@ spec:
     - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
-          - path: /
+          {{- range .Values.ingress.paths }}
+          - path: {{ . | quote }}
             pathType: Prefix
             backend:
               service:
-                name: {{ include "knowledge-vault.fullname" . }}
+                name: {{ include "knowledge-vault.fullname" $ }}
                 port: {name: http}
+          {{- end }}
 {{- end }}

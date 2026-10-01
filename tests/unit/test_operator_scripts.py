@@ -27,13 +27,13 @@ def test_generate_token_writes_private_files_without_printing_secret(tmp_path: P
             "scripts/generate_token.py",
             "--principal",
             "test-device",
-            "--pepper",
-            "test-pepper",
+            "--pepper-stdin",
             "--token-output",
             str(token_path),
             "--record-output",
             str(record_path),
         ],
+        input="test-pepper\n",
         check=True,
         capture_output=True,
         text=True,
@@ -119,3 +119,58 @@ def test_header_helper_requires_private_valid_token_file(tmp_path: Path) -> None
     token_path.write_text("not-a-token\n", encoding="utf-8")
     with pytest.raises(ValueError, match="valid Knowledge Vault token"):
         read_token(token_path)
+
+
+def test_generate_token_accepts_documented_flags_and_accumulates_scopes(tmp_path: Path) -> None:
+    record_path = tmp_path / "record.json"
+    subprocess.run(  # noqa: S603 - fixed interpreter and repository script
+        [
+            sys.executable,
+            "scripts/generate_token.py",
+            "--principal-id",
+            "operator-device",
+            "--scope",
+            "knowledge:read",
+            "--scope",
+            "knowledge:write",
+            "--pepper-stdin",
+            "--token-output",
+            str(tmp_path / "device.token"),
+            "--record-output",
+            str(record_path),
+        ],
+        input="test-pepper\n",
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    assert record["principal_id"] == "operator-device"
+    assert record["scopes"] == ["knowledge:read", "knowledge:write"]
+    # The record file is directly usable as the bootstrap-tokens Secret value.
+    from knowledge_vault.auth.tokens import TokenAuthenticator
+
+    token = (tmp_path / "device.token").read_text(encoding="utf-8").strip()
+    assert TokenAuthenticator.from_json(record_path.read_text(), "test-pepper").authenticate(token)
+
+    pepper_file = tmp_path / "pepper"
+    pepper_file.write_text("test-pepper\n", encoding="utf-8")
+    for arguments in (
+        ["--pepper-file", str(pepper_file), "--scopes", "knowledge:everything"],
+        ["--pepper-file", str(pepper_file), "--princ", "abbreviated"],
+        # The pepper is never accepted as a command-line argument.
+        ["--pepper", "test-pepper"],
+    ):
+        failed = subprocess.run(  # noqa: S603 - fixed interpreter and repository script
+            [sys.executable, "scripts/generate_token.py", *arguments],
+            capture_output=True,
+            text=True,
+        )
+        assert failed.returncode == 2, arguments
+
+
+def test_build_patch_upgrades_a_single_record_secret_to_a_list() -> None:
+    existing = {"principal_id": "first", "sha256": "a" * 64, "scopes": ["knowledge:read"]}
+    record = {"principal_id": "second", "sha256": "b" * 64, "scopes": ["knowledge:read"]}
+    patch = build_secret_patch(encoded_secret(existing), record)
+    assert json.loads(base64.b64decode(patch["data"]["bootstrap-tokens"])) == [existing, record]

@@ -28,10 +28,11 @@ spec:
               imagePullPolicy: {{ .Values.backupImage.pullPolicy }}
               env:
                 - name: DATABASE_URL
-                  valueFrom: {secretKeyRef: {name: {{ .Values.backup.existingSecret }}, key: {{ .Values.backup.databaseUrlKey }}}}
+                  valueFrom: {secretKeyRef: {name: {{ .Values.backup.existingSecret | quote }}, key: {{ .Values.backup.databaseUrlKey | quote }}}}
                 - name: RESTIC_REPOSITORY
-                  valueFrom: {secretKeyRef: {name: {{ .Values.backup.existingSecret }}, key: {{ .Values.backup.repositoryKey }}}}
+                  valueFrom: {secretKeyRef: {name: {{ .Values.backup.existingSecret | quote }}, key: {{ .Values.backup.repositoryKey | quote }}}}
                 - {name: RESTIC_PASSWORD_FILE, value: /secrets/restic/password}
+                - {name: RESTIC_CACHE_DIR, value: /tmp/restic-cache}
                 - {name: BACKUP_KEEP_DAILY, value: {{ .Values.backup.keepDaily | quote }}}
                 - {name: BACKUP_KEEP_WEEKLY, value: {{ .Values.backup.keepWeekly | quote }}}
                 - {name: BACKUP_KEEP_MONTHLY, value: {{ .Values.backup.keepMonthly | quote }}}
@@ -44,8 +45,8 @@ spec:
           volumes:
             - name: restic-password
               secret:
-                secretName: {{ .Values.backup.existingSecret }}
-                items: [{key: {{ .Values.backup.passwordKey }}, path: password}]
+                secretName: {{ .Values.backup.existingSecret | quote }}
+                items: [{key: {{ .Values.backup.passwordKey | quote }}, path: password}]
             - name: tmp
               emptyDir: {sizeLimit: 2Gi}
 {{- end }}

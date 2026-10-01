@@ -85,6 +85,7 @@ jobs:
             -f charts/knowledge-vault/values-minikube.yaml \
             --set cloudflareAccess.enabled=true \
             --set cloudflareAccess.existingSecret=knowledge-vault-cloudflare-access \
+            --set 'cloudflareAccess.publicHosts={mcp.example.com}' \
             --set cloudflareTunnel.enabled=true \
             --set cloudflareTunnel.existingSecret=knowledge-vault-cloudflared \
             --set cloudflareTunnel.image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000
@@ -92,13 +93,34 @@ jobs:
             -f charts/knowledge-vault/values-minikube.yaml \
             --set cloudflareAccess.enabled=true \
             --set cloudflareAccess.existingSecret=knowledge-vault-cloudflare-access \
+            --set 'cloudflareAccess.publicHosts={mcp.example.com}' \
             --set cloudflareTunnel.enabled=true \
             --set cloudflareTunnel.existingSecret=knowledge-vault-cloudflared \
             --set cloudflareTunnel.image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
             > "$RUNNER_TEMP/rendered-cloudflare.yaml"
           "$RUNNER_TEMP/bin/kubeconform" -strict -summary -kubernetes-version 1.33.0 \
             "$RUNNER_TEMP/rendered-cloudflare.yaml"
-
+      - name: Render optional components and scheduling overrides
+        run: |
+          "$RUNNER_TEMP/bin/helm" template knowledge-vault charts/knowledge-vault \
+            -f charts/knowledge-vault/values-external-postgres.yaml \
+            --set backup.enabled=true \
+            --set backup.existingSecret=knowledge-vault-backup \
+            --set modelCache.existingClaim=knowledge-vault-models \
+            --set nodeSelector.disktype=ssd \
+            --set 'tolerations[0].key=dedicated' \
+            --set 'tolerations[0].operator=Exists' \
+            > "$RUNNER_TEMP/rendered-optional.yaml"
+          "$RUNNER_TEMP/bin/kubeconform" -strict -summary -kubernetes-version 1.33.0 \
+            "$RUNNER_TEMP/rendered-optional.yaml"
+      - name: Misspelled values must be rejected by the schema
+        run: |
+          if "$RUNNER_TEMP/bin/helm" template knowledge-vault charts/knowledge-vault \
+            -f charts/knowledge-vault/values-minikube.yaml \
+            --set networkPolicy.enabeld=false > /dev/null 2>&1; then
+            echo "values schema accepted an unknown key" >&2
+            exit 1
+          fi
       - name: Render configurable ingestion guidance
         run: |
           "$RUNNER_TEMP/bin/helm" lint charts/knowledge-vault \

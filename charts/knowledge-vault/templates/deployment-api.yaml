@@ -25,17 +25,7 @@ spec:
       automountServiceAccountToken: false
       securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
       initContainers:
-        - name: wait-for-migration
-          image: {{ include "knowledge-vault.image" .Values.image }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["/bin/sh", "-ec"]
-          args: ["until alembic current 2>/dev/null | grep -q 0001_initial; do sleep 2; done"]
-          envFrom:
-            - configMapRef: {name: {{ include "knowledge-vault.fullname" . }}}
-          env:
-            - name: KNOWLEDGE_VAULT_DATABASE_URL
-              valueFrom: {secretKeyRef: {name: {{ .Values.database.existingSecret }}, key: {{ .Values.database.urlKey }}}}
-          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+        {{- include "knowledge-vault.waitForMigration" . | nindent 8 }}
       containers:
         - name: api
           image: {{ include "knowledge-vault.image" .Values.image }}
@@ -45,23 +35,28 @@ spec:
             - configMapRef: {name: {{ include "knowledge-vault.fullname" . }}}
           env:
             - name: KNOWLEDGE_VAULT_DATABASE_URL
-              valueFrom: {secretKeyRef: {name: {{ .Values.database.existingSecret }}, key: {{ .Values.database.urlKey }}}}
+              valueFrom: {secretKeyRef: {name: {{ .Values.database.existingSecret | quote }}, key: {{ .Values.database.urlKey | quote }}}}
             - name: KNOWLEDGE_VAULT_TOKEN_PEPPER
-              valueFrom: {secretKeyRef: {name: {{ .Values.auth.existingSecret }}, key: {{ .Values.auth.tokenPepperKey }}}}
+              valueFrom: {secretKeyRef: {name: {{ .Values.auth.existingSecret | quote }}, key: {{ .Values.auth.tokenPepperKey | quote }}}}
             - name: KNOWLEDGE_VAULT_BOOTSTRAP_TOKENS
-              valueFrom: {secretKeyRef: {name: {{ .Values.auth.existingSecret }}, key: {{ .Values.auth.bootstrapTokensKey }}}}
+              valueFrom: {secretKeyRef: {name: {{ .Values.auth.existingSecret | quote }}, key: {{ .Values.auth.bootstrapTokensKey | quote }}}}
             {{- if .Values.cloudflareAccess.enabled }}
             - name: KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_ENABLED
               value: "true"
             - name: KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_ISSUER_URL
-              valueFrom: {secretKeyRef: {name: {{ .Values.cloudflareAccess.existingSecret }}, key: {{ .Values.cloudflareAccess.issuerUrlKey }}}}
+              valueFrom: {secretKeyRef: {name: {{ .Values.cloudflareAccess.existingSecret | quote }}, key: {{ .Values.cloudflareAccess.issuerUrlKey | quote }}}}
             - name: KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_AUDIENCE
-              valueFrom: {secretKeyRef: {name: {{ .Values.cloudflareAccess.existingSecret }}, key: {{ .Values.cloudflareAccess.audienceKey }}}}
+              valueFrom: {secretKeyRef: {name: {{ .Values.cloudflareAccess.existingSecret | quote }}, key: {{ .Values.cloudflareAccess.audienceKey | quote }}}}
             - name: KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_ALLOWED_EMAILS
-              valueFrom: {secretKeyRef: {name: {{ .Values.cloudflareAccess.existingSecret }}, key: {{ .Values.cloudflareAccess.allowedEmailsKey }}}}
+              valueFrom: {secretKeyRef: {name: {{ .Values.cloudflareAccess.existingSecret | quote }}, key: {{ .Values.cloudflareAccess.allowedEmailsKey | quote }}}}
             - name: KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_SCOPES
               value: {{ .Values.cloudflareAccess.scopes | quote }}
+            - name: KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_PUBLIC_HOSTS
+              value: {{ join "," .Values.cloudflareAccess.publicHosts | quote }}
+            - name: KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_PRIVATE_HOSTS
+              value: {{ join "," .Values.cloudflareAccess.privateHosts | quote }}
             {{- end }}
+            {{- include "knowledge-vault.modelEnv" . | nindent 12 }}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
           volumeMounts:
             - {name: tmp, mountPath: /tmp}
@@ -76,9 +71,7 @@ spec:
           emptyDir: {sizeLimit: 64Mi}
         {{- if .Values.modelCache.existingClaim }}
         - name: model-cache
-          persistentVolumeClaim: {claimName: {{ .Values.modelCache.existingClaim }}}
+          persistentVolumeClaim: {claimName: {{ .Values.modelCache.existingClaim | quote }}}
         {{- end }}
       terminationGracePeriodSeconds: 30
-      {{- with .Values.nodeSelector }}nodeSelector: {{- toYaml . | nindent 8 }}{{- end }}
-      {{- with .Values.tolerations }}tolerations: {{- toYaml . | nindent 8 }}{{- end }}
-      {{- with .Values.affinity }}affinity: {{- toYaml . | nindent 8 }}{{- end }}
+      {{- include "knowledge-vault.scheduling" . | nindent 6 }}

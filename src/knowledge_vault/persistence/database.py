@@ -18,7 +18,11 @@ def async_database_url(url: str) -> str:
 class Database:
     def __init__(self, url: str, *, echo: bool = False) -> None:
         self.engine: AsyncEngine = create_async_engine(
-            async_database_url(url), pool_pre_ping=True, echo=echo
+            async_database_url(url),
+            pool_pre_ping=True,
+            echo=echo,
+            # Statement parameters carry assertion text; keep them out of exception messages.
+            hide_parameters=True,
         )
         self._sessions = async_sessionmaker(self.engine, expire_on_commit=False)
 

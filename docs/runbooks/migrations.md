@@ -1,7 +1,16 @@
 # Database migration and rollback
 
 Alembic owns schema changes. The Helm post-install/post-upgrade Job runs `alembic upgrade head`; API
-and worker init containers wait until the database reports the expected current revision.
+and worker init containers wait until `alembic current` reports the newest revision contained in
+their own image. During an upgrade the new Pods therefore do not start until the migration has
+run, while the previous Pods keep serving. A migration must stay compatible with the previous
+application version for the duration of that rollout: add first, remove in a later release.
+
+Revisions are frozen. Each one spells out its own DDL and must never derive it from
+`Base.metadata`, because the models keep changing after the revision is written. A model change
+that affects the schema needs a new revision; `alembic check` in the integration suite fails when
+models and migrations disagree, and the suite downgrades to base and upgrades through every
+revision.
 
 ## Before an upgrade
 
@@ -14,7 +23,7 @@ For Kubernetes, deploy the reviewed application image and watch the migration Jo
 
 ```bash
 helm upgrade knowledge-vault charts/knowledge-vault -n knowledge-vault -f OPERATOR_VALUES.yaml
-kubectl -n knowledge-vault logs job/knowledge-vault-knowledge-vault-migration
+kubectl -n knowledge-vault logs -f job/knowledge-vault-knowledge-vault-migration
 kubectl -n knowledge-vault get pods
 ```
 

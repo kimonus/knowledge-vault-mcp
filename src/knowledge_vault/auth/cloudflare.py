@@ -86,7 +86,11 @@ class CloudflareAccessAuthenticator:
 
 
 class CloudflareJWKSClient:
-    """Small async JWKS cache with immediate refresh for a newly rotated key ID."""
+    """Small async JWKS cache that refreshes for a newly rotated key ID.
+
+    Refreshes are spaced by `min_refresh_interval`, so assertions carrying unknown key IDs
+    cannot make the origin fetch the key set on every request.
+    """
 
     def __init__(
         self,
@@ -94,14 +98,17 @@ class CloudflareJWKSClient:
         *,
         lifespan: float = 300,
         timeout: float = 5,
+        min_refresh_interval: float = 30,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._url = url
         self._lifespan = lifespan
         self._timeout = timeout
+        self._min_refresh_interval = min_refresh_interval
         self._transport = transport
         self._keys: dict[str, Any] = {}
         self._expires_at = 0.0
+        self._last_refresh_attempt = float("-inf")
         self._lock = asyncio.Lock()
 
     async def get_signing_key(self, token: str) -> Any:
@@ -118,6 +125,9 @@ class CloudflareJWKSClient:
             key = self._keys.get(key_id)
             if key is not None and now < self._expires_at:
                 return key
+            if now - self._last_refresh_attempt < self._min_refresh_interval:
+                raise CloudflareAccessError("Cloudflare Access signing key is unknown")
+            self._last_refresh_attempt = now
             await self._refresh()
             key = self._keys.get(key_id)
             if key is None:

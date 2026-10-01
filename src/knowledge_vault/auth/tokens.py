@@ -3,6 +3,7 @@ import hmac
 import json
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any, cast
 
 
 class Scope(StrEnum):
@@ -40,18 +41,34 @@ class TokenAuthenticator:
 
     @classmethod
     def from_json(cls, raw: str, pepper: str) -> "TokenAuthenticator":
-        if not raw:
+        if not raw.strip():
             return cls((), pepper)
-        decoded = json.loads(raw)
-        records = tuple(
-            TokenRecord(
-                principal_id=item["principal_id"],
-                digest=bytes.fromhex(item["sha256"]),
-                scopes=frozenset(Scope(scope) for scope in item["scopes"]),
-            )
-            for item in decoded
-        )
-        return cls(records, pepper)
+        try:
+            decoded: object = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("bootstrap tokens must be valid JSON") from exc
+        # `generate_token.py` emits one record object; a single record is accepted as-is.
+        items = cast(list[object], decoded) if isinstance(decoded, list) else [decoded]
+        records: list[TokenRecord] = []
+        for item in items:
+            if not isinstance(item, dict):
+                raise ValueError("each bootstrap token record must be a JSON object")
+            record = cast(dict[str, Any], item)
+            try:
+                principal_id = record["principal_id"]
+                digest = bytes.fromhex(record["sha256"])
+                scopes = frozenset(Scope(scope) for scope in record["scopes"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(
+                    "a bootstrap token record needs principal_id, a hexadecimal sha256, "
+                    "and known scopes"
+                ) from exc
+            if not isinstance(principal_id, str) or not principal_id.strip():
+                raise ValueError("bootstrap token principal_id must be a non-empty string")
+            if len(digest) != hashlib.sha256().digest_size:
+                raise ValueError("bootstrap token sha256 must be a 32-byte HMAC-SHA256 digest")
+            records.append(TokenRecord(principal_id=principal_id, digest=digest, scopes=scopes))
+        return cls(tuple(records), pepper)
 
     def authenticate(self, token: str) -> Principal | None:
         candidate = hash_token(token, self._pepper)

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -22,42 +22,71 @@ def _topic(value: str) -> str:
     return normalized
 
 
+def _as_utc(value: datetime) -> datetime:
+    """Interpret a timestamp without an offset as UTC so comparisons and storage are uniform."""
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def _no_nul(value: str) -> str:
+    if "\x00" in value:
+        raise ValueError("text must not contain NUL characters")
+    return value
+
+
 Topic = Annotated[str, Field(min_length=1, max_length=80), AfterValidator(_topic)]
+Timestamp = Annotated[datetime, AfterValidator(_as_utc)]
+SafeText = Annotated[str, AfterValidator(_no_nul)]
 
 
 class SourceInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     url: HttpUrl
-    title: str | None = Field(default=None, max_length=500)
-    publisher: str | None = Field(default=None, max_length=200)
-    retrieved_at: datetime | None = None
+    title: Annotated[SafeText, Field(max_length=500)] | None = None
+    publisher: Annotated[SafeText, Field(max_length=200)] | None = None
+    retrieved_at: Timestamp | None = None
+
+    @model_validator(mode="after")
+    def reject_embedded_credentials(self) -> "SourceInput":
+        if self.url.username or self.url.password:
+            raise ValueError("source URL must not contain embedded credentials")
+        for value in (str(self.url), self.title, self.publisher):
+            secret = detect_secret(value) if value else None
+            if secret:
+                raise ValueError(f"suspected {secret} in source; store only a reference")
+        return self
 
 
 class AssertionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    content: str = Field(min_length=1, max_length=16_000)
+    content: Annotated[SafeText, Field(min_length=1, max_length=16_000)]
     kind: AssertionKind
     origin: AssertionOrigin
     status: AssertionStatus = AssertionStatus.CURRENT
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     topics: list[Topic] = Field(default_factory=list, max_length=32)
     sources: list[SourceInput] = Field(default_factory=list, max_length=16)
-    valid_from: datetime | None = None
-    valid_to: datetime | None = None
-    observed_at: datetime | None = None
+    valid_from: Timestamp | None = None
+    valid_to: Timestamp | None = None
+    observed_at: Timestamp | None = None
     sensitivity: Sensitivity = Sensitivity.NORMAL
     supersedes_id: UUID | None = None
 
     @model_validator(mode="after")
     def validate_semantics(self) -> "AssertionInput":
-        secret = detect_secret(self.content)
-        if secret:
-            raise ValueError(f"suspected {secret}; store only a reference to the secret")
+        for value in (self.content, *self.topics):
+            secret = detect_secret(value)
+            if secret:
+                raise ValueError(f"suspected {secret}; store only a reference to the secret")
         if self.valid_from and self.valid_to and self.valid_to <= self.valid_from:
             raise ValueError("valid_to must be later than valid_from")
         self.topics = list(dict.fromkeys(self.topics))
+        # One provenance row per URL: a repeated URL would violate the database constraint.
+        unique_sources: dict[str, SourceInput] = {}
+        for source in self.sources:
+            unique_sources.setdefault(str(source.url), source)
+        self.sources = list(unique_sources.values())
         if self.status is AssertionStatus.SUPERSEDED and self.supersedes_id:
             raise ValueError("a new correction cannot itself be submitted as superseded")
         return self
@@ -136,9 +165,9 @@ class SearchFilters(BaseModel):
     topics: list[Topic] = Field(default_factory=list, max_length=16)
     sensitivities: list[Sensitivity] = Field(default_factory=list, max_length=3)
     minimum_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    valid_at: datetime | None = None
-    created_after: datetime | None = None
-    created_before: datetime | None = None
+    valid_at: Timestamp | None = None
+    created_after: Timestamp | None = None
+    created_before: Timestamp | None = None
 
 
 class SearchHit(BaseModel):

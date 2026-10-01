@@ -1,11 +1,13 @@
 import hashlib
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
 
 from pydantic import ValidationError
-from sqlalchemy import CursorResult, delete, select, update
+from sqlalchemy import CursorResult, delete, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -26,8 +28,25 @@ from knowledge_vault.persistence.tables import (
     FlushPartRow,
     SourceRow,
 )
-from knowledge_vault.services.conflicts import looks_contradictory
-from knowledge_vault.services.errors import BatchIncompleteError, ConflictError, NotFoundError
+from knowledge_vault.services.conflicts import looks_contradictory, polarity_key
+from knowledge_vault.services.errors import (
+    BatchIncompleteError,
+    ConflictError,
+    InvalidRequestError,
+    NotFoundError,
+)
+
+# A concurrent commit can insert the same normalized content first. Rerunning the transaction
+# then confirms that row instead, so a small bounded number of attempts always converges.
+_COMMIT_ATTEMPTS = 4
+_CONTENT_HASH_CONSTRAINT = "assertions_content_hash_key"
+_MAX_CONFLICT_CANDIDATES = 200
+
+
+def _lost_content_race(error: IntegrityError) -> bool:
+    """True only for the unique violation that a rerun resolves by confirming the other row."""
+    diagnostics = getattr(error.orig, "diag", None)
+    return getattr(diagnostics, "constraint_name", None) == _CONTENT_HASH_CONSTRAINT
 
 
 def _canonical_hash(value: Any) -> str:
@@ -37,6 +56,14 @@ def _canonical_hash(value: Any) -> str:
 
 def _idempotency_hash(principal_id: str, key: str) -> str:
     return hashlib.sha256(f"{principal_id}\0{key}".encode()).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class _Applied:
+    assertion_id: UUID
+    outcome: str
+    conflict_ids: list[UUID]
+    superseded: bool
 
 
 class IngestionService:
@@ -52,11 +79,13 @@ class IngestionService:
         declared_items: int,
     ) -> FlushBatchRow:
         if not idempotency_key or len(idempotency_key) > 200:
-            raise ConflictError("idempotency_key must contain 1 through 200 characters")
+            raise InvalidRequestError("idempotency_key must contain 1 through 200 characters")
         if not 1 <= declared_parts <= self._settings.max_parts:
-            raise ConflictError(f"declared_parts must be between 1 and {self._settings.max_parts}")
+            raise InvalidRequestError(
+                f"declared_parts must be between 1 and {self._settings.max_parts}"
+            )
         if not 1 <= declared_items <= self._settings.max_batch_items:
-            raise ConflictError(
+            raise InvalidRequestError(
                 f"declared_items must be between 1 and {self._settings.max_batch_items}"
             )
         key_hash = _idempotency_hash(principal_id, idempotency_key)
@@ -73,6 +102,7 @@ class IngestionService:
                     or existing.declared_items != declared_items
                 ):
                     raise ConflictError("idempotency key was already used with different totals")
+                existing.replayed = True
                 return existing
             batch = FlushBatchRow(
                 principal_id=principal_id,
@@ -91,10 +121,10 @@ class IngestionService:
         principal_id: str,
         batch_id: UUID,
         part_number: int,
-        raw_items: list[dict[str, Any]],
+        raw_items: list[Any],
     ) -> tuple[int, list[RejectedItem], bool]:
         if not 1 <= len(raw_items) <= self._settings.max_part_items:
-            raise ConflictError(
+            raise InvalidRequestError(
                 f"a part must contain 1 through {self._settings.max_part_items} items"
             )
         request_hash = _canonical_hash(raw_items)
@@ -127,38 +157,66 @@ class IngestionService:
                 raise NotFoundError("flush batch was not found")
             if batch.state != BatchState.OPEN:
                 raise ConflictError(f"cannot append to batch in {batch.state} state")
-            if batch.expires_at <= datetime.now(UTC):
-                batch.state = BatchState.EXPIRED
-                raise ConflictError("flush batch has expired")
-            if not 1 <= part_number <= batch.declared_parts:
-                raise ConflictError("part_number is outside the declared range")
-            prior = await session.scalar(
-                select(FlushPartRow).where(
-                    FlushPartRow.batch_id == batch_id,
-                    FlushPartRow.part_number == part_number,
+            expired = batch.expires_at <= datetime.now(UTC)
+            if expired:
+                await self._expire(session, batch)
+            else:
+                if not 1 <= part_number <= batch.declared_parts:
+                    raise ConflictError("part_number is outside the declared range")
+                prior = await session.scalar(
+                    select(FlushPartRow).where(
+                        FlushPartRow.batch_id == batch_id,
+                        FlushPartRow.part_number == part_number,
+                    )
                 )
-            )
-            if prior:
-                if prior.payload_hash != request_hash:
-                    raise ConflictError("part number was already accepted with a different payload")
-                prior_rejected = [
-                    RejectedItem.model_validate(item["_rejected"])
-                    for item in prior.payload
-                    if "_rejected" in item
-                ]
-                return prior.item_count - len(prior_rejected), prior_rejected, True
-            session.add(
-                FlushPartRow(
-                    batch_id=batch_id,
-                    part_number=part_number,
-                    payload_hash=request_hash,
-                    item_count=len(raw_items),
-                    payload=staged,
+                if prior:
+                    if prior.payload_hash != request_hash:
+                        raise ConflictError(
+                            "part number was already accepted with a different payload"
+                        )
+                    prior_rejected = [
+                        RejectedItem.model_validate(item["_rejected"])
+                        for item in prior.payload
+                        if "_rejected" in item
+                    ]
+                    return prior.item_count - len(prior_rejected), prior_rejected, True
+                session.add(
+                    FlushPartRow(
+                        batch_id=batch_id,
+                        part_number=part_number,
+                        payload_hash=request_hash,
+                        item_count=len(raw_items),
+                        payload=staged,
+                    )
                 )
-            )
+        if expired:
+            # Raised only after the transaction recording the expiry has committed.
+            raise ConflictError("flush batch has expired")
         return len(raw_items) - len(rejected), rejected, False
 
     async def commit(self, principal_id: str, batch_id: UUID) -> CommitResult:
+        for _ in range(_COMMIT_ATTEMPTS):
+            try:
+                result, fresh = await self._commit_once(principal_id, batch_id)
+            except IntegrityError as error:
+                if not _lost_content_race(error):
+                    # Any other violation is deterministic; retrying cannot help.
+                    raise
+                continue
+            if result is None:
+                raise ConflictError("flush batch has expired")
+            if fresh:
+                BATCH_TRANSITIONS.labels(state=BatchState.COMMITTED).inc()
+                for outcome, value in result.counts.model_dump().items():
+                    if value:
+                        ASSERTION_OUTCOMES.labels(outcome=outcome).inc(value)
+            return result
+        raise ConflictError("commit conflicted with concurrent writes; retry the same commit")
+
+    async def _commit_once(
+        self, principal_id: str, batch_id: UUID
+    ) -> tuple[CommitResult | None, bool]:
+        """Return (result, newly committed); a None result means the batch expired."""
         async with self._sessions.begin() as session:
             batch = await session.scalar(
                 select(FlushBatchRow)
@@ -172,9 +230,12 @@ class IngestionService:
             if not batch:
                 raise NotFoundError("flush batch was not found")
             if batch.state == BatchState.COMMITTED and batch.result:
-                return CommitResult.model_validate(batch.result)
+                return CommitResult.model_validate(batch.result), False
             if batch.state != BatchState.OPEN:
                 raise ConflictError(f"cannot commit batch in {batch.state} state")
+            if batch.expires_at <= datetime.now(UTC):
+                await self._expire(session, batch)
+                return None, False
             expected = set(range(1, batch.declared_parts + 1))
             received = {part.part_number for part in batch.parts}
             received_items = sum(part.item_count for part in batch.parts)
@@ -201,15 +262,15 @@ class IngestionService:
                         global_index += 1
                         continue
                     item = AssertionInput.model_validate(raw)
-                    assertion_id, outcome, conflicts = await self._apply_item(session, item)
-                    assertion_ids.append(assertion_id)
-                    setattr(counts, outcome, getattr(counts, outcome) + 1)
-                    if outcome == "inserted" and self._settings.embeddings_enabled:
+                    applied = await self._apply_item(session, item)
+                    assertion_ids.append(applied.assertion_id)
+                    setattr(counts, applied.outcome, getattr(counts, applied.outcome) + 1)
+                    if applied.outcome == "inserted" and self._settings.embeddings_enabled:
                         counts.embedding_pending += 1
-                    if item.supersedes_id:
+                    if applied.superseded:
                         counts.superseded += 1
-                    counts.possible_conflicts += len(conflicts)
-                    conflict_ids.extend(conflicts)
+                    counts.possible_conflicts += len(applied.conflict_ids)
+                    conflict_ids.extend(applied.conflict_ids)
                     global_index += 1
 
             result = CommitResult(
@@ -225,16 +286,14 @@ class IngestionService:
             # Once committed, retain only hashes/counters/result metadata, not
             # assertion staging text.
             await session.execute(delete(FlushPartRow).where(FlushPartRow.batch_id == batch.id))
+        return result, True
 
-        BATCH_TRANSITIONS.labels(state=BatchState.COMMITTED).inc()
-        for outcome, value in counts.model_dump().items():
-            if value:
-                ASSERTION_OUTCOMES.labels(outcome=outcome).inc(value)
-        return result
+    @staticmethod
+    async def _expire(session: AsyncSession, batch: FlushBatchRow) -> None:
+        batch.state = BatchState.EXPIRED
+        await session.execute(delete(FlushPartRow).where(FlushPartRow.batch_id == batch.id))
 
-    async def _apply_item(
-        self, session: AsyncSession, item: AssertionInput
-    ) -> tuple[UUID, str, list[UUID]]:
+    async def _apply_item(self, session: AsyncSession, item: AssertionInput) -> _Applied:
         existing = await session.scalar(
             select(AssertionRow)
             .options(selectinload(AssertionRow.sources))
@@ -242,18 +301,32 @@ class IngestionService:
             .with_for_update()
         )
         if existing:
+            changed = False
+            superseded = False
+            if item.supersedes_id:
+                # An explicit correction back to already-known wording: retire the named
+                # assertion and make the existing row carry the submitted status again.
+                if item.supersedes_id == existing.id:
+                    raise ConflictError("an assertion cannot supersede itself")
+                await self._supersede(session, item.supersedes_id)
+                superseded = True
+                if existing.status != item.status:
+                    existing.status = item.status
+                    changed = True
+            elif (
+                existing.status in (AssertionStatus.UNCERTAIN, AssertionStatus.DISPUTED)
+                and item.status is AssertionStatus.CURRENT
+            ):
+                existing.status = AssertionStatus.CURRENT
+                changed = True
             existing.confirmation_count += 1
             existing.last_confirmed_at = datetime.now(UTC)
-            changed = self._enrich(existing, item)
-            return existing.id, "enriched_updated" if changed else "confirmed_existing", []
+            changed = self._enrich(existing, item) or changed
+            outcome = "enriched_updated" if changed else "confirmed_existing"
+            return _Applied(existing.id, outcome, [], superseded)
 
         if item.supersedes_id:
-            old = await session.get(AssertionRow, item.supersedes_id, with_for_update=True)
-            if not old:
-                raise NotFoundError(f"superseded assertion {item.supersedes_id} was not found")
-            if old.status == AssertionStatus.SUPERSEDED:
-                raise ConflictError(f"assertion {old.id} is already superseded")
-            old.status = AssertionStatus.SUPERSEDED
+            await self._supersede(session, item.supersedes_id)
 
         row = AssertionRow(
             content=item.content,
@@ -289,7 +362,28 @@ class IngestionService:
         if self._settings.embeddings_enabled:
             session.add(EmbeddingJobRow(assertion_id=row.id, model=self._settings.embedding_model))
         conflicts = await self._record_conflicts(session, row)
-        return row.id, "inserted", conflicts
+        return _Applied(row.id, "inserted", conflicts, item.supersedes_id is not None)
+
+    @staticmethod
+    async def _supersede(session: AsyncSession, assertion_id: UUID) -> None:
+        old = await session.get(AssertionRow, assertion_id, with_for_update=True)
+        if not old:
+            raise NotFoundError(f"superseded assertion {assertion_id} was not found")
+        if old.status == AssertionStatus.SUPERSEDED:
+            raise ConflictError(f"assertion {old.id} is already superseded")
+        old.status = AssertionStatus.SUPERSEDED
+        # A conflict involving a retired assertion no longer needs review.
+        await session.execute(
+            update(ConflictRow)
+            .where(
+                ConflictRow.resolved_at.is_(None),
+                or_(
+                    ConflictRow.left_assertion_id == assertion_id,
+                    ConflictRow.right_assertion_id == assertion_id,
+                ),
+            )
+            .values(resolved_at=datetime.now(UTC))
+        )
 
     @staticmethod
     def _enrich(existing: AssertionRow, item: AssertionInput) -> bool:
@@ -312,6 +406,7 @@ class IngestionService:
                         retrieved_at=source.retrieved_at,
                     )
                 )
+                source_urls.add(str(source.url))
                 changed = True
         return changed
 
@@ -319,14 +414,25 @@ class IngestionService:
     async def _record_conflicts(session: AsyncSession, new: AssertionRow) -> list[UUID]:
         if new.supersedes_id:
             return []
+        key, _ = polarity_key(new.normalized_content)
+        if not key:
+            return []
+        # A contradicting statement contains every word of this one apart from the negation, so
+        # the full-text index finds candidates whether or not the assertions share a topic.
         candidates = (
             await session.scalars(
-                select(AssertionRow).where(
+                select(AssertionRow)
+                .where(
                     AssertionRow.id != new.id,
                     AssertionRow.kind == new.kind,
                     AssertionRow.status == AssertionStatus.CURRENT,
-                    AssertionRow.topics.overlap(new.topics),
+                    or_(
+                        AssertionRow.search_vector.op("@@")(func.plainto_tsquery("simple", key)),
+                        AssertionRow.topics.overlap(new.topics),
+                    ),
                 )
+                .order_by(AssertionRow.created_at.desc(), AssertionRow.id)
+                .limit(_MAX_CONFLICT_CANDIDATES)
             )
         ).all()
         conflict_ids: list[UUID] = []
@@ -365,6 +471,7 @@ class IngestionService:
         return True
 
     async def expire_and_purge(self) -> tuple[int, int]:
+        """Expire abandoned open batches and purge staging metadata past its retention."""
         now = datetime.now(UTC)
         retention_cutoff = now - timedelta(seconds=self._settings.staging_retention_seconds)
         async with self._sessions.begin() as session:
@@ -388,7 +495,7 @@ class IngestionService:
                     FlushBatchRow.updated_at < retention_cutoff,
                 )
             )
-        return (
-            int(cast(CursorResult[Any], expired).rowcount or 0),
-            int(cast(CursorResult[Any], purged).rowcount or 0),
-        )
+        expired_count = int(cast(CursorResult[Any], expired).rowcount or 0)
+        if expired_count:
+            BATCH_TRANSITIONS.labels(state=BatchState.EXPIRED).inc(expired_count)
+        return expired_count, int(cast(CursorResult[Any], purged).rowcount or 0)

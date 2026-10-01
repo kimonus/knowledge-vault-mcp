@@ -1,23 +1,121 @@
 {{- if .Values.networkPolicy.enabled }}
+{{- $fullname := include "knowledge-vault.fullname" . -}}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "knowledge-vault.fullname" . }}
+  name: {{ $fullname }}-api
   labels: {{- include "knowledge-vault.labels" . | nindent 4 }}
 spec:
   podSelector:
-    matchLabels: {{- include "knowledge-vault.selectorLabels" . | nindent 6 }}
+    matchLabels:
+      {{- include "knowledge-vault.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  policyTypes: [Ingress, Egress]
+  ingress:
+    {{- with .Values.networkPolicy.apiIngressFrom }}
+    - from: {{- toYaml . | nindent 8 }}
+      ports: [{protocol: TCP, port: 8000}]
+    {{- end }}
+    {{- if .Values.cloudflareTunnel.enabled }}
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "knowledge-vault.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: cloudflared
+      ports: [{protocol: TCP, port: 8000}]
+    {{- end }}
+  egress:
+    {{- include "knowledge-vault.egressDns" . | nindent 4 }}
+    {{- include "knowledge-vault.egressDatabase" . | nindent 4 }}
+    {{- if .Values.cloudflareAccess.enabled }}
+    # Signing keys are fetched from the Cloudflare team domain.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+      ports: [{protocol: TCP, port: 443}]
+    {{- end }}
+    {{- with .Values.networkPolicy.additionalEgress }}{{ toYaml . | nindent 4 }}{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-worker
+  labels: {{- include "knowledge-vault.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "knowledge-vault.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  policyTypes: [Ingress, Egress]
+  ingress:
+    {{- with .Values.networkPolicy.metricsIngressFrom }}
+    - from: {{- toYaml . | nindent 8 }}
+      ports: [{protocol: TCP, port: {{ $.Values.worker.metricsPort }}}]
+    {{- else }}
+    []
+    {{- end }}
+  egress:
+    {{- include "knowledge-vault.egressDns" . | nindent 4 }}
+    {{- include "knowledge-vault.egressDatabase" . | nindent 4 }}
+    {{- with .Values.networkPolicy.additionalEgress }}{{ toYaml . | nindent 4 }}{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-migration
+  labels: {{- include "knowledge-vault.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "knowledge-vault.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: migration
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    {{- include "knowledge-vault.egressDns" . | nindent 4 }}
+    {{- include "knowledge-vault.egressDatabase" . | nindent 4 }}
+{{- if .Values.internalPostgresql.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-postgresql
+  labels: {{- include "knowledge-vault.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "knowledge-vault.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgresql
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
-        - namespaceSelector: {}
-      ports: [{protocol: TCP, port: 8000}]
+        {{- range $component := list "api" "worker" "migration" "backup" }}
+        - podSelector:
+            matchLabels:
+              {{- include "knowledge-vault.selectorLabels" $ | nindent 14 }}
+              app.kubernetes.io/component: {{ $component }}
+        {{- end }}
+      ports: [{protocol: TCP, port: 5432}]
+  egress: []
+{{- end }}
+{{- if .Values.backup.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-backup
+  labels: {{- include "knowledge-vault.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "knowledge-vault.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backup
+  policyTypes: [Ingress, Egress]
+  ingress: []
   egress:
-    - to:
-        - namespaceSelector: {}
-      ports:
-        - {protocol: UDP, port: 53}
-        - {protocol: TCP, port: 53}
-    - ports: [{protocol: TCP, port: 5432}]
-    {{- with .Values.networkPolicy.additionalEgress }}{{ toYaml . | nindent 4 }}{{- end }}
+    {{- include "knowledge-vault.egressDns" . | nindent 4 }}
+    {{- include "knowledge-vault.egressDatabase" . | nindent 4 }}
+    {{- with .Values.networkPolicy.backupEgress }}{{ toYaml . | nindent 4 }}{{- end }}
+{{- end }}
 {{- end }}
