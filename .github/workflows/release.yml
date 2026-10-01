@@ -51,6 +51,8 @@ jobs:
           "$RUNNER_TEMP/bin/gitleaks" dir . --redact --exit-code 1
       - run: |
           "$RUNNER_TEMP/bin/hadolint" Dockerfile Dockerfile.backup
+      - run: |
+          "$RUNNER_TEMP/bin/actionlint" -color
       - run: docker build --pull=false -t knowledge-vault:release-candidate .
       - run: docker build --pull=false -f Dockerfile.backup -t knowledge-vault-backup:release-candidate .
       - run: sh scripts/ci/test_backup_restore.sh knowledge-vault-backup:release-candidate

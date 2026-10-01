@@ -35,4 +35,10 @@ download \
   syft.tar.gz 8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3
 tar -xzf "${work}/syft.tar.gz" -C "${destination}" syft
 
-chmod 0755 "${destination}/gitleaks" "${destination}/trivy" "${destination}/syft"
+download \
+  https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+  actionlint.tar.gz 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+tar -xzf "${work}/actionlint.tar.gz" -C "${destination}" actionlint
+
+chmod 0755 "${destination}/gitleaks" "${destination}/trivy" "${destination}/syft" \
+  "${destination}/actionlint"

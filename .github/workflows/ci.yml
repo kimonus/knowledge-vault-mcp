@@ -31,7 +31,7 @@ jobs:
       - run: uv run python scripts/check_coverage.py coverage.json
       - run: uv run pip-audit --path .venv/lib/python3.12/site-packages --progress-spinner off
       - run: uv run bandit -q -r src
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: coverage
           path: |
@@ -50,6 +50,8 @@ jobs:
           "$RUNNER_TEMP/bin/gitleaks" dir . --redact --exit-code 1
       - run: |
           "$RUNNER_TEMP/bin/hadolint" Dockerfile Dockerfile.backup
+      - run: |
+          "$RUNNER_TEMP/bin/actionlint" -color
       - run: docker build --pull=false -t knowledge-vault:ci .
       - run: docker build --pull=false -f Dockerfile.backup -t knowledge-vault-backup:ci .
       - run: sh scripts/ci/test_backup_restore.sh knowledge-vault-backup:ci
@@ -59,7 +61,7 @@ jobs:
           "$RUNNER_TEMP/bin/trivy" image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL knowledge-vault-backup:ci
       - run: |
           "$RUNNER_TEMP/bin/syft" knowledge-vault:ci -o cyclonedx-json=knowledge-vault.sbom.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: sbom
           path: knowledge-vault.sbom.json

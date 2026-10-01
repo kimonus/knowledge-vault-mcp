@@ -2,16 +2,37 @@ version: 2
 updates:
   - package-ecosystem: uv
     directory: /
+    open-pull-requests-limit: 5
     schedule:
       interval: weekly
     groups:
       python-minor:
+        patterns: ["*"]
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
   - package-ecosystem: github-actions
     directory: /
+    open-pull-requests-limit: 2
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
   - package-ecosystem: docker
     directory: /
+    open-pull-requests-limit: 3
     schedule:
       interval: weekly
+    groups:
+      container-patches:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: python
+        versions: [">=3.13"]
+      - dependency-name: postgres
+        versions: [">=18"]
+      - dependency-name: golang
+        versions: [">=1.27"]
