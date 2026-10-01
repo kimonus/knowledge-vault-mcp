@@ -31,7 +31,7 @@ Issues = "https://github.com/kimonus/knowledge-vault-mcp/issues"
 Changelog = "https://github.com/kimonus/knowledge-vault-mcp/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-embeddings = ["sentence-transformers>=5.1,<6", "torch>=2.9,<3"]
+embeddings = ["sentence-transformers>=5.1,<7", "torch>=2.9,<3"]
 
 [dependency-groups]
 dev = [
