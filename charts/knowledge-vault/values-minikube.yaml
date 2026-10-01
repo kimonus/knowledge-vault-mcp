@@ -1,3 +1,8 @@
+# Images built locally inside the Minikube Docker daemon (see docs/runbooks/minikube.md).
+image:
+  repository: knowledge-vault
+backupImage:
+  repository: knowledge-vault-backup
 config:
   publicBaseUrl: https://KNOWLEDGE_VAULT_LAN_HOST
   authIssuerUrl: https://KNOWLEDGE_VAULT_LAN_HOST

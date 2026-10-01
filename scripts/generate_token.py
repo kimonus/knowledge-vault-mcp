@@ -11,27 +11,32 @@ from knowledge_vault.auth.device_tokens import (
     generate_record,
     write_private_file,
 )
+from knowledge_vault.auth.tokens import Scope
 
 
 def read_pepper(args: argparse.Namespace) -> str:
-    if args.pepper is not None:
-        return str(args.pepper)
     if args.pepper_file is not None:
         return Path(args.pepper_file).read_text(encoding="utf-8").strip()
     return sys.stdin.read().strip()
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--principal", default="me")
+    # Abbreviated options are disabled so a mistyped flag fails instead of matching another one.
+    parser = argparse.ArgumentParser(allow_abbrev=False)
+    parser.add_argument("--principal", "--principal-id", dest="principal", default="me")
+    # The pepper is read from a file or standard input only: command-line arguments are visible
+    # to other local users and are kept in shell history.
     pepper_source = parser.add_mutually_exclusive_group(required=True)
-    pepper_source.add_argument("--pepper")
     pepper_source.add_argument("--pepper-file", type=Path)
     pepper_source.add_argument("--pepper-stdin", action="store_true")
     parser.add_argument(
         "--scopes",
+        "--scope",
+        dest="scopes",
         nargs="+",
-        default=DEFAULT_DEVICE_SCOPES,
+        action="extend",
+        choices=[scope.value for scope in Scope],
+        help="may be repeated; defaults to read and write",
     )
     parser.add_argument("--token-output", type=Path)
     parser.add_argument("--record-output", type=Path)
@@ -40,7 +45,8 @@ def main() -> None:
     if not pepper:
         parser.error("pepper cannot be empty")
 
-    token, record = generate_record(args.principal, args.scopes, pepper)
+    scopes = list(dict.fromkeys(args.scopes or DEFAULT_DEVICE_SCOPES))
+    token, record = generate_record(args.principal, scopes, pepper)
     record_json = json.dumps(record, separators=(",", ":"))
 
     if args.token_output is None:

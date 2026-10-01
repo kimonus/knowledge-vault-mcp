@@ -9,12 +9,22 @@ backup_dir="$(mktemp -d)"
 trap 'rm -rf "${backup_dir}"' EXIT INT TERM
 dump_path="${backup_dir}/knowledge-vault.dump"
 
+# The container root filesystem is read-only; keep the restic cache on the writable scratch volume.
+RESTIC_CACHE_DIR="${RESTIC_CACHE_DIR:-${backup_dir}/restic-cache}"
+export RESTIC_CACHE_DIR
+
+# Snapshots are identified by a stable host and tag. The dump directory and the Pod hostname differ
+# on every run, so retention must not group by path or by the container hostname.
+backup_host="${BACKUP_HOST:-knowledge-vault}"
+backup_tag="knowledge-vault-postgresql"
+
 pg_dump --dbname="${DATABASE_URL}" --format=custom --no-owner --no-privileges --file="${dump_path}"
 (
   cd "${backup_dir}"
-  restic backup knowledge-vault.dump --tag knowledge-vault-postgresql
+  restic backup knowledge-vault.dump --host "${backup_host}" --tag "${backup_tag}"
 )
-restic forget --keep-daily "${BACKUP_KEEP_DAILY:-7}" \
+restic forget --tag "${backup_tag}" --group-by tags \
+  --keep-daily "${BACKUP_KEEP_DAILY:-7}" \
   --keep-weekly "${BACKUP_KEEP_WEEKLY:-4}" \
   --keep-monthly "${BACKUP_KEEP_MONTHLY:-6}" --prune
 restic check --read-data-subset="${BACKUP_CHECK_SUBSET:-5%}"

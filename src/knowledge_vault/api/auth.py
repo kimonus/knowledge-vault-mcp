@@ -4,12 +4,10 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from knowledge_vault.auth.cloudflare import current_cloudflare_principal
-from knowledge_vault.auth.rate_limit import RateLimit, SlidingWindowRateLimiter
 from knowledge_vault.auth.tokens import Principal, Scope
-from knowledge_vault.services.errors import ForbiddenError, RateLimitedError, UnauthorizedError
+from knowledge_vault.services.errors import ForbiddenError, UnauthorizedError
 
 _bearer = HTTPBearer(auto_error=False)
-_limiter = SlidingWindowRateLimiter()
 
 
 async def authenticated(
@@ -33,19 +31,7 @@ def require_scope(scope: Scope) -> Callable[..., Awaitable[Principal]]:
     ) -> Principal:
         if not principal.permits(scope):
             raise ForbiddenError(f"missing required scope: {scope}")
-        settings = request.app.state.container.settings
-        operation_class = {
-            Scope.READ: "read",
-            Scope.WRITE: "write",
-            Scope.ADMIN: "admin",
-        }[scope]
-        limit = {
-            Scope.READ: settings.rate_read_per_minute,
-            Scope.WRITE: settings.rate_write_per_minute,
-            Scope.ADMIN: settings.rate_admin_per_minute,
-        }[scope]
-        if not _limiter.allow(principal.id, operation_class, RateLimit(limit)):
-            raise RateLimitedError(f"{operation_class} rate limit exceeded")
+        request.app.state.container.rate_limits.enforce(principal.id, scope)
         return principal
 
     return dependency

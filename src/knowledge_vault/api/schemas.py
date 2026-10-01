@@ -1,4 +1,5 @@
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,7 +17,9 @@ class BeginFlushRequest(BaseModel):
 class AppendPartRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    assertions: list[dict[str, Any]]
+    # Items are validated one by one by the ingestion service so that a single invalid or
+    # secret-shaped item is rejected on its own instead of failing the whole part.
+    assertions: list[Any] = Field(min_length=1, max_length=1000)
 
 
 class SearchRequest(BaseModel):
@@ -38,7 +41,7 @@ class CorrectionRequest(BaseModel):
 class ForgetPreviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    assertion_ids: list[str] = Field(min_length=1, max_length=100)
+    assertion_ids: list[UUID] = Field(min_length=1, max_length=100)
 
 
 class ForgetConfirmRequest(BaseModel):

@@ -56,18 +56,35 @@ docker run --rm \
   --entrypoint restic \
   "${image}" init --repo /repository >/dev/null
 
-docker run --rm \
-  --network "container:${database_container}" \
+# Run the job exactly as the chart does: read-only root filesystem with only /tmp writable.
+# Three runs with a keep-one policy must leave one snapshot, proving that retention prunes.
+run=0
+while [ "${run}" -lt 3 ]; do
+  run=$((run + 1))
+  docker run --rm --read-only --tmpfs /tmp:rw,size=256m \
+    --network "container:${database_container}" \
+    --volume "${work_dir}/repository:/repository" \
+    --volume "${work_dir}/secrets:/secrets:ro" \
+    --env DATABASE_URL=postgresql://knowledge_vault:disposable-database-password@127.0.0.1:5432/knowledge_vault \
+    --env RESTIC_REPOSITORY=/repository \
+    --env RESTIC_PASSWORD_FILE=/secrets/password \
+    --env BACKUP_KEEP_DAILY=1 \
+    --env BACKUP_KEEP_WEEKLY=1 \
+    --env BACKUP_KEEP_MONTHLY=1 \
+    --env BACKUP_CHECK_SUBSET=100% \
+    "${image}" >/dev/null
+done
+
+snapshot_count="$(docker run --rm \
   --volume "${work_dir}/repository:/repository" \
   --volume "${work_dir}/secrets:/secrets:ro" \
-  --env DATABASE_URL=postgresql://knowledge_vault:disposable-database-password@127.0.0.1:5432/knowledge_vault \
-  --env RESTIC_REPOSITORY=/repository \
   --env RESTIC_PASSWORD_FILE=/secrets/password \
-  --env BACKUP_KEEP_DAILY=1 \
-  --env BACKUP_KEEP_WEEKLY=1 \
-  --env BACKUP_KEEP_MONTHLY=1 \
-  --env BACKUP_CHECK_SUBSET=100% \
-  "${image}" >/dev/null
+  --entrypoint restic \
+  "${image}" snapshots --repo /repository --json | grep -o '"short_id"' | wc -l)"
+if [ "${snapshot_count}" -ne 1 ]; then
+  echo "retention kept ${snapshot_count} snapshots; expected exactly 1" >&2
+  exit 1
+fi
 
 docker run --rm \
   --volume "${work_dir}/repository:/repository" \

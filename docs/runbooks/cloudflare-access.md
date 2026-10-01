@@ -70,9 +70,14 @@ configured through `cloudflareAccess.existingSecret` and `cloudflareTunnel.exist
 tunnel Secret must contain the token under `cloudflareTunnel.tokenKey` (default: `token`). Do not
 commit rendered Secrets.
 
-Enable the connector with operator-local values:
+Enable origin validation and the connector with operator-local values:
 
 ```yaml
+cloudflareAccess:
+  enabled: true
+  existingSecret: knowledge-vault-cloudflare-access
+  publicHosts: [PUBLIC_MCP_HOST]
+  privateHosts: [PRIVATE_MCP_HOST]
 cloudflareTunnel:
   enabled: true
   existingSecret: knowledge-vault-cloudflared
@@ -81,6 +86,22 @@ cloudflareTunnel:
     tag: "RELEASE_FOR_HUMANS"
     digest: "sha256:VERIFIED_IMMUTABLE_DIGEST"
 ```
+
+`publicHosts` is required: the origin refuses every request for those hostnames that does not
+carry a valid signed assertion, whatever other credential is attached. Host names are compared
+after removing the port, letter case, and a trailing dot, and a request with a missing or repeated
+`Host` header is rejected. `privateHosts` is strongly recommended: with it, device bearer tokens
+are accepted only for the listed private hostnames and every other hostname—including in-cluster
+Service names—requires an assertion. Health probes are exempt so that the kubelet can reach the
+Pod by IP. Also set `config.publicBaseUrl` to `https://PUBLIC_MCP_HOST`; it is advertised in MCP
+resource metadata and in search result URLs.
+
+OAuth protected-resource metadata is served, and referenced from `401` challenges, only for the
+published hostnames; the private endpoint answers with a plain `Bearer` challenge because device
+tokens are issued out of band.
+
+The API Pod fetches Cloudflare's signing keys over HTTPS. The chart's NetworkPolicy allows that
+egress automatically when Access is enabled.
 
 Before deployment, scan that exact image and reject known fixable HIGH or CRITICAL findings. The
 chart refuses to enable the tunnel without an immutable digest, runs Cloudflared without root or a
@@ -95,6 +116,7 @@ Deploy the API and Cloudflared connector first. Confirm:
 - API and tunnel Pods are ready;
 - the origin Service remains `ClusterIP`;
 - the private LAN/WireGuard endpoint still requires a device bearer token;
+- a device bearer token sent with `Host: PUBLIC_MCP_HOST` and no assertion is answered with `401`;
 - origin configuration fails closed when issuer, audience, or allowed identities are missing.
 
 ## Publish the protected route
@@ -102,7 +124,8 @@ Deploy the API and Cloudflared connector first. Confirm:
 Add a tunnel-published application route:
 
 - hostname: `PUBLIC_MCP_HOST`;
-- service: `http://knowledge-vault:8000` or the chart's actual ClusterIP service DNS name;
+- service: the chart's ClusterIP Service, `http://knowledge-vault-knowledge-vault:8000` for a
+  release named `knowledge-vault` without `fullnameOverride`;
 - HTTP Host header: leave unchanged;
 - Access JWT validation: enabled;
 - Access application: the exact MCP application created above.

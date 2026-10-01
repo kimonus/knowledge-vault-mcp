@@ -46,9 +46,12 @@ printf '%s' "$KNOWLEDGE_VAULT_TOKEN_PEPPER" | \
   uv run python scripts/generate_token.py --pepper-stdin
 ```
 
-Put the printed `RECORD` in `KNOWLEDGE_VAULT_BOOTSTRAP_TOKENS`, retain the one-time `TOKEN` in a
-password manager, and use the same pepper in `KNOWLEDGE_VAULT_TOKEN_PEPPER`. Then run the API and
-worker in separate terminals:
+Put the printed `RECORD` in `KNOWLEDGE_VAULT_BOOTSTRAP_TOKENS` (one record object or a JSON array
+of records), retain the one-time `TOKEN` in a password manager, and use the same pepper in
+`KNOWLEDGE_VAULT_TOKEN_PEPPER`. Model weights are loaded from local files only: either set
+`KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED=false` for full-text operation, or install the `embeddings`
+extra and set `KNOWLEDGE_VAULT_EMBEDDING_ALLOW_DOWNLOAD=true` once on a development machine to
+fetch the model. Then run the API and worker in separate terminals:
 
 ```bash
 uv run knowledge-vault-api
@@ -75,6 +78,8 @@ helm lint charts/knowledge-vault -f charts/knowledge-vault/values-minikube.yaml
 helm template knowledge-vault charts/knowledge-vault \
   -f charts/knowledge-vault/values-minikube.yaml > rendered.yaml
 kubeconform -strict -summary -kubernetes-version 1.33.0 rendered.yaml
+docker build --pull=false -f Dockerfile.backup -t knowledge-vault-backup:local .
+sh scripts/ci/test_backup_restore.sh knowledge-vault-backup:local
 # If the Codex plugin validator is installed:
 python3 "$CODEX_HOME/skills/.system/plugin-creator/scripts/validate_plugin.py" \
   plugin/knowledge-vault
@@ -89,17 +94,55 @@ All runtime variables use the `KNOWLEDGE_VAULT_` prefix. Start from [.env.exampl
 which contains placeholders only. Production fails closed without a token pepper. The Helm chart
 also refuses to render without existing auth/database Secrets and explicit public/issuer URLs.
 
-The bearer token configuration is a JSON list of records with `principal_id`, an HMAC-SHA256
-digest in `sha256`, and scopes selected from `knowledge:read`, `knowledge:write`, and
-`knowledge:admin`. Plaintext bearer tokens are never stored by the service.
+The bearer token configuration is a JSON list of records (a single record object is also
+accepted) with `principal_id`, an HMAC-SHA256 digest in `sha256`, and scopes selected from
+`knowledge:read`, `knowledge:write`, and `knowledge:admin`. Plaintext bearer tokens are never
+stored by the service.
 
-Embedding model weights are not baked into the application image. Pre-populate a persistent model
-cache in a controlled build or deployment step and mount it through `modelCache.existingClaim`.
+When Cloudflare Access is enabled, the published hostname must be configured, and the private
+hostname should be:
+
+| Helm value | Environment variable | Meaning |
+|---|---|---|
+| `cloudflareAccess.publicHosts` | `KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_PUBLIC_HOSTS` | Required. Hostname(s) served through the tunnel. Requests for them are refused without a valid signed Access assertion, whatever other credential they carry |
+| `cloudflareAccess.privateHosts` | `KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_PRIVATE_HOSTS` | Recommended. Hostname(s) of the LAN/WireGuard endpoint. When set, device bearer tokens are accepted only for these hostnames |
+
+Both are lists of bare hostnames, without scheme, port, or path. Set them in the operator-local
+values file used for the release, next to the other `cloudflareAccess` settings:
+
+```yaml
+cloudflareAccess:
+  enabled: true
+  existingSecret: knowledge-vault-cloudflare-access
+  publicHosts: [PUBLIC_MCP_HOST]
+  privateHosts: [PRIVATE_MCP_HOST]
+```
+
+Tracing is off by default. `KNOWLEDGE_VAULT_OTEL_ENABLED=true` emits one span per HTTP request
+(method, fixed route label, status, exception type—never content) alongside the MCP SDK's
+message spans, and exports them with the standard `OTEL_EXPORTER_OTLP_*` variables. It requires
+an image that additionally installs `opentelemetry-sdk` and
+`opentelemetry-exporter-otlp-proto-http`; they are not in the locked dependency set because the
+SDK depends on a pre-release package, and the service refuses to start if the flag is set
+without them.
+
+Other settings added for operations: `KNOWLEDGE_VAULT_EMBEDDING_ALLOW_DOWNLOAD` (development
+only), `KNOWLEDGE_VAULT_EMBEDDING_CLAIM_TIMEOUT_SECONDS`,
+`KNOWLEDGE_VAULT_MAINTENANCE_INTERVAL_SECONDS`, and `KNOWLEDGE_VAULT_WORKER_METRICS_PORT` (Helm
+`worker.metricsPort`). MCP tools and HTTP routes share the per-principal
+`KNOWLEDGE_VAULT_RATE_*_PER_MINUTE` limits.
+
+Embedding model weights are not baked into the application image and are never downloaded by a
+running Pod. Pre-populate a persistent model cache in a controlled step and mount it through
+`modelCache.existingClaim` (see [embeddings.md](docs/runbooks/embeddings.md)).
 Set `KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED=false` for deterministic full-text-only operation.
 
 ## Architecture and operations
 
 - [Architecture](docs/architecture.md) and [data model](docs/data-model.md)
+- [Independent solution review prompt](independent-solution-review-prompt.md), the
+  [2026-10-01 review](docs/reviews/2026-10-01-independent-solution-review.md), and its
+  [remediation status](docs/reviews/2026-10-01-remediation-status.md)
 - [Threat model](docs/threat-model.md)
 - [MCP tool reference](docs/mcp-tools.md)
 - [Minikube deployment](docs/runbooks/minikube.md)

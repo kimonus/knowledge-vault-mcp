@@ -22,40 +22,38 @@ spec:
       automountServiceAccountToken: false
       securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
       initContainers:
-        - name: wait-for-migration
-          image: {{ include "knowledge-vault.image" .Values.image }}
-          command: ["/bin/sh", "-ec"]
-          args: ["until alembic current 2>/dev/null | grep -q 0001_initial; do sleep 2; done"]
-          env:
-            - name: KNOWLEDGE_VAULT_ENVIRONMENT
-              value: development
-            - name: KNOWLEDGE_VAULT_DATABASE_URL
-              valueFrom: {secretKeyRef: {name: {{ .Values.database.existingSecret }}, key: {{ .Values.database.urlKey }}}}
-          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+        {{- include "knowledge-vault.waitForMigration" . | nindent 8 }}
       containers:
         - name: worker
           image: {{ include "knowledge-vault.image" .Values.image }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["knowledge-vault-worker"]
+          ports: [{name: metrics, containerPort: {{ .Values.worker.metricsPort }}, protocol: TCP}]
           envFrom:
             - configMapRef: {name: {{ include "knowledge-vault.fullname" . }}}
           env:
             - name: KNOWLEDGE_VAULT_DATABASE_URL
-              valueFrom: {secretKeyRef: {name: {{ .Values.database.existingSecret }}, key: {{ .Values.database.urlKey }}}}
+              valueFrom: {secretKeyRef: {name: {{ .Values.database.existingSecret | quote }}, key: {{ .Values.database.urlKey | quote }}}}
             - name: KNOWLEDGE_VAULT_TOKEN_PEPPER
-              valueFrom: {secretKeyRef: {name: {{ .Values.auth.existingSecret }}, key: {{ .Values.auth.tokenPepperKey }}}}
+              valueFrom: {secretKeyRef: {name: {{ .Values.auth.existingSecret | quote }}, key: {{ .Values.auth.tokenPepperKey | quote }}}}
+            - name: KNOWLEDGE_VAULT_WORKER_METRICS_PORT
+              value: {{ .Values.worker.metricsPort | quote }}
+            {{- include "knowledge-vault.modelEnv" . | nindent 12 }}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
           volumeMounts:
             - {name: tmp, mountPath: /tmp}
             {{- if .Values.modelCache.existingClaim }}
             - {name: model-cache, mountPath: /models, readOnly: true}
             {{- end }}
+          # The metrics listener runs in the worker process, so it also proves liveness.
+          livenessProbe: {tcpSocket: {port: metrics}, initialDelaySeconds: 20, periodSeconds: 20}
           resources: {{- toYaml .Values.resources.worker | nindent 12 }}
       volumes:
         - name: tmp
           emptyDir: {sizeLimit: 128Mi}
         {{- if .Values.modelCache.existingClaim }}
         - name: model-cache
-          persistentVolumeClaim: {claimName: {{ .Values.modelCache.existingClaim }}}
+          persistentVolumeClaim: {claimName: {{ .Values.modelCache.existingClaim | quote }}}
         {{- end }}
       terminationGracePeriodSeconds: 60
+      {{- include "knowledge-vault.scheduling" . | nindent 6 }}

@@ -1,13 +1,13 @@
 replicaCount: 1
 
 image:
-  repository: knowledge-vault
+  repository: ghcr.io/kimonus/knowledge-vault-mcp
   tag: "0.1.0"
   digest: ""
   pullPolicy: IfNotPresent
 
 backupImage:
-  repository: knowledge-vault-backup
+  repository: ghcr.io/kimonus/knowledge-vault-mcp-backup
   tag: "0.1.0"
   digest: ""
   pullPolicy: IfNotPresent
@@ -41,6 +41,12 @@ auth:
 cloudflareAccess:
   enabled: false
   existingSecret: ""
+  # Hostname(s) published through the edge. Required when enabled: requests for these hosts
+  # are refused without a valid signed Access assertion.
+  publicHosts: []
+  # Optional allowlist of private hostnames. When non-empty, device bearer tokens are accepted
+  # only for these hosts and every other hostname requires an assertion.
+  privateHosts: []
   issuerUrlKey: issuer-url
   audienceKey: audience
   allowedEmailsKey: allowed-emails
@@ -63,15 +69,25 @@ resources:
   migration:
     requests: {cpu: 50m, memory: 128Mi}
     limits: {cpu: 500m, memory: 512Mi}
+  init:
+    requests: {cpu: 25m, memory: 96Mi}
+    limits: {cpu: 250m, memory: 256Mi}
+
+worker:
+  metricsPort: 9102
 
 service:
   port: 8000
 
 ingress:
   enabled: false
-  className: nginx
+  # Required when enabled; name the ingress class of a maintained controller in your cluster.
+  className: ""
   host: ""
   tlsSecret: ""
+  # Only client-facing paths are routed. Health, metrics, and the OpenAPI document stay
+  # reachable inside the cluster only.
+  paths: [/mcp, /api/v1, /.well-known]
   annotations: {}
 
 internalPostgresql:
@@ -123,7 +139,18 @@ backup:
 
 networkPolicy:
   enabled: true
+  # Peers allowed to reach the API on port 8000. The default admits any namespace so that an
+  # ingress controller works out of the box; narrow it to the controller's namespace.
+  # Cloudflared Pods of this release are always admitted when the tunnel is enabled.
+  apiIngressFrom:
+    - namespaceSelector: {}
+  # Peers allowed to scrape worker metrics. Empty denies all ingress to the worker.
+  metricsIngressFrom: []
+  # Extra egress rules for the API and worker Pods.
   additionalEgress: []
+  # Egress rules that let the backup Job reach its restic repository.
+  backupEgress:
+    - ports: [{protocol: TCP, port: 443}]
 
 podAnnotations: {}
 nodeSelector: {}

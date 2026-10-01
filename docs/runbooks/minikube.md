@@ -34,8 +34,10 @@ docker build --pull=false -t knowledge-vault:0.1.0 .
 docker build --pull=false -f Dockerfile.backup -t knowledge-vault-backup:0.1.0 .
 ```
 
-Production operators should publish images through their normal registry pipeline and set both a
-version and immutable digest in Helm values.
+`values-minikube.yaml` points `image.repository` and `backupImage.repository` at these local
+names. The chart's own defaults are the published images,
+`ghcr.io/kimonus/knowledge-vault-mcp` and `ghcr.io/kimonus/knowledge-vault-mcp-backup`;
+production operators set a version and an immutable digest for them in Helm values.
 
 ## Create runtime Secrets
 
@@ -45,9 +47,8 @@ Generate token material without printing plaintext into a manifest:
 install -d -m 0700 .local-secrets
 TOKEN_PEPPER="$(openssl rand -hex 32)"
 uv run python scripts/generate_token.py \
-  --principal-id operator-device \
-  --scope knowledge:read \
-  --scope knowledge:write \
+  --principal operator-device \
+  --scopes knowledge:read knowledge:write \
   --pepper-stdin \
   --token-output .local-secrets/operator-device.token \
   --record-output .local-secrets/operator-device-record.json \
@@ -70,6 +71,15 @@ kubectl -n knowledge-vault create secret generic knowledge-vault-database \
   --from-literal=database-url='postgresql+psycopg://knowledge_vault:URL_ENCODED_PASSWORD@knowledge-vault-knowledge-vault-postgresql:5432/knowledge_vault'
 unset TOKEN_PEPPER
 ```
+
+The record file holds one JSON object, which the service accepts as the first bootstrap token.
+Add further devices with the procedure in [tokens.md](tokens.md); it converts the value to a JSON
+array.
+
+Resources are named `RELEASE-knowledge-vault-…`. With the release name `knowledge-vault` used
+below, the database Service is `knowledge-vault-knowledge-vault-postgresql`, which is why that
+name appears in the database URL. Set `fullnameOverride` to choose different names and adjust the
+URL to match.
 
 ## Render and install
 
@@ -94,6 +104,11 @@ outbound connector through an operator-local values file:
 cloudflareAccess:
   enabled: true
   existingSecret: knowledge-vault-cloudflare-access
+  # Required. Requests for these hostnames are refused without a signed Access assertion.
+  publicHosts: [PUBLIC_MCP_HOST]
+  # Recommended. Device bearer tokens are then accepted only for these hostnames; every other
+  # hostname (Service DNS names, Pod IPs, port-forwards) requires an assertion.
+  privateHosts: [PRIVATE_MCP_HOST]
 cloudflareTunnel:
   enabled: true
   existingSecret: knowledge-vault-cloudflared
@@ -105,20 +120,46 @@ cloudflareTunnel:
 
 Do not pass secret values through `--set`; the chart accepts only Secret names and key names.
 
-Embedding production Pods must use a pre-populated, read-only model cache. Tests and startup must
-never download model weights.
+Embedding production Pods must use a pre-populated, read-only model cache. Pods load weights from
+local files only and never contact the model hub, so with `config.embeddingsEnabled=true` and no
+usable cache `/health/ready` reports `"embedding": "degraded"` and search serves text results.
+Populate a PVC as described in [embeddings.md](embeddings.md) and set
+`modelCache.existingClaim`; the chart mounts it read-only at `/models` and points the Hugging
+Face cache there.
+
+## Private ingress
+
+When `ingress.enabled` is set, only `ingress.paths` (`/mcp`, `/api/v1`, and `/.well-known` by
+default) are routed. Health, metrics, and the OpenAPI document are not exposed on the private
+hostname; reach them through the Service inside the cluster or with `kubectl port-forward`.
+Apply the same restriction to an ingress you manage outside this chart.
+
+## Network policy
+
+The chart renders one NetworkPolicy per component: PostgreSQL accepts connections only from the
+API, worker, migration, and backup Pods; the worker and Jobs accept no ingress; the API accepts
+port 8000 from `networkPolicy.apiIngressFrom` (any namespace by default—narrow it to the ingress
+controller's namespace) and from this release's Cloudflared Pods. The API may reach the Cloudflare
+key endpoint on 443 only when Access is enabled, and the backup Job uses
+`networkPolicy.backupEgress`. These policies take effect only when the cluster's CNI enforces
+NetworkPolicy; confirm that for your cluster (Minikube can be started with an enforcing CNI, for
+example `minikube start --cni=calico`) before relying on them. They have been validated by schema
+and rendering, not yet on an enforcing cluster.
 
 ## Verify health and durability
 
 ```bash
 kubectl -n knowledge-vault get pods,pvc,job
-kubectl -n knowledge-vault rollout status statefulset/knowledge-vault-postgresql --timeout=180s
-kubectl -n knowledge-vault wait --for=condition=complete job/knowledge-vault-migration --timeout=180s
-kubectl -n knowledge-vault rollout status deployment/knowledge-vault-api --timeout=180s
-kubectl -n knowledge-vault rollout status deployment/knowledge-vault-worker --timeout=180s
-kubectl -n knowledge-vault port-forward service/knowledge-vault 8000:8000
+kubectl -n knowledge-vault rollout status statefulset/knowledge-vault-knowledge-vault-postgresql --timeout=180s
+kubectl -n knowledge-vault rollout status deployment/knowledge-vault-knowledge-vault-api --timeout=180s
+kubectl -n knowledge-vault rollout status deployment/knowledge-vault-knowledge-vault-worker --timeout=180s
+kubectl -n knowledge-vault port-forward service/knowledge-vault-knowledge-vault 8000:8000
 curl --fail http://127.0.0.1:8000/health/ready
 ```
+
+The migration Job is a Helm hook that is deleted once it succeeds; the API and worker rollouts
+complete only after it has brought the database to the newest revision. Do not pass `--wait` to
+`helm install`: the hook runs after the release resources are created, and the Pods wait for it.
 
 Perform an authenticated flush, record its assertion ID, replace only the API and worker Pods, and
 fetch the same assertion after their replacements become ready. Confirm that the PostgreSQL PVC

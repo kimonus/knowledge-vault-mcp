@@ -1,5 +1,6 @@
 import hashlib
 import json
+import time
 from uuid import UUID
 
 from sqlalchemy import Select, and_, func, or_, select
@@ -22,9 +23,10 @@ from knowledge_vault.domain.models import (
     SourceView,
 )
 from knowledge_vault.embeddings.base import EmbeddingProvider
+from knowledge_vault.observability.metrics import SEARCH_LATENCY
 from knowledge_vault.persistence.tables import AssertionRow
 from knowledge_vault.services.cursors import Cursor, CursorCodec, InvalidCursorError
-from knowledge_vault.services.errors import NotFoundError
+from knowledge_vault.services.errors import InvalidRequestError, NotFoundError
 from knowledge_vault.services.ranking import reciprocal_rank_fusion
 
 # Enrichment can attach more sources over time; responses stay bounded.
@@ -121,11 +123,14 @@ class SearchService:
         limit: int = 20,
         cursor: str | None = None,
     ) -> SearchPage:
+        started = time.perf_counter()
         query = " ".join(query.split())
-        if not query or len(query) > 2000:
-            raise ValueError("query must contain 1 through 2000 characters")
+        if not query or len(query) > 2000 or "\x00" in query:
+            raise InvalidRequestError(
+                "query must contain 1 through 2000 characters and no NUL characters"
+            )
         if not 1 <= limit <= self._settings.max_page_size:
-            raise ValueError(f"limit must be between 1 and {self._settings.max_page_size}")
+            raise InvalidRequestError(f"limit must be between 1 and {self._settings.max_page_size}")
         effective_filters = filters or SearchFilters()
         query_hash = _query_hash(query, effective_filters)
         boundary = self._cursors.decode(cursor) if cursor else None
@@ -161,6 +166,9 @@ class SearchService:
                     .where(
                         AssertionRow.embedding_state == EmbeddingState.READY,
                         AssertionRow.embedding.is_not(None),
+                        # Vectors from another model live in a different space; ignore them
+                        # until the rebuild for the configured model has replaced them.
+                        AssertionRow.embedding_model == self._settings.embedding_model,
                     )
                     .order_by(distance, AssertionRow.id)
                     .limit(candidate_limit)
@@ -190,6 +198,9 @@ class SearchService:
         if has_more and page_items:
             final = page_items[-1]
             next_cursor = self._cursors.encode(Cursor(query_hash, final.score, final.item))
+        SEARCH_LATENCY.labels(mode="text" if query_vector is None else "hybrid").observe(
+            time.perf_counter() - started
+        )
         return SearchPage(results=results, next_cursor=next_cursor, embedding_degraded=degraded)
 
     async def get(self, assertion_id: UUID) -> AssertionView:

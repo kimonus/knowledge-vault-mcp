@@ -9,7 +9,12 @@ from knowledge_vault.domain.models import AssertionInput, SearchFilters
 from knowledge_vault.embeddings.providers import DeterministicFakeProvider
 from knowledge_vault.persistence.tables import AssertionRow, EmbeddingJobRow, FlushPartRow
 from knowledge_vault.services.cursors import InvalidCursorError
-from knowledge_vault.services.errors import BatchIncompleteError, ConflictError, NotFoundError
+from knowledge_vault.services.errors import (
+    BatchIncompleteError,
+    ConflictError,
+    InvalidRequestError,
+    NotFoundError,
+)
 from knowledge_vault.services.ingestion import IngestionService
 from knowledge_vault.services.search import SearchService
 from knowledge_vault.worker.jobs import EmbeddingWorker
@@ -195,20 +200,28 @@ async def test_worker_retry_dead_rebuild_and_release(integration_container) -> N
         assert job is not None and job.state == "dead"
         assert assertion is not None and assertion.embedding_state == EmbeddingState.FAILED
 
+    # A worker embeds only jobs queued for the model it is configured to load.
     rebuild = EmbeddingWorker(
         container.database.sessions,
-        retry_settings,
+        retry_settings.model_copy(update={"embedding_model": "replacement"}),
         DeterministicFakeProvider(dimensions=384, model_id="replacement"),
         worker_id="rebuild-worker",
     )
     assert await rebuild.enqueue_rebuild("replacement") == 1
+    assert await failing.process_once() == 0
     assert await rebuild.process_once() == 1
     async with container.database.sessions() as session:
         assertion = await session.get(AssertionRow, result.assertion_ids[0])
         assert assertion is not None
         assert assertion.embedding_model == "replacement"
-        assert assertion.replacement_embedding is None
+        assert assertion.embedding_state == EmbeddingState.READY
 
+    rebuild = EmbeddingWorker(
+        container.database.sessions,
+        retry_settings.model_copy(update={"embedding_model": "replacement-2"}),
+        DeterministicFakeProvider(dimensions=384, model_id="replacement-2"),
+        worker_id="rebuild-worker",
+    )
     assert await rebuild.enqueue_rebuild("replacement-2") == 1
     assert len(await rebuild.claim()) == 1
     assert await rebuild.release_claims() == 1
@@ -229,9 +242,9 @@ async def test_boundary_validation_enrichment_filters_and_pagination(integration
     principal = "test-user"
 
     for key, parts, items in [("", 1, 1), ("parts", 0, 1), ("items", 1, 0)]:
-        with pytest.raises(ConflictError):
+        with pytest.raises(InvalidRequestError):
             await ingestion.begin(principal, key, parts, items)
-    with pytest.raises(ConflictError, match="part must contain"):
+    with pytest.raises(InvalidRequestError, match="part must contain"):
         await ingestion.append(principal, uuid4(), 1, [])
     with pytest.raises(NotFoundError):
         await ingestion.append(principal, uuid4(), 1, [item("unknown").model_dump(mode="json")])
@@ -348,9 +361,9 @@ async def test_boundary_validation_enrichment_filters_and_pagination(integration
     assert next_page.results
     with pytest.raises(InvalidCursorError):
         await container.search.search("different", filters, limit=1, cursor=page.next_cursor)
-    with pytest.raises(ValueError, match="query"):
+    with pytest.raises(InvalidRequestError, match="query"):
         await container.search.search("   ")
-    with pytest.raises(ValueError, match="limit"):
+    with pytest.raises(InvalidRequestError, match="limit"):
         await container.search.search("software", limit=0)
 
     class SearchFailureProvider:

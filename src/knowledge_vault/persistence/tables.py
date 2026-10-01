@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from enum import StrEnum
 from typing import Any
 
 from pgvector.sqlalchemy import VECTOR
@@ -17,14 +18,28 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
-    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from knowledge_vault.domain.enums import (
+    AssertionKind,
+    AssertionOrigin,
+    AssertionStatus,
+    BatchState,
+    EmbeddingState,
+    JobState,
+    Sensitivity,
+)
+
 
 def json_type() -> JSON:
     return JSON().with_variant(JSONB(), "postgresql")
+
+
+def _one_of(column: str, values: type[StrEnum]) -> str:
+    allowed = ", ".join(f"'{member.value}'" for member in values)
+    return f"{column} IN ({allowed})"
 
 
 class Base(DeclarativeBase):
@@ -39,6 +54,13 @@ class AssertionRow(Base):
         CheckConstraint(
             "valid_to IS NULL OR valid_from IS NULL OR valid_to > valid_from",
             name="ck_assertion_valid_range",
+        ),
+        CheckConstraint(_one_of("kind", AssertionKind), name="ck_assertion_kind"),
+        CheckConstraint(_one_of("origin", AssertionOrigin), name="ck_assertion_origin"),
+        CheckConstraint(_one_of("status", AssertionStatus), name="ck_assertion_status"),
+        CheckConstraint(_one_of("sensitivity", Sensitivity), name="ck_assertion_sensitivity"),
+        CheckConstraint(
+            _one_of("embedding_state", EmbeddingState), name="ck_assertion_embedding_state"
         ),
         Index("ix_assertions_topics", "topics", postgresql_using="gin"),
         Index("ix_assertions_search_vector", "search_vector", postgresql_using="gin"),
@@ -104,6 +126,7 @@ class FlushBatchRow(Base):
         UniqueConstraint("principal_id", "idempotency_hash", name="uq_batch_idempotency"),
         CheckConstraint("declared_parts > 0", name="ck_batch_declared_parts"),
         CheckConstraint("declared_items > 0", name="ck_batch_declared_items"),
+        CheckConstraint(_one_of("state", BatchState), name="ck_batch_state"),
         Index("ix_flush_batches_expiry", "state", "expires_at"),
     )
 
@@ -124,6 +147,9 @@ class FlushBatchRow(Base):
     parts: Mapped[list["FlushPartRow"]] = relationship(
         back_populates="batch", cascade="all, delete-orphan", lazy="selectin"
     )
+
+    # Transient, unmapped: set by the service when `begin` returned an existing batch.
+    replayed = False
 
 
 class FlushPartRow(Base):
@@ -147,6 +173,7 @@ class EmbeddingJobRow(Base):
     __table_args__ = (
         UniqueConstraint("assertion_id", "model", name="uq_embedding_job_assertion_model"),
         CheckConstraint("attempts >= 0", name="ck_embedding_job_attempts"),
+        CheckConstraint(_one_of("state", JobState), name="ck_embedding_job_state"),
         Index("ix_embedding_jobs_claim", "state", "available_at"),
     )
 
@@ -212,16 +239,3 @@ class ConfirmationTokenRow(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-
-POSTGRES_SEARCH_VECTOR_DDL = text(
-    """
-    CREATE OR REPLACE FUNCTION knowledge_vault_search_vector_update() RETURNS trigger AS $$
-    BEGIN
-      NEW.search_vector := to_tsvector('simple', coalesce(NEW.content, '') || ' ' ||
-        coalesce(array_to_string(NEW.topics, ' '), ''));
-      RETURN NEW;
-    END
-    $$ LANGUAGE plpgsql;
-    """
-)

@@ -33,7 +33,8 @@ then publishes:
 - keyless Sigstore signatures for both immutable image digests; and
 - the packaged Helm chart attached to the GitHub release.
 
-Floating semantic tags are conveniences only. Kubernetes deployments must pin the reported
+The workflow scans the pushed digests before signing them, and publishes version tags
+(`MAJOR.MINOR.PATCH` and `MAJOR.MINOR`) but no `latest` tag. Version tags are conveniences only. Kubernetes deployments must pin the reported
 `sha256` image digest.
 
 ## Verify

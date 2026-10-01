@@ -38,11 +38,11 @@ spec:
           ports: [{name: postgresql, containerPort: 5432}]
           env:
             - name: POSTGRES_USER
-              valueFrom: {secretKeyRef: {name: {{ .Values.internalPostgresql.existingSecret }}, key: {{ .Values.internalPostgresql.usernameKey }}}}
+              valueFrom: {secretKeyRef: {name: {{ .Values.internalPostgresql.existingSecret | quote }}, key: {{ .Values.internalPostgresql.usernameKey | quote }}}}
             - name: POSTGRES_PASSWORD
-              valueFrom: {secretKeyRef: {name: {{ .Values.internalPostgresql.existingSecret }}, key: {{ .Values.internalPostgresql.passwordKey }}}}
+              valueFrom: {secretKeyRef: {name: {{ .Values.internalPostgresql.existingSecret | quote }}, key: {{ .Values.internalPostgresql.passwordKey | quote }}}}
             - name: POSTGRES_DB
-              valueFrom: {secretKeyRef: {name: {{ .Values.internalPostgresql.existingSecret }}, key: {{ .Values.internalPostgresql.databaseKey }}}}
+              valueFrom: {secretKeyRef: {name: {{ .Values.internalPostgresql.existingSecret | quote }}, key: {{ .Values.internalPostgresql.databaseKey | quote }}}}
             - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
           volumeMounts:

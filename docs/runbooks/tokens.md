@@ -13,7 +13,7 @@ install -d -m 700 ~/.config/knowledge-vault
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
 
-kubectl -n knowledge-vault get secret knowledge-vault-runtime \
+kubectl -n knowledge-vault get secret knowledge-vault-auth \
   -o jsonpath='{.data.token-pepper}' | base64 --decode | \
   uv run python scripts/generate_token.py \
     --principal codex-DEVICE_NAME \
@@ -22,14 +22,18 @@ kubectl -n knowledge-vault get secret knowledge-vault-runtime \
     --token-output ~/.config/knowledge-vault/codex-DEVICE_NAME.token \
     --record-output "$work_dir/record.json"
 
-kubectl -n knowledge-vault get secret knowledge-vault-runtime -o json | \
+kubectl -n knowledge-vault get secret knowledge-vault-auth -o json | \
   uv run python scripts/build_token_secret_patch.py --record-file "$work_dir/record.json" | \
-  kubectl -n knowledge-vault patch secret knowledge-vault-runtime \
+  kubectl -n knowledge-vault patch secret knowledge-vault-auth \
     --type=merge --patch-file=/dev/stdin
 
 kubectl -n knowledge-vault rollout restart deployment/knowledge-vault-api
 kubectl -n knowledge-vault rollout status deployment/knowledge-vault-api
 ```
+
+`bootstrap-tokens` holds a JSON array of records. A Secret that was created from a single
+generated record file holds one bare object; the service accepts that form and the patch helper
+converts it to an array when the next record is added.
 
 The generator creates the token and digest record as owner-only files and refuses to overwrite an
 existing token. It does not print the token when `--token-output` is used. Transfer the token to its

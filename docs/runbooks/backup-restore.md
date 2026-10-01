@@ -2,6 +2,12 @@
 
 The backup image runs `pg_dump --format=custom` into a temporary filesystem, sends it to an
 encrypted restic repository, applies retention, and executes `restic check --read-data-subset`.
+The Job runs with a read-only root filesystem; the dump and the restic cache live on its `/tmp`
+volume. Every snapshot carries the tag `knowledge-vault-postgresql` and the host name
+`knowledge-vault` (override with `BACKUP_HOST`), and retention is applied to that tag as one
+group, so `keepDaily`/`keepWeekly`/`keepMonthly` bound the repository regardless of which Pod
+produced a snapshot. Snapshots written by earlier versions under per-run paths carry the same tag
+and are pruned by the same policy on the next run.
 The chart is disabled by default and requires an existing Secret containing `database-url`,
 `repository`, and `password`.
 
@@ -33,5 +39,10 @@ PostgreSQL/pgvector instance, restore the newest verified snapshot, apply only r
 migrations, rotate DB/tunnel/bearer credentials, then restore API and worker service. Validate
 health, queue depth, known assertion IDs, and deletion audit continuity before reopening access.
 
-Hard-deleted data may remain in older backups until retention expires. Restrict restores and honor
-deletion requirements by expiring backup generations according to policy.
+Hard-deleted data remains in backups taken before the deletion until retention removes those
+snapshots—up to the longest configured period (six months with the default `keepMonthly`).
+Restrict restores, and when a deletion must take effect sooner, shorten the policy or remove the
+affected snapshots with `restic forget --prune`.
+
+The Job's NetworkPolicy allows egress to the repository through `networkPolicy.backupEgress`
+(TCP 443 by default); adjust it for SFTP, a LAN target, or another port.

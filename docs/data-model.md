@@ -19,9 +19,19 @@ assertion it supersedes.
 PostgreSQL owns referential integrity and uniqueness. The migration enables `vector`, creates the
 tables and indexes, and maintains the generated full-text search value. Exact normalized-content
 deduplication precedes semantic conflict hints. Flush payload text exists only while a batch is
-open; commit atomically materializes assertions and removes the part payloads. Vectors are
-replaced only after successful model inference, so a rebuild never creates an avoidable search
-gap.
+open; commit atomically materializes assertions and removes the part payloads, and the worker
+expires batches that pass `KNOWLEDGE_VAULT_STAGING_TTL_SECONDS` and deletes their payloads. Batch
+metadata and used or expired confirmation tokens are purged after the retention period.
 
-The initial migration is [0001_initial.py](../migrations/versions/0001_initial.py). Application
-tables are defined in [tables.py](../src/knowledge_vault/persistence/tables.py).
+A vector is replaced only after successful model inference. Each vector records the model that
+produced it, and search compares the query only against vectors of the configured model, so a
+rebuild for a different model falls back to text search for assertions it has not reached yet
+instead of mixing vector spaces.
+
+Revisions live in [migrations/versions](../migrations/versions/): `0001_initial` creates the
+schema and `0002_enumerated_value_checks` adds CHECK constraints for every enumerated column.
+Each revision spells out its DDL and never derives it from the ORM models. Application tables are
+defined in [tables.py](../src/knowledge_vault/persistence/tables.py).
+
+There is no approximate vector index: similarity search scans the embeddings of the filtered
+rows, which is adequate for a personal corpus of tens of thousands of assertions.
