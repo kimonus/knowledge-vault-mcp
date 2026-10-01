@@ -5,6 +5,20 @@ stable release.
 
 ## [Unreleased]
 
+### Changed
+
+- MCP initialization now delivers exhaustive extraction guidance with fixed trigger, safety,
+  idempotency and readback rules. The client workflow verifies every distinct committed assertion
+  ID and reports rejections, discrepancies and unavailable context without promising lossless chat
+  preservation. Tool schemas and persistence contracts are unchanged.
+- Added `config.ingestionPolicyVersion` and optional `config.ingestionPolicy` Helm values, mapped
+  to `KNOWLEDGE_VAULT_INGESTION_POLICY_VERSION` and `KNOWLEDGE_VAULT_INGESTION_POLICY`. The packaged
+  policy is used when no override is supplied; overrides are bounded and reject secret shapes.
+- **Operator action required.** Deploy the updated application image, upgrade using the complete
+  operator values file, reconnect clients and refresh the ChatGPT plugin connection. ConfigMap
+  edits alone do not refresh running Pods or existing client sessions. See the Minikube policy
+  configuration runbook.
+
 ### Added
 
 - Initial MCP and HTTP service with authenticated resumable assertion ingestion.

@@ -4,6 +4,8 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from knowledge_vault.auth.tokens import Scope
+from knowledge_vault.domain.secrets import detect_secret
+from knowledge_vault.ingestion_policy import DEFAULT_INGESTION_POLICY
 
 
 class Settings(BaseSettings):
@@ -20,6 +22,12 @@ class Settings(BaseSettings):
     cors_origins: str = ""
     public_base_url: str = "https://knowledge-vault.invalid"
     auth_issuer_url: str = "https://knowledge-vault.invalid"
+    ingestion_policy_version: str = Field(
+        default="1", min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    )
+    ingestion_policy: str = Field(
+        default=DEFAULT_INGESTION_POLICY, min_length=1, max_length=8192, repr=False
+    )
     cloudflare_access_enabled: bool = False
     cloudflare_access_issuer_url: str = ""
     cloudflare_access_audience: str = Field(default="", repr=False)
@@ -44,6 +52,17 @@ class Settings(BaseSettings):
     rate_admin_per_minute: int = Field(default=10, ge=1)
     log_level: str = "INFO"
     otel_enabled: bool = False
+
+    @field_validator("ingestion_policy")
+    @classmethod
+    def validate_ingestion_policy(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("ingestion policy must contain non-whitespace guidance")
+        if any(ord(character) < 32 and character not in "\n\r\t" for character in value):
+            raise ValueError("ingestion policy must not contain control characters")
+        if detect_secret(value):
+            raise ValueError("ingestion policy must not contain secret-shaped values")
+        return value
 
     @field_validator("token_pepper")
     @classmethod

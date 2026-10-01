@@ -6,8 +6,10 @@ description: Flush durable knowledge to the private Knowledge Vault MCP when the
 # Flush knowledge
 
 Convert all meaningful knowledge in the currently available conversation context into atomic
-assertions and durably commit it through the Knowledge Vault MCP. The flush is complete only after
-`commit_knowledge_flush` succeeds.
+assertions and durably commit it through the Knowledge Vault MCP. Follow the server's current
+operator extraction policy when the client exposes its MCP instructions. Persistence is complete
+only after `commit_knowledge_flush` succeeds; verified preservation also requires reading back
+every distinct committed assertion ID and comparing it with the extraction checklist.
 
 ## Extract
 
@@ -22,6 +24,11 @@ For every assertion:
   dates, topics, sensitivity, and source URLs.
 - Keep it atomic and self-contained. Split compound statements when either part could change or be
   retrieved independently.
+- Preserve exact names, versions, parameters, quantities, units, commands, code, ordering,
+  prerequisites, expected outcomes, validation steps, caveats and context needed for reproducibility.
+  Keep a recipe or procedure's necessary steps together so its record is usable alone. For a
+  procedure above the schema's size limit, use self-contained subprocedures with prerequisites and
+  disclose any detail that cannot be represented. Never invent missing steps or values.
 - Store claims and concise provenance, not copied pages or transcript structure.
 - Exclude filler, duplicate wording, hidden reasoning, and facts already expressed by a more precise
   assertion in the same flush.
@@ -31,6 +38,10 @@ For every assertion:
 
 Use `supersedes_id` only when the conversation explicitly corrects an assertion whose server ID is
 known. Do not infer a supersession target from semantic similarity.
+
+Keep a checklist of the planned assertions in client context for later verification. If none are
+useful, report that without beginning a flush. If extraction exceeds the server's batch limit, use
+multiple complete flushes with separate keys; do not truncate or overdeclare one batch.
 
 ## Commit protocol
 
@@ -45,10 +56,23 @@ known. Do not infer a supersession target from semantic similarity.
    result.
 6. Call `commit_knowledge_flush` only after every declared part has been accepted. Retry commit
    idempotently after a transient failure.
-7. Report success only from the commit response and reproduce its counts: inserted, confirmed
-   existing, enriched/updated, superseded, possible conflicts, rejected, and embedding pending.
+7. After commit succeeds, call `get_knowledge` for every distinct ID in `assertion_ids`. IDs follow
+   accepted input order; `rejected_items` indexes cover all submitted items. Read duplicate IDs once,
+   but compare each against all corresponding checklist entries. Check substantive content, metadata
+   and provenance, accounting for documented normalization, deduplication, enrichment and explicit
+   supersession. Also check whether the extraction itself missed useful information.
+8. Honor rate limits, pause and retry transient read failures. A failed read does not undo commit:
+   report "committed, verification incomplete" with unchecked IDs; do not repeat writes. Report
+   mismatches explicitly. Repair safe omissions with a new flush and key; use a known
+   `supersedes_id` for an explicit correction. If a corrective flush still fails verification, stop
+   and report the unresolved discrepancy rather than looping.
+9. Reproduce server commit counts: inserted, confirmed existing, enriched/updated, superseded,
+   possible conflicts, rejected, and embedding pending. Report distinct records verified,
+   rejections, omissions and context limits separately. Rejected items mean partial preservation;
+   never describe them as fully saved.
 
-If context may have been compacted, say that only currently available context was flushed. If begin,
+Readback proves persistence, not lossless extraction of unseen or compacted conversation. If
+context may have been compacted, say that only currently available context was flushed. If begin,
 append, or commit ultimately fails, say the flush is incomplete and the chat should not yet be
 deleted. Never describe an append-only state as committed.
 

@@ -1,0 +1,8 @@
+# Overlay on the operator's complete deployment values. Contains no credentials or personal data.
+config:
+  ingestionPolicyVersion: "recipes-1"
+  ingestionPolicy: |
+    Extract every independently useful durable assertion from available context. Preserve exact
+    names, versions, quantities, units, parameters and commands. Keep each procedure self-contained
+    with prerequisites, ordered steps, validation, outcomes and caveats. Retain decisions,
+    alternatives, reasons, uncertainties and provenance. Do not replace detail with a summary.

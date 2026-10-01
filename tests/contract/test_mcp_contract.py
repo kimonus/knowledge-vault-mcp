@@ -1,11 +1,15 @@
+import anyio
 import pytest
+from mcp.client.session import ClientSession
 from mcp.server.auth.middleware.auth_context import auth_context_var
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from mcp.server.auth.provider import AccessToken
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.shared.memory import create_client_server_memory_streams
 
 from knowledge_vault.container import build_container
 from knowledge_vault.embeddings.providers import DeterministicFakeProvider
+from knowledge_vault.ingestion_policy import CORE_INSTRUCTIONS, DEFAULT_INGESTION_POLICY
 from knowledge_vault.mcp.server import create_mcp_server
 
 
@@ -46,6 +50,41 @@ async def test_tool_discovery_contract(settings) -> None:
     assert tools["begin_knowledge_flush"].annotations.destructive_hint is False
     assert tools["forget_knowledge"].annotations.destructive_hint is True
     assert all(tool.annotations.open_world_hint is False for tool in tools.values())
+
+
+@pytest.mark.contract
+@pytest.mark.parametrize("custom", [False, True])
+async def test_initialization_delivers_policy_over_mcp_transport(settings, custom: bool) -> None:
+    policy = "Preserve exact quantities.\nKeep units and ordered steps."
+    if custom:
+        settings = settings.model_copy(
+            update={"ingestion_policy": policy, "ingestion_policy_version": "recipe-2"}
+        )
+    container = build_container(settings, embedder=DeterministicFakeProvider(dimensions=384))
+    server = create_mcp_server(container)
+    async with (
+        create_client_server_memory_streams() as (client_streams, server_streams),
+        anyio.create_task_group() as tasks,
+    ):
+        tasks.start_soon(
+            server._lowlevel_server.run,
+            *server_streams,
+            server._lowlevel_server.create_initialization_options(),
+        )
+        async with ClientSession(*client_streams) as client:
+            initialization = await client.initialize()
+            instructions = initialization.instructions
+            assert instructions is not None
+            assert instructions.startswith(CORE_INSTRUCTIONS)
+            assert "get_knowledge" in instructions[:512]
+            if custom:
+                assert instructions.endswith(policy + "\n")
+                assert "Operator extraction policy version: recipe-2" in instructions
+                assert DEFAULT_INGESTION_POLICY not in instructions
+            else:
+                assert instructions.endswith(DEFAULT_INGESTION_POLICY + "\n")
+        tasks.cancel_scope.cancel()
+    await container.database.close()
 
 
 @pytest.mark.contract

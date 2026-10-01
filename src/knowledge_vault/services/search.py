@@ -19,12 +19,16 @@ from knowledge_vault.domain.models import (
     SearchFilters,
     SearchHit,
     SearchPage,
+    SourceView,
 )
 from knowledge_vault.embeddings.base import EmbeddingProvider
 from knowledge_vault.persistence.tables import AssertionRow
 from knowledge_vault.services.cursors import Cursor, CursorCodec, InvalidCursorError
 from knowledge_vault.services.errors import NotFoundError
 from knowledge_vault.services.ranking import reciprocal_rank_fusion
+
+# Enrichment can attach more sources over time; responses stay bounded.
+_MAX_SOURCES_PER_VIEW = 32
 
 
 def _query_hash(query: str, filters: SearchFilters) -> str:
@@ -55,6 +59,15 @@ def _view(row: AssertionRow) -> AssertionView:
         confirmation_count=row.confirmation_count,
         supersedes_id=row.supersedes_id,
         embedding_state=EmbeddingState(row.embedding_state),
+        sources=[
+            SourceView(
+                url=source.url,
+                title=source.title,
+                publisher=source.publisher,
+                retrieved_at=source.retrieved_at,
+            )
+            for source in sorted(row.sources, key=lambda source: source.url)[:_MAX_SOURCES_PER_VIEW]
+        ],
     )
 
 

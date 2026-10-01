@@ -9,6 +9,10 @@ data:
   KNOWLEDGE_VAULT_ENVIRONMENT: {{ .Values.config.environment | quote }}
   KNOWLEDGE_VAULT_PUBLIC_BASE_URL: {{ .Values.config.publicBaseUrl | quote }}
   KNOWLEDGE_VAULT_AUTH_ISSUER_URL: {{ .Values.config.authIssuerUrl | quote }}
+  KNOWLEDGE_VAULT_INGESTION_POLICY_VERSION: {{ .Values.config.ingestionPolicyVersion | quote }}
+  {{- if ne .Values.config.ingestionPolicy nil }}
+  KNOWLEDGE_VAULT_INGESTION_POLICY: {{ .Values.config.ingestionPolicy | quote }}
+  {{- end }}
   KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED: {{ .Values.config.embeddingsEnabled | quote }}
   KNOWLEDGE_VAULT_EMBEDDING_MODEL: {{ .Values.config.embeddingModel | quote }}
   KNOWLEDGE_VAULT_EMBEDDING_DIMENSIONS: {{ .Values.config.embeddingDimensions | quote }}

@@ -20,6 +20,10 @@ config:
   environment: production
   publicBaseUrl: ""
   authIssuerUrl: ""
+  ingestionPolicyVersion: "1"
+  # null uses the complete extraction policy packaged in the application. A non-empty string
+  # replaces only operator guidance; fixed safety, batching and readback rules stay in code.
+  ingestionPolicy: null
   embeddingsEnabled: true
   embeddingModel: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
   embeddingDimensions: 384
