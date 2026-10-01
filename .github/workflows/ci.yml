@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.12.0"
           enable-cache: true
@@ -31,7 +31,7 @@ jobs:
       - run: uv run python scripts/check_coverage.py coverage.json
       - run: uv run pip-audit --path .venv/lib/python3.12/site-packages --progress-spinner off
       - run: uv run bandit -q -r src
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage
           path: |
@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
       - run: sh scripts/ci/install_security_tools.sh "$RUNNER_TEMP/bin"
       - run: echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - run: |
@@ -61,7 +61,7 @@ jobs:
           "$RUNNER_TEMP/bin/trivy" image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL knowledge-vault-backup:ci
       - run: |
           "$RUNNER_TEMP/bin/syft" knowledge-vault:ci -o cyclonedx-json=knowledge-vault.sbom.json
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom
           path: knowledge-vault.sbom.json
@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
       - run: sh scripts/ci/install_kubernetes_tools.sh "$RUNNER_TEMP/bin"
       - run: |
           "$RUNNER_TEMP/bin/helm" lint charts/knowledge-vault -f charts/knowledge-vault/values-minikube.yaml
@@ -103,11 +103,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.12.0"
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6.1.0
         with:
           node-version: "22.23.2"
       - run: uv sync --locked
