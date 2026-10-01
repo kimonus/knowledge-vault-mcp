@@ -2,12 +2,12 @@
 
 Status of each finding in the
 [independent solution review](2026-10-01-independent-solution-review.md) after the remediation
-work done on top of commit `1125a87`. Nothing described here has been deployed: the changes are
-source, chart, test, and documentation changes only.
+work done on top of commit `1125a87`.
 
-On 2026-10-01 the maintainer chose to review and commit these changes before deploying them, and
-to leave the NetworkPolicies unvalidated on an enforcing CNI for now. KV-014 and KV-017 therefore
-stay open as recorded below.
+The changes were committed and then deployed to the maintainer's homelab on 2026-10-01, after a
+database dump whose restore and migration had been rehearsed on a disposable copy. The
+NetworkPolicies remain unvalidated on an enforcing CNI by the maintainer's decision, so KV-014
+stays open as recorded below.
 
 ## Operator actions before the next deployment
 
@@ -48,7 +48,7 @@ stay open as recorded below.
 | KV-014 | Medium | Fixed in the chart; **not validated on an enforcing CNI** | One policy per component; PostgreSQL ingress from application Pods only; JWKS and backup egress modelled | Rendered and inspected in five configurations; kubeconform valid. A disposable cluster on the development host was not created because that host also runs the live cluster and shares kernel limits with it |
 | KV-015 | Medium | Fixed | One rate guard shared by MCP and HTTP; `Retry-After`; JWKS refresh floor of 30 s. Throttling of invalid bearer tokens is deliberately not added (see below) | `test_rate_limits_apply_to_mcp_and_http`, `test_jwks_refresh_is_throttled_for_unknown_key_ids` |
 | KV-016 | Medium | Fixed | Runbook commands, Secret and resource names, the MCP example, readiness and architecture statements corrected; the generator accepts the documented flag spellings; a single record is a valid bootstrap value | `tests/unit/test_operator_scripts.py` runs the documented command and loads its output |
-| KV-017 | Medium | **Open — operator action** | Not a repository change | Both Pods report one image digest with PyJWT ≥ 2.15 |
+| KV-017 | Medium | Fixed in the homelab | API and worker were redeployed from one image built from the remediated tree; revision `0002_enumerated_value_checks` was applied | Both Pods report the same image ID with PyJWT 2.15.1; the database is at the new revision with its row count unchanged; anonymous requests get `401` on both hostnames, including Host variants of the published name |
 | KV-018 | Low | Fixed | Bounded route labels; tool-call, search-latency, and pool metrics recorded; worker metrics port and liveness probe; Access rejections logged with a request ID; readiness reports degraded embeddings; `otel_enabled` now emits content-free request spans and fails closed without the SDK; the chart ingress routes only client-facing paths, so `/metrics`, `/health/*`, and the OpenAPI document are cluster-internal | `test_metrics_are_recorded_and_route_labels_are_bounded`, `test_request_spans_are_content_free_and_optional`, rendered ingress paths |
 | KV-019 | Low | Fixed | `Origin` on `/mcp` must be absent or listed in `corsOrigins` | `test_mcp_endpoint_rejects_foreign_origins` |
 | KV-020 | Low | Fixed | Scheduling fields render; values schema is typed and closed; init containers have resources; `ingress.className` is required; default images are the published GHCR names; Secret and claim names are quoted so names such as `y` or `on` render correctly | CI renders the optional components and rejects a misspelled key |
@@ -112,4 +112,4 @@ Run on the working tree on 2026-10-01 (Python 3.12.14, uv 0.12.21, Docker 29.1.3
 | NetworkPolicies on an enforcing CNI | not run | would need a second cluster on the host that runs the live one |
 | Release workflow | not run | requires a tag push |
 | Codex plugin validator | not run | validator not installed |
-| Live cluster, Cloudflare, public endpoint | not touched | not authorised |
+| Homelab deployment | passed | migration Job completed; API and worker rolled out with no restarts; logs are JSON only |
