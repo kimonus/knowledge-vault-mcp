@@ -120,6 +120,7 @@ jobs:
             pgvector/pgvector:0.8.1-pg17-trixie@sha256:137f044b0efe3d57f39b972b9b53641b1f2045b99d879e298bbf514a25787dcf
           for attempt in $(seq 1 60); do
             docker exec inspector-postgres pg_isready -U knowledge_vault && exit 0
+            echo "Waiting for PostgreSQL (${attempt}/60)"
             sleep 1
           done
           exit 1
@@ -127,9 +128,11 @@ jobs:
         run: |
           export KNOWLEDGE_VAULT_ENVIRONMENT=development
           export KNOWLEDGE_VAULT_DATABASE_URL=postgresql+psycopg://knowledge_vault:inspector-db-password@127.0.0.1:5432/knowledge_vault
-          export KNOWLEDGE_VAULT_TOKEN_PEPPER="$(openssl rand -hex 32)"
-          export INSPECTOR_TOKEN="kv_$(openssl rand -hex 32)"
-          export KNOWLEDGE_VAULT_BOOTSTRAP_TOKENS="$(uv run python -c 'import hashlib,hmac,json,os; print(json.dumps([{"principal_id":"ci-inspector","sha256":hmac.new(os.environ["KNOWLEDGE_VAULT_TOKEN_PEPPER"].encode(),os.environ["INSPECTOR_TOKEN"].encode(),hashlib.sha256).hexdigest(),"scopes":["knowledge:read","knowledge:write","knowledge:admin"]}]))')"
+          KNOWLEDGE_VAULT_TOKEN_PEPPER="$(openssl rand -hex 32)"
+          INSPECTOR_TOKEN="kv_$(openssl rand -hex 32)"
+          export KNOWLEDGE_VAULT_TOKEN_PEPPER INSPECTOR_TOKEN
+          KNOWLEDGE_VAULT_BOOTSTRAP_TOKENS="$(uv run python -c 'import hashlib,hmac,json,os; print(json.dumps([{"principal_id":"ci-inspector","sha256":hmac.new(os.environ["KNOWLEDGE_VAULT_TOKEN_PEPPER"].encode(),os.environ["INSPECTOR_TOKEN"].encode(),hashlib.sha256).hexdigest(),"scopes":["knowledge:read","knowledge:write","knowledge:admin"]}]))')"
+          export KNOWLEDGE_VAULT_BOOTSTRAP_TOKENS
           export KNOWLEDGE_VAULT_PUBLIC_BASE_URL=http://127.0.0.1:8000
           export KNOWLEDGE_VAULT_AUTH_ISSUER_URL=http://127.0.0.1:8000
           export KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED=false
@@ -138,6 +141,7 @@ jobs:
           echo $! > "$RUNNER_TEMP/server.pid"
           for attempt in $(seq 1 60); do
             curl --fail --silent http://127.0.0.1:8000/health/ready && break
+            echo "Waiting for the MCP server (${attempt}/60)"
             sleep 1
           done
           npx --yes @modelcontextprotocol/inspector@2.4.0 \
