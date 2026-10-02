@@ -98,8 +98,19 @@ describes, tests, and runs:
   Integer settings are now rendered as integers and CI rejects exponent-form values
   (`scripts/ci/check_rendered_numbers.sh`). After the switch a backup and a watchdog run both
   succeeded.
+- **The reference deployment runs what the project describes.** Embeddings are enabled there: the
+  model cache was populated once on the host and mounted read-only, all 1,726 stored assertions
+  were embedded in about six minutes with no failed jobs, and searches run in hybrid mode. The
+  measurement showed that the chart's default API memory limit was too low for the model, which
+  is corrected. Two differences remain and are stated rather than hidden: the cluster's network
+  plugin does not enforce NetworkPolicies (KV-014), and device tokens are not yet restricted to
+  the private hostname (`cloudflareAccess.privateHosts` is unset).
+- **Restore tested on the release candidate.** A backup taken after the changes above was
+  restored into a disposable PostgreSQL instance: migration revision, assertion count, and
+  vector count match the live database.
 
-Still open: KV-014 (NetworkPolicies on an enforcing CNI) and the first tagged release.
+Still open: KV-014 (NetworkPolicies on an enforcing CNI), and pushing the signed `v0.1.0` tag,
+which only the maintainer does ([RELEASING.md](../../RELEASING.md)).
 
 ## Deliberately unchanged
 
