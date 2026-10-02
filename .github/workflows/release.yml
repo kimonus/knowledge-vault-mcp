@@ -45,6 +45,12 @@ jobs:
           test "${release_version}" = "${chart_version}"
           test "${release_version}" = "${app_version}"
           test "${release_version}" = "${plugin_version}"
+      # Scan the checkout before anything is installed or run: test caches contain synthetic
+      # secret-shaped fixtures that are not part of the repository.
+      - run: sh scripts/ci/install_security_tools.sh "$RUNNER_TEMP/bin"
+      - run: echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - run: |
+          "$RUNNER_TEMP/bin/gitleaks" dir . --redact --exit-code 1
       - run: uv sync --locked
       - run: uv run ruff format --check .
       - run: uv run ruff check .
@@ -53,10 +59,6 @@ jobs:
       - run: uv run python scripts/check_coverage.py coverage.json
       - run: uv run pip-audit --path .venv/lib/python3.12/site-packages --progress-spinner off
       - run: uv run bandit -q -r src
-      - run: sh scripts/ci/install_security_tools.sh "$RUNNER_TEMP/bin"
-      - run: echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - run: |
-          "$RUNNER_TEMP/bin/gitleaks" dir . --redact --exit-code 1
       - run: |
           "$RUNNER_TEMP/bin/hadolint" Dockerfile Dockerfile.backup
       - run: |
