@@ -48,9 +48,9 @@ spec:
                 {{- end }}
                 - {name: RESTIC_PASSWORD_FILE, value: /secrets/restic/password}
                 - {name: RESTIC_CACHE_DIR, value: /tmp/restic-cache}
-                - {name: BACKUP_KEEP_DAILY, value: {{ .Values.backup.keepDaily | quote }}}
-                - {name: BACKUP_KEEP_WEEKLY, value: {{ .Values.backup.keepWeekly | quote }}}
-                - {name: BACKUP_KEEP_MONTHLY, value: {{ .Values.backup.keepMonthly | quote }}}
+                - {name: BACKUP_KEEP_DAILY, value: {{ .Values.backup.keepDaily | int64 | quote }}}
+                - {name: BACKUP_KEEP_WEEKLY, value: {{ .Values.backup.keepWeekly | int64 | quote }}}
+                - {name: BACKUP_KEEP_MONTHLY, value: {{ .Values.backup.keepMonthly | int64 | quote }}}
                 - {name: BACKUP_CHECK_SUBSET, value: {{ .Values.backup.checkSubset | quote }}}
               volumeMounts:
                 - {name: restic-password, mountPath: /secrets/restic, readOnly: true}

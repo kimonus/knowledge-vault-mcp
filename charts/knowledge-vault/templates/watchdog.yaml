@@ -36,8 +36,8 @@ spec:
                 - name: KNOWLEDGE_VAULT_TOKEN_PEPPER
                   valueFrom: {secretKeyRef: {name: {{ .Values.auth.existingSecret | quote }}, key: {{ .Values.auth.tokenPepperKey | quote }}}}
                 - {name: KNOWLEDGE_VAULT_WATCHDOG_EXPECT_BACKUP, value: {{ .Values.backup.enabled | quote }}}
-                - {name: KNOWLEDGE_VAULT_WATCHDOG_WORKER_MAX_AGE_SECONDS, value: {{ .Values.watchdog.workerMaxAgeSeconds | quote }}}
-                - {name: KNOWLEDGE_VAULT_WATCHDOG_BACKUP_MAX_AGE_SECONDS, value: {{ .Values.watchdog.backupMaxAgeSeconds | quote }}}
+                - {name: KNOWLEDGE_VAULT_WATCHDOG_WORKER_MAX_AGE_SECONDS, value: {{ .Values.watchdog.workerMaxAgeSeconds | int64 | quote }}}
+                - {name: KNOWLEDGE_VAULT_WATCHDOG_BACKUP_MAX_AGE_SECONDS, value: {{ .Values.watchdog.backupMaxAgeSeconds | int64 | quote }}}
                 {{- if .Values.watchdog.webhook.existingSecret }}
                 - name: KNOWLEDGE_VAULT_ALERT_WEBHOOK_URL
                   valueFrom: {secretKeyRef: {name: {{ .Values.watchdog.webhook.existingSecret | quote }}, key: {{ .Values.watchdog.webhook.urlKey | quote }}}}

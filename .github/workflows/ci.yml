@@ -148,6 +148,15 @@ jobs:
             echo "values schema accepted whitespace-only ingestion guidance" >&2
             exit 1
           fi
+      - name: Integer settings must not be rendered in exponent form
+        run: |
+          "$RUNNER_TEMP/bin/helm" template knowledge-vault charts/knowledge-vault \
+            -f charts/knowledge-vault/values-traefik-hostpath.yaml \
+            --set config.maxRequestBytes=16000000 \
+            --set watchdog.backupMaxAgeSeconds=2592000 \
+            --set backup.keepDaily=1000000 \
+            > "$RUNNER_TEMP/rendered-large-numbers.yaml"
+          sh scripts/ci/check_rendered_numbers.sh "$RUNNER_TEMP"/rendered*.yaml
 
   inspector:
     runs-on: ubuntu-24.04
