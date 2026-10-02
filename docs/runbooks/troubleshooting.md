@@ -53,6 +53,11 @@ internal MCP Service URL. Rotate the tunnel token if logs suggest disclosure. Fo
 transport, follow its diagnostics while preserving the same origin-authentication boundary. Do not
 expose an unauthenticated public ingress as an emergency workaround.
 
+## The watchdog Job failed
+
+A failed watchdog run means it found a problem, not that the watchdog is broken. Read its log for
+the problem codes and follow [monitoring.md](monitoring.md).
+
 ## Backup failed
 
 Check repository reachability, mounted password file, DB permissions, temporary space, retention

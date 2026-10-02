@@ -21,6 +21,9 @@ Arguments that do not match a tool's schema are rejected by the MCP layer before
 Read, write, and admin operations have separate per-principal rate limits that are shared with
 the HTTP API. Error text and server logs never contain assertion content.
 
+The HTTP API under `/api/v1` returns the same response models as the corresponding tools, and
+they appear as response schemas in `/api/openapi.json`.
+
 ## Compatibility tools
 
 - `search({query})` returns exactly `{results: [{id, title, url}]}` with a bounded result set.
@@ -110,7 +113,8 @@ new flush with a new idempotency key.
   identifies the one it replaces. If the corrected wording already exists (for example when
   reverting to an earlier statement), that existing assertion becomes current again and the named
   one is superseded.
-- `get_knowledge_statistics()`: content-free counts and embedding queue state.
+- `get_knowledge_statistics()`: content-free counts and embedding queue state, plus
+  `operations`: seconds since the worker and the backup last succeeded (`null` if never).
 - `forget_knowledge(dry_run, assertion_ids?, confirmation_token?)`: admin-only two-step deletion.
 
 Results of `search_knowledge` and `get_knowledge` carry `untrusted_data: true`. Stored text is

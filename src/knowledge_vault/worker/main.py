@@ -8,6 +8,7 @@ from knowledge_vault.config import get_settings
 from knowledge_vault.container import build_container
 from knowledge_vault.embeddings.providers import SentenceTransformerProvider
 from knowledge_vault.observability.logging import configure_logging
+from knowledge_vault.services.operations import WORKER
 from knowledge_vault.worker.jobs import EmbeddingWorker
 from knowledge_vault.worker.runner import run_worker_loop
 
@@ -37,6 +38,8 @@ async def _worker() -> None:
     async def maintenance() -> None:
         await container.ingestion.expire_and_purge()
         await container.administration.purge_confirmation_tokens()
+        # Lets the watchdog and the statistics tool tell that the worker loop is alive.
+        await container.operations.beat(WORKER)
 
     try:
         await run_worker_loop(

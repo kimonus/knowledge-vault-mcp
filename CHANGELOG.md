@@ -5,6 +5,23 @@ stable release.
 
 ## [Unreleased]
 
+### Added (operational consistency)
+
+- Heartbeats for the worker and the backup job, reported by `get_knowledge_statistics` and as a
+  metric, and an optional watchdog CronJob that fails—and can notify a webhook—when the worker
+  stops, backups stop, or embedding jobs die (revision `0003_operational_heartbeats`).
+- Chart values for an existing PostgreSQL claim, backups to a host directory under a chosen user,
+  `extraEnv`, and `extraObjects`, with a complete Traefik and host-path example, so that a
+  deployment needs no hand-written manifests beside the chart.
+- A manual rehearsal mode for the release workflow that publishes nothing.
+
+### Changed (operational consistency)
+
+- The HTTP API and the MCP tools return the same response models. HTTP responses for assertions
+  and searches now carry `untrusted_data`, append and abort responses include the batch ID, and
+  the OpenAPI document describes responses.
+- The service version is read from the installed package.
+
 ### Changed
 
 - MCP initialization now delivers exhaustive extraction guidance with fixed trigger, safety,

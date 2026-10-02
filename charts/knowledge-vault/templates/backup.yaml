@@ -21,16 +21,31 @@ spec:
           restartPolicy: OnFailure
           serviceAccountName: {{ include "knowledge-vault.fullname" . }}-ops
           automountServiceAccountToken: false
-          securityContext: {runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, fsGroup: 999, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {runAsNonRoot: true, runAsUser: {{ .Values.backup.runAsUser }}, runAsGroup: {{ .Values.backup.runAsGroup }}, fsGroup: {{ .Values.backup.runAsGroup }}, seccompProfile: {type: RuntimeDefault}}
           containers:
             - name: backup
               image: {{ include "knowledge-vault.image" .Values.backupImage }}
               imagePullPolicy: {{ .Values.backupImage.pullPolicy }}
               env:
+                {{- if .Values.backup.databaseFromInternalPostgresql }}
+                # No credentials in the URL: libpq reads them from the PG* variables.
+                - {name: DATABASE_URL, value: {{ printf "postgresql://%s-postgresql:5432" (include "knowledge-vault.fullname" .) | quote }}}
+                - name: PGUSER
+                  valueFrom: {secretKeyRef: {name: {{ .Values.internalPostgresql.existingSecret | quote }}, key: {{ .Values.internalPostgresql.usernameKey | quote }}}}
+                - name: PGPASSWORD
+                  valueFrom: {secretKeyRef: {name: {{ .Values.internalPostgresql.existingSecret | quote }}, key: {{ .Values.internalPostgresql.passwordKey | quote }}}}
+                - name: PGDATABASE
+                  valueFrom: {secretKeyRef: {name: {{ .Values.internalPostgresql.existingSecret | quote }}, key: {{ .Values.internalPostgresql.databaseKey | quote }}}}
+                {{- else }}
                 - name: DATABASE_URL
                   valueFrom: {secretKeyRef: {name: {{ .Values.backup.existingSecret | quote }}, key: {{ .Values.backup.databaseUrlKey | quote }}}}
+                {{- end }}
+                {{- if .Values.backup.repositoryHostPath }}
+                - {name: RESTIC_REPOSITORY, value: /repository}
+                {{- else }}
                 - name: RESTIC_REPOSITORY
                   valueFrom: {secretKeyRef: {name: {{ .Values.backup.existingSecret | quote }}, key: {{ .Values.backup.repositoryKey | quote }}}}
+                {{- end }}
                 - {name: RESTIC_PASSWORD_FILE, value: /secrets/restic/password}
                 - {name: RESTIC_CACHE_DIR, value: /tmp/restic-cache}
                 - {name: BACKUP_KEEP_DAILY, value: {{ .Values.backup.keepDaily | quote }}}
@@ -40,6 +55,9 @@ spec:
               volumeMounts:
                 - {name: restic-password, mountPath: /secrets/restic, readOnly: true}
                 - {name: tmp, mountPath: /tmp}
+                {{- if .Values.backup.repositoryHostPath }}
+                - {name: repository, mountPath: /repository}
+                {{- end }}
               securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
               resources: {{- toYaml .Values.backup.resources | nindent 16 }}
           volumes:
@@ -49,4 +67,10 @@ spec:
                 items: [{key: {{ .Values.backup.passwordKey | quote }}, path: password}]
             - name: tmp
               emptyDir: {sizeLimit: 2Gi}
+            {{- if .Values.backup.repositoryHostPath }}
+            # `Directory` makes the Pod fail to start when the path is missing (for example an
+            # unmounted external drive) instead of creating a repository somewhere else.
+            - name: repository
+              hostPath: {path: {{ .Values.backup.repositoryHostPath | quote }}, type: Directory}
+            {{- end }}
 {{- end }}

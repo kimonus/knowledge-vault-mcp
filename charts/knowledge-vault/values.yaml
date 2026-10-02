@@ -72,6 +72,17 @@ resources:
   init:
     requests: {cpu: 25m, memory: 96Mi}
     limits: {cpu: 250m, memory: 256Mi}
+  watchdog:
+    requests: {cpu: 25m, memory: 128Mi}
+    limits: {cpu: 250m, memory: 384Mi}
+
+# Additional non-secret KNOWLEDGE_VAULT_* settings for the API and worker, for example
+#   KNOWLEDGE_VAULT_RATE_WRITE_PER_MINUTE: "60"
+extraEnv: {}
+
+# Additional manifests rendered with the release (templated), for example Traefik IngressRoutes
+# or a statically provisioned PersistentVolume. See values-traefik-hostpath.yaml.
+extraObjects: []
 
 worker:
   metricsPort: 9102
@@ -102,6 +113,8 @@ internalPostgresql:
   databaseKey: database
   storageClass: ""
   storage: 20Gi
+  # Use an existing PersistentVolumeClaim for the data directory instead of creating one.
+  existingClaim: ""
   resources:
     requests: {cpu: 250m, memory: 512Mi}
     limits: {cpu: "2", memory: 2Gi}
@@ -133,9 +146,32 @@ backup:
   keepWeekly: 4
   keepMonthly: 6
   checkSubset: 5%
+  # Take the database user, password, and name from the internal PostgreSQL Secret instead of a
+  # `database-url` key in the backup Secret.
+  databaseFromInternalPostgresql: false
+  # Keep the restic repository in a directory on the node (for example an external drive)
+  # instead of the location in the backup Secret. The Job fails if the directory is missing.
+  repositoryHostPath: ""
+  # The user that owns the repository directory.
+  runAsUser: 999
+  runAsGroup: 999
   resources:
     requests: {cpu: 100m, memory: 256Mi}
     limits: {cpu: "1", memory: 1Gi}
+
+# Periodic health check for deployments without a monitoring stack: fails (and optionally
+# notifies) when the worker stops, backups stop while `backup.enabled`, or embedding jobs die.
+watchdog:
+  enabled: false
+  schedule: "*/15 * * * *"
+  workerMaxAgeSeconds: 900
+  backupMaxAgeSeconds: 129600
+  webhook:
+    # Secret holding the notification URL. Leave empty to rely on the failed Job alone.
+    existingSecret: ""
+    urlKey: url
+    # `json` posts {title, message, problems}; `text` posts the message with a Title header.
+    format: json
 
 networkPolicy:
   enabled: true
@@ -150,6 +186,9 @@ networkPolicy:
   additionalEgress: []
   # Egress rules that let the backup Job reach its restic repository.
   backupEgress:
+    - ports: [{protocol: TCP, port: 443}]
+  # Egress rules that let the watchdog reach its notification webhook.
+  watchdogEgress:
     - ports: [{protocol: TCP, port: 443}]
 
 podAnnotations: {}

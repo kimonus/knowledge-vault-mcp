@@ -103,7 +103,7 @@ async def test_authenticated_http_flush_search_and_problem_details(
         aborted = await client.post(
             f"/api/v1/flushes/{abandoned.json()['batch_id']}/abort", headers=headers
         )
-        assert aborted.json() == {"aborted": True}
+        assert aborted.json() == {"batch_id": abandoned.json()["batch_id"], "aborted": True}
 
         malformed = await client.post("/api/v1/search", headers=headers, json={"query": ""})
         assert malformed.status_code == 422

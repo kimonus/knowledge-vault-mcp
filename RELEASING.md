@@ -15,6 +15,18 @@ and are produced by the tag-driven GitHub Actions workflow.
 5. Restore the release-candidate backup into a disposable PostgreSQL instance. A successful backup
    alone is not a recovery test.
 
+## Rehearse
+
+Run the release workflow manually before the first tag and after changing it:
+
+```bash
+gh workflow run release.yml --ref main
+gh run watch
+```
+
+A manual run executes every verification step, builds both images, and packages the chart, but
+pushes, signs, and releases nothing.
+
 ## Tag and publish
 
 Create an annotated, signed tag from the reviewed `main` commit and push only that tag:

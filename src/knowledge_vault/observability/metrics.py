@@ -22,6 +22,11 @@ EMBEDDING_QUEUE = Gauge(
 EMBEDDING_OUTCOMES = Counter(
     "knowledge_vault_embedding_jobs_total", "Embedding job outcomes", ("outcome",)
 )
+HEARTBEAT_AGE = Gauge(
+    "knowledge_vault_heartbeat_age_seconds",
+    "Seconds since a background duty last succeeded",
+    ("name",),
+)
 DB_POOL = Gauge(
     "knowledge_vault_database_pool_connections", "Database pool connections", ("state",)
 )

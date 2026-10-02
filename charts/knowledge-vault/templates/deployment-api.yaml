@@ -57,6 +57,7 @@ spec:
               value: {{ join "," .Values.cloudflareAccess.privateHosts | quote }}
             {{- end }}
             {{- include "knowledge-vault.modelEnv" . | nindent 12 }}
+            {{- include "knowledge-vault.extraEnv" . | nindent 12 }}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
           volumeMounts:
             - {name: tmp, mountPath: /tmp}

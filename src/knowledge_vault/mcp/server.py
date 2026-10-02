@@ -14,11 +14,20 @@ from pydantic import AnyHttpUrl, Field, SkipValidation
 from knowledge_vault.auth.mcp import MCPTokenVerifier
 from knowledge_vault.auth.tokens import Scope
 from knowledge_vault.container import Container
-from knowledge_vault.domain.models import AssertionInput, AssertionView, SearchFilters
+from knowledge_vault.domain.models import AssertionInput, CommitResult, SearchFilters
+from knowledge_vault.domain.responses import (
+    AbortResponse,
+    AppendResponse,
+    AssertionResponse,
+    BeginFlushResponse,
+    ConflictListResponse,
+    ForgetPreviewResponse,
+    ForgetResultResponse,
+    SearchResponse,
+    StatisticsResponse,
+)
 from knowledge_vault.ingestion_policy import build_ingestion_instructions
 from knowledge_vault.mcp.schemas import (
-    AppendOutput,
-    BeginFlushOutput,
     CompatibilityFetchOutput,
     CompatibilitySearchOutput,
     CompatibilitySearchResult,
@@ -139,9 +148,6 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
     def assertion_url(assertion_id: UUID) -> str:
         return f"{settings.public_base_url.rstrip('/')}/api/v1/assertions/{assertion_id}"
 
-    def untrusted(view: AssertionView) -> dict[str, Any]:
-        return {**view.model_dump(mode="json"), "untrusted_data": True}
-
     @tool(
         description=(
             "Search private knowledge for a query. Read-only OpenAI compatibility tool; returns "
@@ -201,12 +207,12 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
     )
     async def begin_knowledge_flush(
         idempotency_key: str, declared_parts: int, declared_items: int
-    ) -> BeginFlushOutput:
+    ) -> BeginFlushResponse:
         principal_id = principal(Scope.WRITE)
         batch = await container.ingestion.begin(
             principal_id, idempotency_key, declared_parts, declared_items
         )
-        return BeginFlushOutput(
+        return BeginFlushResponse(
             batch_id=str(batch.id),
             state=batch.state,
             declared_parts=batch.declared_parts,
@@ -233,17 +239,17 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
             list[SkipValidation[AssertionInput]],
             Field(min_length=1, max_length=settings.max_part_items),
         ],
-    ) -> AppendOutput:
+    ) -> AppendResponse:
         principal_id = principal(Scope.WRITE)
         raw_items = cast(list[Any], assertions)
         accepted, rejected, replayed = await container.ingestion.append(
             principal_id, _uuid(batch_id, "batch_id"), part_number, raw_items
         )
-        return AppendOutput(
+        return AppendResponse(
             batch_id=batch_id,
             part_number=part_number,
             accepted=accepted,
-            rejected=[item.model_dump(mode="json") for item in rejected],
+            rejected=rejected,
             replayed=replayed,
         )
 
@@ -258,10 +264,9 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
         ),
         annotations=WRITE_IDEMPOTENT,
     )
-    async def commit_knowledge_flush(batch_id: str) -> dict[str, Any]:
+    async def commit_knowledge_flush(batch_id: str) -> CommitResult:
         principal_id = principal(Scope.WRITE)
-        result = await container.ingestion.commit(principal_id, _uuid(batch_id, "batch_id"))
-        return result.model_dump(mode="json")
+        return await container.ingestion.commit(principal_id, _uuid(batch_id, "batch_id"))
 
     @tool(
         description=(
@@ -270,12 +275,10 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
         ),
         annotations=WRITE_IDEMPOTENT,
     )
-    async def abort_knowledge_flush(batch_id: str) -> dict[str, Any]:
+    async def abort_knowledge_flush(batch_id: str) -> AbortResponse:
         principal_id = principal(Scope.WRITE)
-        return {
-            "batch_id": batch_id,
-            "aborted": await container.ingestion.abort(principal_id, _uuid(batch_id, "batch_id")),
-        }
+        aborted = await container.ingestion.abort(principal_id, _uuid(batch_id, "batch_id"))
+        return AbortResponse(batch_id=batch_id, aborted=aborted)
 
     @tool(
         description=(
@@ -290,10 +293,10 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
         filters: SearchFilters | None = None,
         limit: int = 20,
         cursor: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> SearchResponse:
         principal(Scope.READ)
         page = await container.search.search(query, filters, limit=limit, cursor=cursor)
-        return {**page.model_dump(mode="json"), "untrusted_data": True}
+        return SearchResponse(**page.model_dump())
 
     @tool(
         description=(
@@ -302,17 +305,20 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
         ),
         annotations=READ_ONLY,
     )
-    async def get_knowledge(assertion_id: str) -> dict[str, Any]:
+    async def get_knowledge(assertion_id: str) -> AssertionResponse:
         principal(Scope.READ)
-        return untrusted(await container.search.get(_uuid(assertion_id, "assertion_id")))
+        view = await container.search.get(_uuid(assertion_id, "assertion_id"))
+        return AssertionResponse(**view.model_dump())
 
     @tool(
         description="List bounded unresolved possible-conflict records. Read-only.",
         annotations=READ_ONLY,
     )
-    async def list_knowledge_conflicts(limit: int = 50) -> dict[str, Any]:
+    async def list_knowledge_conflicts(limit: int = 50) -> ConflictListResponse:
         principal(Scope.READ)
-        return {"conflicts": await container.administration.list_conflicts(limit=limit)}
+        return ConflictListResponse.model_validate(
+            {"conflicts": await container.administration.list_conflicts(limit=limit)}
+        )
 
     @tool(
         description=(
@@ -321,10 +327,9 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
         ),
         annotations=WRITE_IDEMPOTENT,
     )
-    async def correct_knowledge(idempotency_key: str, correction: AssertionInput) -> dict[str, Any]:
+    async def correct_knowledge(idempotency_key: str, correction: AssertionInput) -> CommitResult:
         principal_id = principal(Scope.WRITE)
-        result = await container.administration.correct(principal_id, idempotency_key, correction)
-        return result.model_dump(mode="json")
+        return await container.administration.correct(principal_id, idempotency_key, correction)
 
     @tool(
         description=(
@@ -343,21 +348,26 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
         if dry_run:
             if not assertion_ids:
                 raise ToolError("invalid_request: assertion_ids are required for dry-run preview")
-            return await container.administration.preview_forgetting(
+            preview = await container.administration.preview_forgetting(
                 principal_id, [_uuid(item, "assertion_ids") for item in assertion_ids]
             )
+            return ForgetPreviewResponse.model_validate(preview).model_dump(mode="json")
         if not confirmation_token:
             raise ToolError(
                 "invalid_request: confirmation_token is required for permanent deletion"
             )
-        return await container.administration.confirm_forgetting(principal_id, confirmation_token)
+        result = await container.administration.confirm_forgetting(principal_id, confirmation_token)
+        return ForgetResultResponse.model_validate(result).model_dump(mode="json")
 
     @tool(
-        description="Return content-free knowledge and embedding queue statistics. Read-only.",
+        description=(
+            "Return content-free knowledge, embedding queue, and operational statistics, "
+            "including how long ago the worker and the backup last succeeded. Read-only."
+        ),
         annotations=READ_ONLY,
     )
-    async def get_knowledge_statistics() -> dict[str, Any]:
+    async def get_knowledge_statistics() -> StatisticsResponse:
         principal(Scope.READ)
-        return await container.administration.statistics()
+        return StatisticsResponse.model_validate(await container.administration.statistics())
 
     return server

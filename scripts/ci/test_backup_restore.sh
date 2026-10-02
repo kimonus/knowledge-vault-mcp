@@ -47,6 +47,7 @@ docker exec "${database_container}" psql -v ON_ERROR_STOP=1 \
   -U knowledge_vault -d knowledge_vault \
   -c "CREATE TABLE backup_probe (id integer PRIMARY KEY, marker text NOT NULL);" \
   -c "INSERT INTO backup_probe VALUES (1, 'synthetic');" \
+  -c "CREATE TABLE operational_heartbeats (name varchar(40) PRIMARY KEY, succeeded_at timestamptz NOT NULL DEFAULT now(), detail varchar(200));" \
   >/dev/null
 
 docker run --rm \
@@ -85,6 +86,12 @@ if [ "${snapshot_count}" -ne 1 ]; then
   echo "retention kept ${snapshot_count} snapshots; expected exactly 1" >&2
   exit 1
 fi
+
+# Every successful run records a heartbeat for the watchdog.
+heartbeat_count="$(docker exec "${database_container}" psql -At \
+  -U knowledge_vault -d knowledge_vault \
+  -c "SELECT count(*) FROM operational_heartbeats WHERE name = 'backup' AND succeeded_at > now() - interval '5 minutes';")"
+test "${heartbeat_count}" = "1"
 
 docker run --rm \
   --volume "${work_dir}/repository:/repository" \
