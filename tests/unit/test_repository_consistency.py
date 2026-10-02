@@ -57,3 +57,14 @@ def test_version_is_identical_everywhere() -> None:
         },
     }
     assert set(found.values()) == {version}, found
+
+
+def test_release_workflow_publishes_no_latest_tag() -> None:
+    """docker/metadata-action adds `latest` to semver releases unless told not to."""
+    workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    steps = re.split(r"\n      - ", workflow)
+    metadata_steps = [step for step in steps if "docker/metadata-action@" in step]
+    assert len(metadata_steps) == 2, "expected one metadata step per published image"
+    for step in metadata_steps:
+        assert "flavor: latest=false" in step, step
+        assert "type=raw" not in step and "latest=true" not in step, step

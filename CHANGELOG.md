@@ -5,6 +5,13 @@ stable release.
 
 ## [Unreleased]
 
+### Fixed
+
+- The release workflow published a `latest` image tag with 0.1.0 although the release policy
+  says it publishes none: the metadata action adds it to semver releases by default. It is now
+  disabled, and a test keeps it disabled. The `latest` tag on the 0.1.0 images stays where it is
+  and must not be used; pin the digest.
+
 ## [0.1.0] - 2026-10-02
 
 ### Added (operational consistency)
