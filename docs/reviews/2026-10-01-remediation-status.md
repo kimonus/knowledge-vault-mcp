@@ -109,8 +109,17 @@ describes, tests, and runs:
   restored into a disposable PostgreSQL instance: migration revision, assertion count, and
   vector count match the live database.
 
-Still open: KV-014 (NetworkPolicies on an enforcing CNI), and pushing the signed `v0.1.0` tag,
-which only the maintainer does ([RELEASING.md](../../RELEASING.md)).
+- **Release 0.1.0 is published and deployed.** The maintainer pushed `v0.1.0` (annotated, not
+  GPG-signed—a departure from [RELEASING.md](../../RELEASING.md) chosen by the maintainer; the
+  images are signed by the workflow regardless). Both image signatures verify with cosign against the
+  release workflow identity, and the reference deployment runs both images by digest; a backup
+  and a watchdog run on the published images succeeded. The first real publication also showed
+  that the workflow still pushed a `latest` tag, which the rehearsals could not show because
+  they push nothing; that is fixed for later releases.
+
+Still open: KV-014 (NetworkPolicies on an enforcing CNI), a tag-protection rule for `v*`, a
+notification target for the watchdog on the reference deployment, and restricting device tokens
+to the private hostname there.
 
 ## Deliberately unchanged
 

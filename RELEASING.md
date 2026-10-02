@@ -49,8 +49,11 @@ then publishes:
 - the packaged Helm chart attached to the GitHub release.
 
 The workflow scans the pushed digests before signing them, and publishes version tags
-(`MAJOR.MINOR.PATCH` and `MAJOR.MINOR`) but no `latest` tag. Version tags are conveniences only. Kubernetes deployments must pin the reported
-`sha256` image digest.
+(`MAJOR.MINOR.PATCH` and `MAJOR.MINOR`) but no `latest` tag. Version tags are conveniences only.
+Kubernetes deployments must pin the reported `sha256` image digest.
+
+Release 0.1.0 is the exception: its workflow still let the metadata action add `latest`, so both
+0.1.0 images also carry that tag. Later releases do not move it. Do not use it.
 
 ## Verify
 
@@ -64,6 +67,20 @@ cosign verify \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/kimonus/knowledge-vault-mcp@sha256:RELEASE_DIGEST
 ```
+
+Without a local `cosign`, the pinned container image does the same; give it a writable home:
+
+```bash
+docker run --rm --read-only --tmpfs /tmp:mode=1777 -e HOME=/tmp -e TUF_ROOT=/tmp/tuf \
+  ghcr.io/sigstore/cosign/cosign:v3.1.3 verify \
+  --certificate-identity \
+  'https://github.com/kimonus/knowledge-vault-mcp/.github/workflows/release.yml@refs/tags/vX.Y.Z' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/kimonus/knowledge-vault-mcp@sha256:RELEASE_DIGEST
+```
+
+Provenance and SBOM are BuildKit attestations stored in the image index, not GitHub artifact
+attestations, so `gh attestation verify` does not find them.
 
 Confirm the SBOM/provenance attestations in GHCR, install the packaged chart into a disposable
 namespace by digest, run an authenticated MCP tools/list and search/fetch smoke test, and repeat the
