@@ -16,6 +16,29 @@ HF_HOME=/models python -c "from sentence_transformers import SentenceTransformer
 SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')"
 ```
 
+On a single-node cluster the same step can run on the node with the application image, which
+already contains the libraries, writing into the host directory that backs the claim:
+
+```bash
+docker run --rm -u "$(id -u):$(id -g)" --read-only --tmpfs /tmp --cap-drop ALL \
+  -e HOME=/tmp -e HF_HOME=/models -v /path/to/model-cache:/models \
+  --entrypoint python IMAGE -c "from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')"
+```
+
+Then confirm that it loads the way a Pod will load it—without a network, read-only, as the Pod's
+user—before enabling embeddings:
+
+```bash
+docker run --rm -u 10001:10001 --network none --read-only --tmpfs /tmp --cap-drop ALL \
+  -e HF_HOME=/models -e HF_HUB_OFFLINE=1 -v /path/to/model-cache:/models:ro \
+  --entrypoint python IMAGE -c "from sentence_transformers import SentenceTransformer; \
+print(SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2', \
+local_files_only=True).encode(['check']).shape)"
+```
+
+The cache directory name under `hub/models--…/snapshots/` is the model revision; record it.
+
 The chart sets `HF_HOME=/models`, so the default `config.embeddingModel` identifier resolves from
 that cache. Alternatively copy a model directory onto the volume and set `config.embeddingModel`
 to its path, for example `/models/paraphrase-multilingual-MiniLM-L12-v2`. Record the model
@@ -23,6 +46,14 @@ revision you verified.
 
 For local development only, `KNOWLEDGE_VAULT_EMBEDDING_ALLOW_DOWNLOAD=true` lets the first call
 download the model into the user's Hugging Face cache.
+
+### Memory
+
+The default model occupies about 1.3 GiB in each process that loads it (measured on the reference
+deployment: 1.1 GiB peak while loading, 1.27 GiB in the worker after embedding 1,726 assertions).
+The worker loads it when it starts embedding; the API loads it on the first search. The chart's
+default limits (2 GiB each) allow for that. Do not lower the API limit below that unless
+`config.embeddingsEnabled` is `false`, or the first search will have the Pod killed for memory.
 
 If the model cannot be loaded, the provider fails fast and retries the load once a minute:
 `/health/ready` reports `"embedding": "degraded"`, search answers from full-text results, and

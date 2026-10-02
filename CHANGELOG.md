@@ -5,6 +5,8 @@ stable release.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-02
+
 ### Added (operational consistency)
 
 - Heartbeats for the worker and the backup job, reported by `get_knowledge_statistics` and as a
@@ -21,6 +23,10 @@ stable release.
   `config.maxRequestBytes` reached the service as `2e+06` and the API and worker refused to
   start. Integer settings are now rendered as integers, and CI rejects exponent-form values in
   every rendered manifest.
+
+- The chart's default API memory limit (1 GiB) was below what the embedding model needs once the
+  API loads it for the first search (about 1.3 GiB). The default is now 2 GiB with a 512 MiB
+  request, and the embeddings runbook states the measured requirement.
 
 ### Changed (operational consistency)
 
