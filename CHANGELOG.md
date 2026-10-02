@@ -15,6 +15,13 @@ stable release.
   deployment needs no hand-written manifests beside the chart.
 - A manual rehearsal mode for the release workflow that publishes nothing.
 
+### Fixed (operational consistency)
+
+- The chart rendered integer settings of one million or more in exponent form, so the default
+  `config.maxRequestBytes` reached the service as `2e+06` and the API and worker refused to
+  start. Integer settings are now rendered as integers, and CI rejects exponent-form values in
+  every rendered manifest.
+
 ### Changed (operational consistency)
 
 - The HTTP API and the MCP tools return the same response models. HTTP responses for assertions

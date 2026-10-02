@@ -37,7 +37,7 @@ spec:
             - name: KNOWLEDGE_VAULT_TOKEN_PEPPER
               valueFrom: {secretKeyRef: {name: {{ .Values.auth.existingSecret | quote }}, key: {{ .Values.auth.tokenPepperKey | quote }}}}
             - name: KNOWLEDGE_VAULT_WORKER_METRICS_PORT
-              value: {{ .Values.worker.metricsPort | quote }}
+              value: {{ .Values.worker.metricsPort | int64 | quote }}
             {{- include "knowledge-vault.modelEnv" . | nindent 12 }}
             {{- include "knowledge-vault.extraEnv" . | nindent 12 }}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}

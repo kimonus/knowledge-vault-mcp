@@ -138,12 +138,15 @@ uv run pytest tests/integration tests/e2e
 helm lint charts/knowledge-vault
 helm template knowledge-vault charts/knowledge-vault # with required safe test values
 kubeconform -strict -summary <rendered manifests>
+sh scripts/ci/check_rendered_numbers.sh <rendered manifests>
 ```
 
 For container, backup, or chart changes also build both images and run
 `sh scripts/ci/test_backup_restore.sh <backup image>`, which executes the backup job with a
 read-only root filesystem and asserts that retention prunes. Render the chart with Cloudflare
-enabled (`cloudflareAccess.publicHosts` set) as well as with the default values.
+enabled (`cloudflareAccess.publicHosts` set) as well as with the default values. Chart templates
+render integer settings with `| int64 | quote`; a bare `| quote` writes large numbers in exponent
+form.
 
 The development host also runs the live cluster on the same Docker daemon. Check free space on
 the Docker data root before building, remove review-built images afterwards, and never select

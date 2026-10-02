@@ -86,8 +86,18 @@ describes, tests, and runs:
   ([monitoring runbook](../runbooks/monitoring.md)).
 - **One set of response shapes.** The HTTP API and the MCP tools return the same models
   (`domain/responses.py`); a contract test compares them.
-- **Release rehearsal.** The release workflow can be run manually without publishing.
+- **Release rehearsal.** The release workflow can be run manually without publishing. The first
+  rehearsal failed at the secret scan, which ran after the tests and read their cache; the scan
+  now runs on the fresh checkout, and the second rehearsal passed.
 - **Conventions.** `AGENTS.md` records the branch, worktree, and single-definition rules.
+- **The reference deployment runs from the chart.** The homelab was switched from hand-written
+  manifests to a Helm release with a private values file; the data volume, Secrets, and
+  certificate were kept. The switch found a chart defect no render had caught: integer settings
+  of one million or more were written in exponent form (`maxRequestBytes` as `2e+06`), and the
+  API and worker refused to start for about seven minutes until the template was corrected.
+  Integer settings are now rendered as integers and CI rejects exponent-form values
+  (`scripts/ci/check_rendered_numbers.sh`). After the switch a backup and a watchdog run both
+  succeeded.
 
 Still open: KV-014 (NetworkPolicies on an enforcing CNI) and the first tagged release.
 
