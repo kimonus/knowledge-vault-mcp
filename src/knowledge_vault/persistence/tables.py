@@ -239,3 +239,15 @@ class ConfirmationTokenRow(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class HeartbeatRow(Base):
+    """When a background duty last succeeded. Content-free operational data."""
+
+    __tablename__ = "operational_heartbeats"
+
+    name: Mapped[str] = mapped_column(String(40), primary_key=True)
+    succeeded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    detail: Mapped[str | None] = mapped_column(String(200))

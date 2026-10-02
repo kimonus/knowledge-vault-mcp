@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 
 class CompatibilitySearchResult(BaseModel):
@@ -19,25 +19,3 @@ class CompatibilityFetchOutput(BaseModel):
     text: str
     url: str
     metadata: dict[str, Any] | None = None
-
-
-class BeginFlushOutput(BaseModel):
-    batch_id: str
-    state: str
-    declared_parts: int
-    declared_items: int
-    replayed: bool
-
-
-class AppendOutput(BaseModel):
-    batch_id: str
-    part_number: int
-    accepted: int
-    rejected: list[dict[str, Any]]
-    replayed: bool
-
-
-class OperationOutput(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    success: bool

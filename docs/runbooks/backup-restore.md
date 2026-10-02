@@ -44,5 +44,15 @@ snapshots—up to the longest configured period (six months with the default `ke
 Restrict restores, and when a deletion must take effect sooner, shorten the policy or remove the
 affected snapshots with `restic forget --prune`.
 
+A successful run records a `backup` heartbeat in the database; the
+[watchdog](monitoring.md) reports when it goes stale.
+
+To keep the repository on a directory of the node—an external drive, for instance—set
+`backup.repositoryHostPath` and, if the directory belongs to another user, `backup.runAsUser` and
+`backup.runAsGroup`. The Job then fails to start when the directory is missing rather than
+writing somewhere else. A drive in the same machine protects against a failed disk or a bad
+deploy, not against losing the machine; keep the repository password somewhere that survives the
+loss of the disk holding the database.
+
 The Job's NetworkPolicy allows egress to the repository through `networkPolicy.backupEgress`
 (TCP 443 by default); adjust it for SFTP, a LAN target, or another port.

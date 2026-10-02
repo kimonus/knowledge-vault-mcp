@@ -15,6 +15,7 @@ from knowledge_vault.persistence.tables import (
     ConflictRow,
     DeletionAuditRow,
     EmbeddingJobRow,
+    HeartbeatRow,
 )
 from knowledge_vault.services.errors import ConflictError, InvalidRequestError, NotFoundError
 from knowledge_vault.services.ingestion import IngestionService
@@ -178,10 +179,23 @@ class AdministrationService:
                 .select_from(ConflictRow)
                 .where(ConflictRow.resolved_at.is_(None))
             )
+            heartbeat_rows = (
+                await session.execute(
+                    select(
+                        HeartbeatRow.name,
+                        func.extract("epoch", func.now() - HeartbeatRow.succeeded_at),
+                    )
+                )
+            ).all()
+        heartbeat_ages = {name: float(seconds) for name, seconds in heartbeat_rows}
         return {
             "assertions_total": total or 0,
             "by_status": {str(key): count for key, count in status_rows},
             "by_kind": {str(key): count for key, count in kind_rows},
             "embedding_jobs": {str(key): count for key, count in job_rows},
             "unresolved_conflicts": conflicts or 0,
+            "operations": {
+                "worker_heartbeat_age_seconds": heartbeat_ages.get("worker"),
+                "backup_heartbeat_age_seconds": heartbeat_ages.get("backup"),
+            },
         }

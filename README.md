@@ -150,6 +150,7 @@ Set `KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED=false` for deterministic full-text-only 
 - [Cloudflare Tunnel and Managed OAuth](docs/runbooks/cloudflare-access.md)
 - [Token rotation](docs/runbooks/tokens.md)
 - [Backup and disaster recovery](docs/runbooks/backup-restore.md)
+- [Monitoring and the watchdog](docs/runbooks/monitoring.md)
 - [Database migrations](docs/runbooks/migrations.md)
 - [Embedding model migration](docs/runbooks/embeddings.md)
 - [Troubleshooting](docs/runbooks/troubleshooting.md)

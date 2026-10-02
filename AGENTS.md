@@ -83,7 +83,8 @@ prohibition on publicly exposing the device-bearer endpoint.
 
 ## Implementation expectations
 
-- Use `apply_patch` for source edits. Search with `rg`/`rg --files` first.
+- Edit files with your agent's patch or edit tool (`apply_patch` in Codex). Search with
+  `rg`/`rg --files` first.
 - Pin runtime dependencies in `pyproject.toml` and `uv.lock`; do not use prereleases or floating
   production image tags. Tests must never download embedding models, and neither may a running
   Pod: weights are loaded from local files only (`KNOWLEDGE_VAULT_EMBEDDING_ALLOW_DOWNLOAD` is a
@@ -105,6 +106,23 @@ prohibition on publicly exposing the device-bearer endpoint.
 - Metric labels must come from a fixed set; never label by a caller-supplied path or identifier.
 - Do not commit, push, publish, modify cloud resources, or deploy externally unless the user has
   explicitly authorized that action. Inspecting state read-only is allowed when relevant.
+
+## Working conventions
+
+- Never work on `main`. Start every task on its own branch and merge through a pull request;
+  `main` is protected and requires the `quality`, `supply-chain`, `kubernetes`, and `inspector`
+  checks.
+- One agent per working tree. If another agent or session may be active in this checkout, use a
+  separate `git worktree` and branch instead of editing the same files.
+- Commit everything the change needs, including new files. Before opening a pull request, check
+  `git status` for untracked files that the code imports.
+- The MCP and HTTP adapters return the shared models in `domain/responses.py`. Add or change a
+  response field there, never in one adapter only.
+- The Helm chart is the single deployment definition. Environment-specific objects (another
+  ingress controller, static volumes) go into a values file through `extraObjects`, not into
+  separate hand-written manifests.
+- Background duties record a heartbeat on success (`services/operations.py`); a new duty that
+  can fail silently gets one, and the watchdog learns to check it.
 
 ## Verification
 
@@ -145,6 +163,7 @@ important code or add broad exclusions to satisfy coverage.
 - Codex, Copilot, VS Code, and ChatGPT configuration: `docs/runbooks/client-setup.md`.
 - MCP contracts: `docs/mcp-tools.md` and contract tests.
 - Security properties: `docs/threat-model.md` and `SECURITY.md`.
+- Failure visibility and the watchdog: `docs/runbooks/monitoring.md`.
 - Independent reviews and the status of their findings: `docs/reviews/`.
 - Operator-visible changes: `CHANGELOG.md`, including any action required on upgrade.
 - The magic flush trigger and batching behavior: `plugin/knowledge-vault/skills/flush-knowledge/`.

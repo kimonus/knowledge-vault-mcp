@@ -127,6 +127,14 @@ Populate a PVC as described in [embeddings.md](embeddings.md) and set
 `modelCache.existingClaim`; the chart mounts it read-only at `/models` and points the Hugging
 Face cache there.
 
+## Other ingress controllers and host-path storage
+
+`charts/knowledge-vault/values-traefik-hostpath.yaml` is a complete example for a cluster that
+uses Traefik IngressRoutes, a statically provisioned host-path volume for PostgreSQL
+(`internalPostgresql.existingClaim`), and backups to a directory on an external drive. It adds
+the controller-specific objects through `extraObjects`, so the whole deployment stays in one Helm
+release. Settings without a dedicated value can be passed through `extraEnv`.
+
 ## Private ingress
 
 When `ingress.enabled` is set, only `ingress.paths` (`/mcp`, `/api/v1`, and `/.well-known` by

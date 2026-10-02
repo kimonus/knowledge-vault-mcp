@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - "v*.*.*"
+  # A manual run rehearses the whole workflow without publishing anything: images are built but
+  # not pushed, and nothing is signed or released.
+  workflow_dispatch:
 
 concurrency:
   group: release-${{ github.ref }}
@@ -27,9 +30,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          release_version="${GITHUB_REF_NAME#v}"
           project_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml)"
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            release_version="${GITHUB_REF_NAME#v}"
+          else
+            # Rehearsal: the files only have to agree with each other.
+            release_version="${project_version}"
+          fi
           chart_version="$(sed -n 's/^version: \(.*\)/\1/p' charts/knowledge-vault/Chart.yaml)"
           app_version="$(sed -n 's/^appVersion: "\([^"]*\)"/\1/p' charts/knowledge-vault/Chart.yaml)"
           plugin_version="$(jq -r '.version' plugin/knowledge-vault/.codex-plugin/plugin.json)"
@@ -122,7 +130,7 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
-          push: true
+          push: ${{ github.event_name == 'push' }}
           platforms: linux/amd64
           tags: ${{ steps.app-meta.outputs.tags }}
           labels: ${{ steps.app-meta.outputs.labels }}
@@ -136,7 +144,7 @@ jobs:
         with:
           context: .
           file: Dockerfile.backup
-          push: true
+          push: ${{ github.event_name == 'push' }}
           platforms: linux/amd64
           tags: ${{ steps.backup-meta.outputs.tags }}
           labels: ${{ steps.backup-meta.outputs.labels }}
@@ -145,6 +153,7 @@ jobs:
           provenance: mode=max
           sbom: true
       - name: Scan the published image digests
+        if: github.event_name == 'push'
         shell: bash
         run: |
           set -euo pipefail
@@ -154,16 +163,28 @@ jobs:
             "${APP_IMAGE}@${{ steps.app-build.outputs.digest }}"
           "$RUNNER_TEMP/bin/trivy" image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL \
             "${BACKUP_IMAGE}@${{ steps.backup-build.outputs.digest }}"
+      - name: Rehearse chart packaging
+        if: github.event_name != 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh scripts/ci/install_kubernetes_tools.sh "$RUNNER_TEMP/bin"
+          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml)"
+          "$RUNNER_TEMP/bin/helm" package charts/knowledge-vault \
+            --version "${version}" --app-version "${version}" --destination "$RUNNER_TEMP/release"
+          ls -l "$RUNNER_TEMP/release"
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: v3.1.3
       - name: Sign immutable image digests
+        if: github.event_name == 'push'
         shell: bash
         run: |
           set -euo pipefail
           cosign sign --yes "${APP_IMAGE}@${{ steps.app-build.outputs.digest }}"
           cosign sign --yes "${BACKUP_IMAGE}@${{ steps.backup-build.outputs.digest }}"
       - name: Build release artifacts
+        if: github.event_name == 'push'
         shell: bash
         run: |
           set -euo pipefail
@@ -186,6 +207,7 @@ jobs:
             "${artifact_dir}/knowledge-vault-backup-${release_version}.sbom.cdx.json" \
             > "${artifact_dir}/SHA256SUMS"
       - name: Create GitHub release
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash

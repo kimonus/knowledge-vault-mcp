@@ -40,6 +40,8 @@ authentication or scope checks.
   deletion audit records, jobs, text indexes, and vectors.
 - Migration Job: executes Alembic; API and worker init containers wait until the database is at
   the newest revision shipped in their image.
+- Watchdog (optional CronJob): reads heartbeats and job counters, fails when the worker or the
+  backups stop, and can notify a webhook. See [monitoring](runbooks/monitoring.md).
 - Optional tunnel, ingress, internal PostgreSQL, and backup workloads are separately enabled.
 
 In the reference profile, the public trust boundary ends at Cloudflare Access and the outbound-only

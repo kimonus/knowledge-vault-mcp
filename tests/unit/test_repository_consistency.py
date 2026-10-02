@@ -5,6 +5,8 @@ import re
 import tomllib
 from pathlib import Path
 
+from knowledge_vault.config import Settings
+
 ROOT = Path(__file__).resolve().parents[2]
 
 PGVECTOR_FILES = (
@@ -39,12 +41,12 @@ def test_version_is_identical_everywhere() -> None:
     plugin = json.loads(
         (ROOT / "plugin/knowledge-vault/.codex-plugin/plugin.json").read_text(encoding="utf-8")
     )
-    settings = (ROOT / "src/knowledge_vault/config.py").read_text(encoding="utf-8")
     found = {
         "Chart.yaml version": re.search(r"^version: (\S+)$", chart, re.M).group(1),  # type: ignore[union-attr]
         "Chart.yaml appVersion": re.search(r'^appVersion: "([^"]+)"$', chart, re.M).group(1),  # type: ignore[union-attr]
         "plugin.json": plugin["version"],
-        "config.py default": re.search(r'version: str = "([^"]+)"', settings).group(1),  # type: ignore[union-attr]
+        # The running service reports the installed package version, not a second literal.
+        "Settings().version": Settings(environment="test").version,
         **{
             f"{name} label": match
             for name in ("Dockerfile", "Dockerfile.backup")

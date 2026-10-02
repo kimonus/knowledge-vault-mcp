@@ -14,6 +14,7 @@ assertion it supersedes.
 | `embedding_jobs` | Persistent pending/claimed/retry/dead queue with attempts and next-run time |
 | `knowledge_conflicts` | Bounded review records connecting potentially incompatible current assertions |
 | `confirmation_tokens` | Short-lived, one-use digest and target ID set for hard deletion |
+| `operational_heartbeats` | When each background duty (worker maintenance, backup, watchdog) last succeeded; content-free |
 | `deletion_audit` | Content-free principal, action, deletion count, correlation ID, and time; never retains deleted assertion text |
 
 PostgreSQL owns referential integrity and uniqueness. The migration enables `vector`, creates the
@@ -29,7 +30,8 @@ rebuild for a different model falls back to text search for assertions it has no
 instead of mixing vector spaces.
 
 Revisions live in [migrations/versions](../migrations/versions/): `0001_initial` creates the
-schema and `0002_enumerated_value_checks` adds CHECK constraints for every enumerated column.
+schema, `0002_enumerated_value_checks` adds CHECK constraints for every enumerated column, and
+`0003_operational_heartbeats` adds the heartbeat table.
 Each revision spells out its DDL and never derives it from the ORM models. Application tables are
 defined in [tables.py](../src/knowledge_vault/persistence/tables.py).
 

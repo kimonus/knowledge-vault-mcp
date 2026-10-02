@@ -1,4 +1,5 @@
 from functools import lru_cache
+from importlib import metadata
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -9,6 +10,13 @@ from knowledge_vault.auth.hosts import canonical_host
 from knowledge_vault.auth.tokens import Scope
 from knowledge_vault.domain.secrets import detect_secret
 from knowledge_vault.ingestion_policy import DEFAULT_INGESTION_POLICY
+
+
+def _package_version() -> str:
+    try:
+        return metadata.version("knowledge-vault")
+    except metadata.PackageNotFoundError:
+        return "0.0.0+unknown"
 
 
 def _host_set(raw: str) -> frozenset[str]:
@@ -22,7 +30,8 @@ class Settings(BaseSettings):
 
     environment: Literal["production", "development", "test"] = "production"
     service_name: str = "knowledge-vault"
-    version: str = "0.1.0"
+    # The installed package is the single source of the version.
+    version: str = Field(default_factory=_package_version)
     database_url: str = "postgresql://knowledge_vault@localhost/knowledge_vault"
     token_pepper: str = Field(default="", repr=False)
     bootstrap_tokens: str = Field(default="", repr=False)
@@ -68,6 +77,16 @@ class Settings(BaseSettings):
     rate_read_per_minute: int = Field(default=120, ge=1)
     rate_write_per_minute: int = Field(default=30, ge=1)
     rate_admin_per_minute: int = Field(default=10, ge=1)
+    # Watchdog thresholds. A heartbeat older than these is reported as a problem.
+    watchdog_worker_max_age_seconds: int = Field(default=900, ge=60)
+    watchdog_backup_max_age_seconds: int = Field(default=129_600, ge=3600)
+    # Only deployments that run the backup job should be told when its heartbeat is missing.
+    watchdog_expect_backup: bool = False
+    # A problem that persists is announced again after this long.
+    watchdog_renotify_seconds: int = Field(default=86_400, ge=600)
+    # Optional notification target for the watchdog. It may embed a token, so it is a secret.
+    alert_webhook_url: str = Field(default="", repr=False)
+    alert_webhook_format: Literal["json", "text"] = "json"
     log_level: str = "INFO"
     # Emit request and MCP message spans. Requires the OpenTelemetry SDK and OTLP exporter in
     # the image; see observability/tracing.py.
@@ -82,6 +101,13 @@ class Settings(BaseSettings):
             raise ValueError("ingestion policy must not contain control characters")
         if detect_secret(value):
             raise ValueError("ingestion policy must not contain secret-shaped values")
+        return value
+
+    @field_validator("alert_webhook_url")
+    @classmethod
+    def validate_alert_webhook_url(cls, value: str) -> str:
+        if value and urlsplit(value).scheme not in {"http", "https"}:
+            raise ValueError("alert webhook URL must be an http or https URL")
         return value
 
     @model_validator(mode="after")

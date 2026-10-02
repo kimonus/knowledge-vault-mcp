@@ -38,6 +38,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if and .Values.cloudflareAccess.enabled (not .Values.cloudflareAccess.publicHosts) }}{{ fail "cloudflareAccess.publicHosts must list the published hostname(s) when Cloudflare Access is enabled" }}{{ end -}}
 {{- if and .Values.ingress.enabled (or (not .Values.ingress.host) (not .Values.ingress.tlsSecret) (not .Values.ingress.className) (not .Values.ingress.paths)) }}{{ fail "ingress host, tlsSecret, className, and paths are required when enabled" }}{{ end -}}
 {{- if and .Values.backup.enabled (not .Values.backup.existingSecret) }}{{ fail "backup.existingSecret is required when backup is enabled" }}{{ end -}}
+{{- if and .Values.backup.databaseFromInternalPostgresql (not .Values.internalPostgresql.enabled) }}{{ fail "backup.databaseFromInternalPostgresql requires internalPostgresql.enabled" }}{{ end -}}
 {{- end -}}
 
 {{/* Wait until the database is at the newest revision shipped in this image. */}}
@@ -95,5 +96,12 @@ affinity: {{- toYaml . | nindent 2 }}
   ports: [{protocol: TCP, port: 5432}]
 {{- else }}
 - ports: [{protocol: TCP, port: 5432}]
+{{- end }}
+{{- end -}}
+
+{{/* Additional non-secret KNOWLEDGE_VAULT_* settings for the API and worker. */}}
+{{- define "knowledge-vault.extraEnv" -}}
+{{- range $name, $value := .Values.extraEnv }}
+- {name: {{ $name | quote }}, value: {{ $value | quote }}}
 {{- end }}
 {{- end -}}

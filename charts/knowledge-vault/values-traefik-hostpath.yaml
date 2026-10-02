@@ -1,0 +1,90 @@
+# Example for a single-node cluster that uses Traefik IngressRoutes instead of the Ingress API,
+# keeps PostgreSQL data in a host directory, and writes backups to a directory on an external
+# drive. Replace every UPPER_CASE placeholder. Contains no credentials.
+fullnameOverride: knowledge-vault
+
+image:
+  repository: knowledge-vault
+  tag: "0.1.0"
+  pullPolicy: Never
+backupImage:
+  repository: knowledge-vault-backup
+  tag: "0.1.0"
+  pullPolicy: Never
+
+config:
+  publicBaseUrl: https://PUBLIC_MCP_HOST
+  authIssuerUrl: https://PUBLIC_MCP_HOST
+  embeddingsEnabled: false
+
+auth:
+  existingSecret: knowledge-vault-auth
+database:
+  existingSecret: knowledge-vault-database
+
+cloudflareAccess:
+  enabled: true
+  existingSecret: knowledge-vault-cloudflare-access
+  publicHosts: [PUBLIC_MCP_HOST]
+  privateHosts: [PRIVATE_MCP_HOST]
+
+internalPostgresql:
+  enabled: true
+  existingSecret: knowledge-vault-postgresql
+  existingClaim: knowledge-vault-postgresql-pvc
+
+backup:
+  enabled: true
+  existingSecret: knowledge-vault-backup
+  databaseFromInternalPostgresql: true
+  repositoryHostPath: /PATH/ON/EXTERNAL/DRIVE/knowledge-vault-restic
+  # The owner of the repository directory; exFAT and similar mounts fix it at mount time.
+  runAsUser: 1000
+  runAsGroup: 1000
+
+watchdog:
+  enabled: true
+
+networkPolicy:
+  apiIngressFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+  # The repository is a local directory, so the backup Job needs no extra egress.
+  backupEgress: []
+
+extraObjects:
+  - apiVersion: v1
+    kind: PersistentVolume
+    metadata:
+      name: knowledge-vault-postgresql-pv
+    spec:
+      capacity: {storage: 20Gi}
+      accessModes: [ReadWriteOnce]
+      persistentVolumeReclaimPolicy: Retain
+      storageClassName: manual
+      hostPath: {path: /PATH/ON/HOST/knowledge-vault/postgresql, type: DirectoryOrCreate}
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: knowledge-vault-postgresql-pvc
+    spec:
+      accessModes: [ReadWriteOnce]
+      storageClassName: manual
+      volumeName: knowledge-vault-postgresql-pv
+      resources: {requests: {storage: 20Gi}}
+  - apiVersion: traefik.io/v1alpha1
+    kind: IngressRoute
+    metadata:
+      name: knowledge-vault-https
+    spec:
+      entryPoints: [websecure]
+      routes:
+        # Only client-facing paths are routed; health, metrics, and OpenAPI stay cluster-internal.
+        - kind: Rule
+          match: Host(`PRIVATE_MCP_HOST`) && (PathPrefix(`/mcp`) || PathPrefix(`/api/v1`) || PathPrefix(`/.well-known`))
+          services:
+            - name: '{{ include "knowledge-vault.fullname" . }}'
+              port: 8000
+      tls:
+        secretName: PRIVATE_TLS_SECRET

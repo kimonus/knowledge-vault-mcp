@@ -57,6 +57,11 @@ spec:
           emptyDir: {sizeLimit: 16Mi}
         - name: tmp
           emptyDir: {sizeLimit: 64Mi}
+        {{- if .Values.internalPostgresql.existingClaim }}
+        - name: data
+          persistentVolumeClaim: {claimName: {{ .Values.internalPostgresql.existingClaim | quote }}}
+        {{- end }}
+  {{- if not .Values.internalPostgresql.existingClaim }}
   volumeClaimTemplates:
     - metadata: {name: data}
       spec:
@@ -65,4 +70,5 @@ spec:
         storageClassName: {{ .Values.internalPostgresql.storageClass }}
         {{- end }}
         resources: {requests: {storage: {{ .Values.internalPostgresql.storage }}}}
+  {{- end }}
 {{- end }}

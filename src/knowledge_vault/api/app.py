@@ -1,5 +1,4 @@
-from contextlib import asynccontextmanager
-from typing import Any
+from contextlib import asynccontextmanager, suppress
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Query, Request
@@ -27,9 +26,20 @@ from knowledge_vault.api.schemas import (
 )
 from knowledge_vault.auth.tokens import Principal, Scope
 from knowledge_vault.container import Container
-from knowledge_vault.domain.models import ProblemDetail
+from knowledge_vault.domain.models import CommitResult, ProblemDetail
+from knowledge_vault.domain.responses import (
+    AbortResponse,
+    AppendResponse,
+    AssertionResponse,
+    BeginFlushResponse,
+    ConflictListResponse,
+    ForgetPreviewResponse,
+    ForgetResultResponse,
+    SearchResponse,
+    StatisticsResponse,
+)
 from knowledge_vault.mcp.server import create_mcp_server
-from knowledge_vault.observability.metrics import DB_POOL
+from knowledge_vault.observability.metrics import DB_POOL, HEARTBEAT_AGE
 from knowledge_vault.services.errors import KnowledgeVaultError, RateLimitedError
 
 
@@ -161,26 +171,30 @@ def create_app(container: Container) -> FastAPI:
             DB_POOL.labels(state="checkedin").set(pool.checkedin())
             DB_POOL.labels(state="checkedout").set(pool.checkedout())
             DB_POOL.labels(state="overflow").set(pool.overflow())
+        # A scrape must still answer when the database is down.
+        with suppress(Exception):
+            for name, heartbeat in (await container.operations.heartbeats()).items():
+                HEARTBEAT_AGE.labels(name=name).set(heartbeat.age_seconds)
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     @app.post("/api/v1/flushes", status_code=201)
     async def begin_flush(
         body: BeginFlushRequest,
         principal: Principal = Depends(require_scope(Scope.WRITE)),
-    ) -> dict[str, Any]:
+    ) -> BeginFlushResponse:
         batch = await container.ingestion.begin(
             principal.id,
             body.idempotency_key,
             body.declared_parts,
             body.declared_items,
         )
-        return {
-            "batch_id": str(batch.id),
-            "state": batch.state,
-            "declared_parts": batch.declared_parts,
-            "declared_items": batch.declared_items,
-            "replayed": batch.replayed,
-        }
+        return BeginFlushResponse(
+            batch_id=str(batch.id),
+            state=batch.state,
+            declared_parts=batch.declared_parts,
+            declared_items=batch.declared_items,
+            replayed=batch.replayed,
+        )
 
     @app.put("/api/v1/flushes/{batch_id}/parts/{part_number}")
     async def append_part(
@@ -188,91 +202,96 @@ def create_app(container: Container) -> FastAPI:
         part_number: int,
         body: AppendPartRequest,
         principal: Principal = Depends(require_scope(Scope.WRITE)),
-    ) -> dict[str, Any]:
+    ) -> AppendResponse:
         accepted, rejected, replayed = await container.ingestion.append(
             principal.id, batch_id, part_number, body.assertions
         )
-        return {
-            "accepted": accepted,
-            "rejected": [item.model_dump(mode="json") for item in rejected],
-            "replayed": replayed,
-        }
+        return AppendResponse(
+            batch_id=str(batch_id),
+            part_number=part_number,
+            accepted=accepted,
+            rejected=rejected,
+            replayed=replayed,
+        )
 
     @app.post("/api/v1/flushes/{batch_id}/commit")
     async def commit_flush(
         batch_id: UUID,
         principal: Principal = Depends(require_scope(Scope.WRITE)),
-    ) -> dict[str, Any]:
-        result = await container.ingestion.commit(principal.id, batch_id)
-        return result.model_dump(mode="json")
+    ) -> CommitResult:
+        return await container.ingestion.commit(principal.id, batch_id)
 
     @app.post("/api/v1/flushes/{batch_id}/abort")
     async def abort_flush(
         batch_id: UUID,
         principal: Principal = Depends(require_scope(Scope.WRITE)),
-    ) -> dict[str, Any]:
-        return {"aborted": await container.ingestion.abort(principal.id, batch_id)}
+    ) -> AbortResponse:
+        aborted = await container.ingestion.abort(principal.id, batch_id)
+        return AbortResponse(batch_id=str(batch_id), aborted=aborted)
 
     @app.post("/api/v1/search")
     async def search_knowledge(
         body: SearchRequest,
         principal: Principal = Depends(require_scope(Scope.READ)),
-    ) -> dict[str, Any]:
+    ) -> SearchResponse:
         del principal
-        result = await container.search.search(
+        page = await container.search.search(
             body.query, body.filters, limit=body.limit, cursor=body.cursor
         )
-        return result.model_dump(mode="json")
+        return SearchResponse(**page.model_dump())
 
     @app.get("/api/v1/assertions/{assertion_id}")
     async def get_assertion(
         assertion_id: UUID,
         principal: Principal = Depends(require_scope(Scope.READ)),
-    ) -> dict[str, Any]:
+    ) -> AssertionResponse:
         del principal
-        result = await container.search.get(assertion_id)
-        return result.model_dump(mode="json")
+        view = await container.search.get(assertion_id)
+        return AssertionResponse(**view.model_dump())
 
     @app.get("/api/v1/conflicts")
     async def conflicts(
         limit: int = Query(default=50, ge=1, le=100),
         principal: Principal = Depends(require_scope(Scope.READ)),
-    ) -> dict[str, Any]:
+    ) -> ConflictListResponse:
         del principal
-        return {"conflicts": await container.administration.list_conflicts(limit=limit)}
+        return ConflictListResponse.model_validate(
+            {"conflicts": await container.administration.list_conflicts(limit=limit)}
+        )
 
     @app.post("/api/v1/corrections")
     async def correct(
         body: CorrectionRequest,
         principal: Principal = Depends(require_scope(Scope.WRITE)),
-    ) -> dict[str, Any]:
-        result = await container.administration.correct(
+    ) -> CommitResult:
+        return await container.administration.correct(
             principal.id, body.idempotency_key, body.correction
         )
-        return result.model_dump(mode="json")
 
     @app.post("/api/v1/forget/preview")
     async def forget_preview(
         body: ForgetPreviewRequest,
         principal: Principal = Depends(require_scope(Scope.ADMIN)),
-    ) -> dict[str, Any]:
-        return await container.administration.preview_forgetting(principal.id, body.assertion_ids)
+    ) -> ForgetPreviewResponse:
+        return ForgetPreviewResponse.model_validate(
+            await container.administration.preview_forgetting(principal.id, body.assertion_ids)
+        )
 
     @app.post("/api/v1/forget/confirm")
     async def forget_confirm(
         body: ForgetConfirmRequest,
         principal: Principal = Depends(require_scope(Scope.ADMIN)),
-    ) -> dict[str, Any]:
-        return await container.administration.confirm_forgetting(
-            principal.id, body.confirmation_token
+    ) -> ForgetResultResponse:
+        return ForgetResultResponse.model_validate(
+            await container.administration.confirm_forgetting(principal.id, body.confirmation_token)
         )
 
     @app.get("/api/v1/statistics")
     async def statistics(
         principal: Principal = Depends(require_scope(Scope.READ)),
-    ) -> dict[str, Any]:
+    ) -> StatisticsResponse:
         del principal
-        return await container.administration.statistics()
+        return StatisticsResponse.model_validate(await container.administration.statistics())
 
     # Keep this catch-all mount last so ordinary HTTP routes remain authoritative.
     app.mount("/", mcp_app)

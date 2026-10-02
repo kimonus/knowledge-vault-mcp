@@ -476,3 +476,63 @@ async def test_public_hostname_always_requires_an_assertion(
         assert "resource_metadata" not in challenge.headers["www-authenticate"]
     finally:
         await container.database.close()
+
+
+async def test_http_and_mcp_return_the_same_shapes(
+    integration_container, base_url, mcp_connect, raw_token
+) -> None:
+    """Both adapters answer with the shared response models, so their shapes cannot drift."""
+    headers = {"Authorization": f"Bearer {raw_token}"}
+    await integration_container.operations.beat("worker")
+    async with (
+        mcp_connect(base_url, raw_token) as mcp,
+        httpx.AsyncClient(base_url=base_url, headers=headers) as http,
+    ):
+        _, begun = await mcp.call(
+            "begin_knowledge_flush",
+            {"idempotency_key": "shapes", "declared_parts": 1, "declared_items": 1},
+        )
+        await mcp.call(
+            "append_knowledge",
+            {
+                "batch_id": begun["batch_id"],
+                "part_number": 1,
+                "assertions": [item("Shapes agree.", sources=[{"url": "https://example.org/s"}])],
+            },
+        )
+        _, committed = await mcp.call("commit_knowledge_flush", {"batch_id": begun["batch_id"]})
+        assertion_id = committed["assertion_ids"][0]
+
+        _, via_mcp = await mcp.call("get_knowledge", {"assertion_id": assertion_id})
+        via_http = (await http.get(f"/api/v1/assertions/{assertion_id}")).json()
+        assert via_http == via_mcp
+        assert via_http["untrusted_data"] is True
+
+        _, mcp_page = await mcp.call("search_knowledge", {"query": "shapes", "limit": 5})
+        http_page = (await http.post("/api/v1/search", json={"query": "shapes", "limit": 5})).json()
+        assert http_page == mcp_page and http_page["untrusted_data"] is True
+
+        _, mcp_statistics = await mcp.call("get_knowledge_statistics")
+        http_statistics = (await http.get("/api/v1/statistics")).json()
+        assert http_statistics.keys() == mcp_statistics.keys()
+        assert http_statistics["operations"]["worker_heartbeat_age_seconds"] is not None
+        assert http_statistics["operations"]["backup_heartbeat_age_seconds"] is None
+
+        _, mcp_conflicts = await mcp.call("list_knowledge_conflicts")
+        assert (await http.get("/api/v1/conflicts")).json() == mcp_conflicts
+
+        http_begin = await http.post(
+            "/api/v1/flushes",
+            json={"idempotency_key": "shapes", "declared_parts": 1, "declared_items": 1},
+        )
+        assert http_begin.json().keys() == begun.keys()
+        assert http_begin.json()["replayed"] is True
+
+        # The OpenAPI document now describes responses, not just requests.
+        schema = (await http.get("/api/openapi.json")).json()
+        described = schema["paths"]["/api/v1/assertions/{assertion_id}"]["get"]["responses"]["200"]
+        assert described["content"]["application/json"]["schema"]["$ref"].endswith(
+            "AssertionResponse"
+        )
+        metrics = (await http.get("/metrics")).text
+        assert 'knowledge_vault_heartbeat_age_seconds{name="worker"}' in metrics

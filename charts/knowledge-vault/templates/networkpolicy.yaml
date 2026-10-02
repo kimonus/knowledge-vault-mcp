@@ -90,7 +90,7 @@ spec:
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
-        {{- range $component := list "api" "worker" "migration" "backup" }}
+        {{- range $component := list "api" "worker" "migration" "backup" "watchdog" }}
         - podSelector:
             matchLabels:
               {{- include "knowledge-vault.selectorLabels" $ | nindent 14 }}

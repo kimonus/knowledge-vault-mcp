@@ -28,3 +28,10 @@ restic forget --tag "${backup_tag}" --group-by tags \
   --keep-weekly "${BACKUP_KEEP_WEEKLY:-4}" \
   --keep-monthly "${BACKUP_KEEP_MONTHLY:-6}" --prune
 restic check --read-data-subset="${BACKUP_CHECK_SUBSET:-5%}"
+
+# Record the success so the watchdog and the statistics tool can tell when backups stop. A
+# database that predates the heartbeat table still gets its backup; only the record is skipped.
+psql --dbname="${DATABASE_URL}" --quiet --no-psqlrc --set=ON_ERROR_STOP=1 --command="
+  INSERT INTO operational_heartbeats (name, succeeded_at) VALUES ('backup', now())
+  ON CONFLICT (name) DO UPDATE SET succeeded_at = EXCLUDED.succeeded_at, detail = NULL" \
+  || echo "warning: could not record the backup heartbeat" >&2

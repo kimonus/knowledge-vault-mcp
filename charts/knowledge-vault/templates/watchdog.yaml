@@ -1,0 +1,74 @@
+{{- if .Values.watchdog.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-watchdog
+  labels: {{- include "knowledge-vault.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.watchdog.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # A failed run means "something is wrong", not "try again": the next scheduled run re-checks.
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            {{- include "knowledge-vault.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: watchdog
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "knowledge-vault.fullname" . }}-ops
+          automountServiceAccountToken: false
+          securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
+          containers:
+            - name: watchdog
+              image: {{ include "knowledge-vault.image" .Values.image }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["knowledge-vault-watchdog"]
+              envFrom:
+                - configMapRef: {name: {{ include "knowledge-vault.fullname" . }}}
+              env:
+                - name: KNOWLEDGE_VAULT_DATABASE_URL
+                  valueFrom: {secretKeyRef: {name: {{ .Values.database.existingSecret | quote }}, key: {{ .Values.database.urlKey | quote }}}}
+                - name: KNOWLEDGE_VAULT_TOKEN_PEPPER
+                  valueFrom: {secretKeyRef: {name: {{ .Values.auth.existingSecret | quote }}, key: {{ .Values.auth.tokenPepperKey | quote }}}}
+                - {name: KNOWLEDGE_VAULT_WATCHDOG_EXPECT_BACKUP, value: {{ .Values.backup.enabled | quote }}}
+                - {name: KNOWLEDGE_VAULT_WATCHDOG_WORKER_MAX_AGE_SECONDS, value: {{ .Values.watchdog.workerMaxAgeSeconds | quote }}}
+                - {name: KNOWLEDGE_VAULT_WATCHDOG_BACKUP_MAX_AGE_SECONDS, value: {{ .Values.watchdog.backupMaxAgeSeconds | quote }}}
+                {{- if .Values.watchdog.webhook.existingSecret }}
+                - name: KNOWLEDGE_VAULT_ALERT_WEBHOOK_URL
+                  valueFrom: {secretKeyRef: {name: {{ .Values.watchdog.webhook.existingSecret | quote }}, key: {{ .Values.watchdog.webhook.urlKey | quote }}}}
+                - {name: KNOWLEDGE_VAULT_ALERT_WEBHOOK_FORMAT, value: {{ .Values.watchdog.webhook.format | quote }}}
+                {{- end }}
+              volumeMounts:
+                - {name: tmp, mountPath: /tmp}
+              securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+              resources: {{- toYaml .Values.resources.watchdog | nindent 16 }}
+          volumes:
+            - name: tmp
+              emptyDir: {sizeLimit: 32Mi}
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-watchdog
+  labels: {{- include "knowledge-vault.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "knowledge-vault.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: watchdog
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    {{- include "knowledge-vault.egressDns" . | nindent 4 }}
+    {{- include "knowledge-vault.egressDatabase" . | nindent 4 }}
+    {{- if .Values.watchdog.webhook.existingSecret }}
+    {{- with .Values.networkPolicy.watchdogEgress }}{{ toYaml . | nindent 4 }}{{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}

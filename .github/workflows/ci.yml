@@ -113,6 +113,16 @@ jobs:
             > "$RUNNER_TEMP/rendered-optional.yaml"
           "$RUNNER_TEMP/bin/kubeconform" -strict -summary -kubernetes-version 1.33.0 \
             "$RUNNER_TEMP/rendered-optional.yaml"
+      - name: Render the Traefik and host-path example with backups and the watchdog
+        run: |
+          "$RUNNER_TEMP/bin/helm" template knowledge-vault charts/knowledge-vault \
+            -f charts/knowledge-vault/values-traefik-hostpath.yaml \
+            --set watchdog.webhook.existingSecret=knowledge-vault-alerts \
+            --set-string extraEnv.KNOWLEDGE_VAULT_RATE_WRITE_PER_MINUTE=60 \
+            > "$RUNNER_TEMP/rendered-traefik.yaml"
+          # Traefik's IngressRoute is a custom resource without a bundled schema.
+          "$RUNNER_TEMP/bin/kubeconform" -strict -ignore-missing-schemas -summary \
+            -kubernetes-version 1.33.0 "$RUNNER_TEMP/rendered-traefik.yaml"
       - name: Misspelled values must be rejected by the schema
         run: |
           if "$RUNNER_TEMP/bin/helm" template knowledge-vault charts/knowledge-vault \

@@ -73,6 +73,24 @@ constraints as missing. Those exist as new, not yet tracked files
 (`migrations/versions/0002_enumerated_value_checks.py` holds the constraints); the review bundle
 contained only changes to tracked files. **Remember to `git add` the new files when committing.**
 
+## Consistency follow-up (2026-10-02)
+
+Work done after the review items were closed, to remove the differences between what the project
+describes, tests, and runs:
+
+- **One deployment definition.** The chart can now express a Traefik and host-path deployment
+  (`internalPostgresql.existingClaim`, host-directory backups, `extraEnv`, `extraObjects`), with
+  `values-traefik-hostpath.yaml` as a complete example rendered in CI.
+- **Failures are visible.** Worker and backup heartbeats, operational statistics, and the
+  optional watchdog CronJob with webhook notification
+  ([monitoring runbook](../runbooks/monitoring.md)).
+- **One set of response shapes.** The HTTP API and the MCP tools return the same models
+  (`domain/responses.py`); a contract test compares them.
+- **Release rehearsal.** The release workflow can be run manually without publishing.
+- **Conventions.** `AGENTS.md` records the branch, worktree, and single-definition rules.
+
+Still open: KV-014 (NetworkPolicies on an enforcing CNI) and the first tagged release.
+
 ## Deliberately unchanged
 
 - Invalid bearer tokens are not throttled. Tokens carry 256 bits of entropy, each attempt costs
