@@ -27,6 +27,9 @@ gh run watch
 A manual run executes every verification step, builds both images, and packages the chart, but
 pushes, signs, and releases nothing.
 
+The first rehearsal (2026-10-02) caught the secret scan running after the tests and flagging
+their cached fixtures; the scan now runs on the fresh checkout.
+
 ## Tag and publish
 
 Create an annotated, signed tag from the reviewed `main` commit and push only that tag:
