@@ -2,13 +2,13 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/kimonus/knowledge-vault-mcp
-  tag: "0.1.0"
+  tag: "0.1.1"
   digest: ""
   pullPolicy: IfNotPresent
 
 backupImage:
   repository: ghcr.io/kimonus/knowledge-vault-mcp-backup
-  tag: "0.1.0"
+  tag: "0.1.1"
   digest: ""
   pullPolicy: IfNotPresent
 

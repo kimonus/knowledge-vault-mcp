@@ -117,6 +117,13 @@ describes, tests, and runs:
   that the workflow still pushed a `latest` tag, which the rehearsals could not show because
   they push nothing; that is fixed for later releases.
 
+- **First real client use found a defect the tests had not.** On 2026-10-03 a hosted client sent
+  three searches at once to the freshly restarted API; each loaded its own copy of the embedding
+  model and the container was killed for memory. Post-deployment checks had covered anonymous
+  refusal, readiness, and an in-process search, but no authenticated call through the public
+  path and no concurrent first use. Fixed in 0.1.1 (single load, serialised encoding) with tests
+  that fail on the 0.1.0 code.
+
 Still open: KV-014 (NetworkPolicies on an enforcing CNI), a tag-protection rule for `v*`, a
 notification target for the watchdog on the reference deployment, and restricting device tokens
 to the private hostname there.

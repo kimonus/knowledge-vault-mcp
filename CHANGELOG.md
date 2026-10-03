@@ -5,8 +5,14 @@ stable release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-03
+
 ### Fixed
 
+- **Upgrade recommended for every deployment with embeddings enabled.** Searches that arrived
+  together before the embedding model was loaded each loaded their own copy—more than a gigabyte
+  apiece—and the API was killed for memory; clients saw the tool fail. The model is now loaded
+  once per process however many requests are waiting, and encoding runs one call at a time.
 - The release workflow published a `latest` image tag with 0.1.0 although the release policy
   says it publishes none: the metadata action adds it to semver releases by default. It is now
   disabled, and a test keeps it disabled. The `latest` tag on the 0.1.0 images stays where it is

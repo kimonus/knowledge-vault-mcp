@@ -18,7 +18,7 @@ FROM python:3.12.14-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc07
 LABEL org.opencontainers.image.title="Knowledge Vault" \
       org.opencontainers.image.description="Private personal knowledge MCP server" \
       org.opencontainers.image.licenses="Apache-2.0" \
-      org.opencontainers.image.version="0.1.0"
+      org.opencontainers.image.version="0.1.1"
 RUN groupadd --gid 10001 knowledge-vault \
     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent knowledge-vault
 WORKDIR /app
