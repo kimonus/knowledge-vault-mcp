@@ -47,13 +47,19 @@ from knowledge_vault.services.errors import (
 # then confirms that row instead, so a small bounded number of attempts always converges.
 _COMMIT_ATTEMPTS = 4
 _CONTENT_HASH_CONSTRAINT = "assertions_content_hash_key"
+_BATCH_IDEMPOTENCY_CONSTRAINT = "uq_batch_idempotency"
 _MAX_CONFLICT_CANDIDATES = 200
+
+
+def violates(error: IntegrityError, constraint: str) -> bool:
+    """True when the error is a violation of exactly this named constraint."""
+    diagnostics = getattr(error.orig, "diag", None)
+    return getattr(diagnostics, "constraint_name", None) == constraint
 
 
 def _lost_content_race(error: IntegrityError) -> bool:
     """True only for the unique violation that a rerun resolves by confirming the other row."""
-    diagnostics = getattr(error.orig, "diag", None)
-    return getattr(diagnostics, "constraint_name", None) == _CONTENT_HASH_CONSTRAINT
+    return violates(error, _CONTENT_HASH_CONSTRAINT)
 
 
 def _canonical_hash(value: Any) -> str:
@@ -96,32 +102,42 @@ class IngestionService:
                 f"declared_items must be between 1 and {self._settings.max_batch_items}"
             )
         key_hash = _idempotency_hash(principal_id, idempotency_key)
-        async with self._sessions.begin() as session:
-            existing = await session.scalar(
-                select(FlushBatchRow).where(
-                    FlushBatchRow.principal_id == principal_id,
-                    FlushBatchRow.idempotency_hash == key_hash,
-                )
-            )
-            if existing:
-                if (
-                    existing.declared_parts != declared_parts
-                    or existing.declared_items != declared_items
-                ):
-                    raise ConflictError("idempotency key was already used with different totals")
-                existing.replayed = True
-                return existing
-            batch = FlushBatchRow(
-                principal_id=principal_id,
-                idempotency_hash=key_hash,
-                declared_parts=declared_parts,
-                declared_items=declared_items,
-                expires_at=datetime.now(UTC)
-                + timedelta(seconds=self._settings.staging_ttl_seconds),
-            )
-            session.add(batch)
-        BATCH_TRANSITIONS.labels(state=BatchState.OPEN).inc()
-        return batch
+        for _ in range(2):
+            try:
+                async with self._sessions.begin() as session:
+                    existing = await session.scalar(
+                        select(FlushBatchRow).where(
+                            FlushBatchRow.principal_id == principal_id,
+                            FlushBatchRow.idempotency_hash == key_hash,
+                        )
+                    )
+                    if existing:
+                        if (
+                            existing.declared_parts != declared_parts
+                            or existing.declared_items != declared_items
+                        ):
+                            raise ConflictError(
+                                "idempotency key was already used with different totals"
+                            )
+                        existing.replayed = True
+                        return existing
+                    batch = FlushBatchRow(
+                        principal_id=principal_id,
+                        idempotency_hash=key_hash,
+                        declared_parts=declared_parts,
+                        declared_items=declared_items,
+                        expires_at=datetime.now(UTC)
+                        + timedelta(seconds=self._settings.staging_ttl_seconds),
+                    )
+                    session.add(batch)
+            except IntegrityError as error:
+                # A concurrent begin with the same key inserted first; the rerun returns its row.
+                if not violates(error, _BATCH_IDEMPOTENCY_CONSTRAINT):
+                    raise
+                continue
+            BATCH_TRANSITIONS.labels(state=BatchState.OPEN).inc()
+            return batch
+        raise ConflictError("begin conflicted with a concurrent request; retry the same call")
 
     async def append(
         self,

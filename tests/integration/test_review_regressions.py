@@ -63,14 +63,35 @@ async def count(container, table, *conditions) -> int:
         )
 
 
+async def warm_pool(container, size: int) -> None:
+    """Open `size` connections at once, so concurrent calls all read before any of them writes."""
+
+    async def hold() -> None:
+        async with container.database.engine.connect() as connection:
+            await connection.execute(text("SELECT pg_sleep(0.05)"))
+
+    await asyncio.gather(*(hold() for _ in range(size)))
+
+
 @pytest.mark.integration
 async def test_concurrent_begin_and_commit_are_idempotent(integration_container) -> None:
     container = integration_container
+    await warm_pool(container, 8)
     batches = await asyncio.gather(
         *[container.ingestion.begin(P, "concurrent-begin", 1, 2) for _ in range(8)]
     )
     assert len({batch.id for batch in batches}) == 1
     assert any(batch.replayed for batch in batches)
+    assert await count(container, FlushBatchRow) == 1
+
+    await warm_pool(container, 8)
+    uploads = await asyncio.gather(
+        *[
+            container.artifacts.begin(P, "concurrent-upload", "a.txt", "text/plain", 1)
+            for _ in range(8)
+        ]
+    )
+    assert len({upload.id for upload in uploads}) == 1
 
     batch = batches[0]
     await container.ingestion.append(P, batch.id, 1, [item("same one"), item("same two")])
