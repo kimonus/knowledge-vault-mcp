@@ -15,6 +15,7 @@ from knowledge_vault.auth.cloudflare import (
     bind_cloudflare_principal,
     current_cloudflare_principal,
 )
+from knowledge_vault.auth.hosts import canonical_host
 from knowledge_vault.auth.mcp import MCPTokenVerifier
 from knowledge_vault.auth.tokens import Principal, Scope, TokenAuthenticator
 from knowledge_vault.config import Settings
@@ -201,6 +202,55 @@ def test_cloudflare_settings_fail_closed() -> None:
             cloudflare_access_allowed_emails="owner@example.com",
             cloudflare_access_scopes="knowledge:admin",
         )
+    # Access enabled with a published host but no private-host allowlist is refused, because a
+    # bearer token would otherwise be accepted for every unpublished Host.
+    valid = dict(
+        environment="test",
+        cloudflare_access_enabled=True,
+        cloudflare_access_issuer_url="https://example.cloudflareaccess.com",
+        cloudflare_access_audience="audience",
+        cloudflare_access_allowed_emails="owner@example.com",
+        cloudflare_access_public_hosts="mcp.example.com",
+    )
+    with pytest.raises(ValidationError, match="private hostname allowlist"):
+        Settings(**valid)  # type: ignore[arg-type]
+    # With the allowlist set it validates; a host cannot be both public and private.
+    assert Settings(**valid, cloudflare_access_private_hosts="mcp-lan.example.com")  # type: ignore[arg-type]
+    with pytest.raises(ValidationError, match="both a Cloudflare public and a private host"):
+        Settings(**valid, cloudflare_access_private_hosts="mcp.example.com")  # type: ignore[arg-type]
+
+
+def test_canonical_host_folds_equivalent_spellings() -> None:
+    base = canonical_host("mcp.example.com")
+    assert base == "mcp.example.com"
+    for variant in (
+        "MCP.EXAMPLE.COM",
+        "mcp.example.com.",
+        " mcp.example.com ",
+        "mcp.example.com:443",
+        "mcp．example．com",  # fullwidth full stops
+        "mcp.example.com。",  # ideographic full stop
+        "ＭＣＰ.example.com",  # fullwidth "MCP"
+    ):
+        assert canonical_host(variant) == base, variant
+    assert canonical_host("[::1]:8000") == "[::1]"
+
+
+async def test_private_host_allowlist_confines_the_bearer_surface() -> None:
+    authenticator, _ = make_authenticator()
+    middleware = CloudflareAccessMiddleware(
+        _passthrough,
+        authenticator,
+        required_hosts=frozenset({"mcp.example.com"}),
+        private_hosts=frozenset({"mcp-lan.example.com"}),
+    )
+    # The one declared private host falls through to bearer authentication (204 passthrough).
+    assert await _status(middleware, [(b"host", b"mcp-lan.example.com")]) == 204
+    # Every other unpublished Host is refused before bearer auth is ever reached.
+    for host in (b"localhost", b"evil.example", b"knowledge-vault-api"):
+        assert await _status(middleware, [(b"host", host)]) == 401, host
+    # The published host still demands a signed assertion.
+    assert await _status(middleware, [(b"host", b"mcp.example.com")]) == 401
 
 
 async def _status(
@@ -296,7 +346,11 @@ def test_cloudflare_settings_require_a_real_published_hostname() -> None:
     }
     with pytest.raises(ValidationError, match="published hostname"):
         Settings(**base)  # public_base_url is still the .invalid placeholder
-    derived = Settings(**base, public_base_url="https://MCP.Example.com./")
+    derived = Settings(
+        **base,
+        public_base_url="https://MCP.Example.com./",
+        cloudflare_access_private_hosts="mcp-lan.example.com",
+    )
     assert derived.cloudflare_access_public_host_set == frozenset({"mcp.example.com"})
     explicit = Settings(
         **base,

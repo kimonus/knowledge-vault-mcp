@@ -166,7 +166,15 @@ class OAuthDiscoveryMiddleware:
             await self.app(scope, receive, send)
             return
         hosts = [value for name, value in scope.get("headers", []) if name.lower() == b"host"]
-        host = canonical_host(hosts[0].decode("latin-1")) if len(hosts) == 1 else ""
+        # Decode the Host strictly, matching CloudflareAccessMiddleware, so a single hostname is
+        # canonicalized the same way everywhere. A non-ASCII or ambiguous Host is treated as
+        # not-advertised, which only withholds OAuth metadata and never grants access.
+        host = ""
+        if len(hosts) == 1:
+            try:
+                host = canonical_host(hosts[0].decode("ascii", errors="strict"))
+            except UnicodeDecodeError:
+                host = ""
         if host in self._advertised:
             await self.app(scope, receive, send)
             return

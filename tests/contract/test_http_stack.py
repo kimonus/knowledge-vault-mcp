@@ -388,12 +388,13 @@ async def _raw_status(url: str, request: bytes) -> str:
     return status_line.decode().strip()
 
 
-@pytest.mark.parametrize("private_hosts", ["private.test", ""])
 async def test_public_hostname_always_requires_an_assertion(
-    integration_container, serve, raw_token, private_hosts
+    integration_container, serve, raw_token
 ) -> None:
     """KV-003: no spelling of the Host header lets a bearer token stand in for Access identity."""
-    assertion, settings_update, authenticator = _access_environment(private_hosts)
+    # A private-host allowlist is mandatory when Access is enabled (fail-closed), so the empty
+    # case is rejected at config load; see test_cloudflare_settings_fail_closed.
+    assertion, settings_update, authenticator = _access_environment("private.test")
     settings = settings_update(integration_container.settings)
     container = build_container(settings, embedder=DeterministicFakeProvider(dimensions=384))
     container.cloudflare_authenticator = authenticator(settings)
@@ -422,8 +423,8 @@ async def test_public_hostname_always_requires_an_assertion(
             assert await status(host, **bearer) == 401, host
         assert await status("private.test", **bearer) == 200
         assert await status("PRIVATE.test.:8443", **bearer) == 200
-        # With an allowlist every other name needs an assertion; without one it is private.
-        assert await status("10.0.0.7:8000", **bearer) == (401 if private_hosts else 200)
+        # With the allowlist in force, every other name needs an assertion even with a bearer.
+        assert await status("10.0.0.7:8000", **bearer) == 401
         assert await status("10.0.0.7:8000", "/health/live") == 200
         assert await status("public.test", "/health/live") == 401
 

@@ -149,7 +149,22 @@ class Settings(BaseSettings):
                 "KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_PUBLIC_HOSTS or a real "
                 "KNOWLEDGE_VAULT_PUBLIC_BASE_URL"
             )
-        if public_hosts & self.cloudflare_access_private_host_set:
+        # Fail closed on the bearer surface: without a private-host allowlist, device bearer
+        # tokens are accepted for every hostname that is not published, so an attacker who can
+        # reach the origin directly with an arbitrary Host header only needs a bearer token.
+        # Requiring the allowlist confines bearer acceptance to the declared private hostname(s).
+        private_hosts = self.cloudflare_access_private_host_set
+        if not private_hosts:
+            raise ValueError(
+                "Cloudflare Access requires the private hostname allowlist: set "
+                "KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_PRIVATE_HOSTS to the device-bearer hostname(s) "
+                "so bearer tokens are not accepted for every unpublished Host"
+            )
+        if any(host.endswith(".invalid") for host in private_hosts):
+            raise ValueError(
+                "KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_PRIVATE_HOSTS must list real hostnames"
+            )
+        if public_hosts & private_hosts:
             raise ValueError("a hostname cannot be both a Cloudflare public and a private host")
         return self
 
