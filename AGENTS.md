@@ -4,7 +4,8 @@
 
 Maintain a production-grade, single-user personal knowledge platform. It stores durable atomic
 assertions extracted by MCP clients, and text artifacts that those assertions describe; it does
-not store conversations, message graphs, credentials, or raw transcripts. Produce working, tested changes and preserve unrelated user work.
+not store conversations, message graphs, credentials, or raw transcripts. Produce working, tested
+changes and preserve unrelated user work.
 
 The original implementation brief is
 [personal-knowledge-mcp-codex-prompt.md](personal-knowledge-mcp-codex-prompt.md). Read it before
@@ -103,6 +104,8 @@ prohibition on publicly exposing the device-bearer endpoint.
   and existing revisions are not edited.
 - A worker embeds only jobs for its configured model, and search compares only vectors of that
   model. Keep claim leases, per-item fallback, and the periodic staging expiry and purge.
+- A process holds one copy of the embedding model. Requests that arrive while it loads wait for
+  that load, and encoding runs one call at a time; each extra copy costs more than a gigabyte.
 - Maintain non-root, read-only-root-filesystem containers, dropped capabilities, RuntimeDefault
   seccomp, resource bounds, probes, NetworkPolicies, and ClusterIP-only origin Services.
 - Logs and traces must never contain assertion content, source excerpts, bearer tokens,
@@ -129,6 +132,10 @@ prohibition on publicly exposing the device-bearer endpoint.
   separate hand-written manifests.
 - Background duties record a heartbeat on success (`services/operations.py`); a new duty that
   can fail silently gets one, and the watchdog learns to check it.
+- Releases follow `RELEASING.md`. An agent prepares the version, changelog, and a passing
+  rehearsal of the release workflow on `main`, then stops: only the maintainer pushes the
+  `vX.Y.Z` tag, signed with the key configured as this repository's `user.signingkey`.
+  Deployments pin the published image digests after their signatures are verified.
 
 ## Verification
 
@@ -165,6 +172,11 @@ gate; do not claim it passed.
 Coverage must remain at least 90% statements and 85% branches for application code. Do not omit
 important code or add broad exclusions to satisfy coverage.
 
+A deployment is verified only when an authenticated client has called it through the deployed
+path, including whatever the change touched and concurrent first use where that matters. Rollout
+status, readiness, anonymous refusals, and checks run inside a Pod are not that proof; say so
+when the client call has not happened, and read the API log and restart counts after it.
+
 ## Documentation that must stay synchronized
 
 - Public/LAN deployment and Cloudflare steps: `docs/runbooks/cloudflare-access.md` and
@@ -173,6 +185,8 @@ important code or add broad exclusions to satisfy coverage.
 - MCP contracts: `docs/mcp-tools.md` and contract tests.
 - Security properties: `docs/threat-model.md` and `SECURITY.md`.
 - Failure visibility and the watchdog: `docs/runbooks/monitoring.md`.
+- Embedding model cache, memory, and rebuilds: `docs/runbooks/embeddings.md`.
+- Release procedure and signature verification: `RELEASING.md`.
 - Independent reviews and the status of their findings: `docs/reviews/`.
 - Operator-visible changes: `CHANGELOG.md`, including any action required on upgrade.
 - The magic flush trigger and batching behavior: `plugin/knowledge-vault/skills/flush-knowledge/`.
