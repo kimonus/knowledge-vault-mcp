@@ -108,7 +108,8 @@ async def integration_container(postgres_url: str, settings: Settings) -> AsyncI
         await connection.execute(
             text(
                 "TRUNCATE confirmation_tokens, deletion_audit, knowledge_conflicts, "
-                "embedding_jobs, flush_parts, flush_batches, assertion_sources, assertions "
+                "embedding_jobs, flush_parts, flush_batches, assertion_sources, assertions, "
+                "artifacts "
                 "RESTART IDENTITY CASCADE"
             )
         )

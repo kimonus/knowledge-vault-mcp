@@ -57,3 +57,16 @@ class JobState(StrEnum):
     RETRY = "retry"
     COMPLETED = "completed"
     DEAD = "dead"
+
+
+class ArtifactState(StrEnum):
+    OPEN = "open"
+    STORED = "stored"
+    # The same content was already stored; `duplicate_of` names the record that holds it.
+    DUPLICATE = "duplicate"
+
+
+class ArtifactStorage(StrEnum):
+    """How an artifact's content is held. Binary storage would be a further member."""
+
+    TEXT = "text"

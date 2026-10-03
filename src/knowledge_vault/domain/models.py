@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
@@ -57,6 +58,39 @@ class SourceInput(BaseModel):
         return self
 
 
+# Text only: the content is stored and returned as a string. Binary types need a storage kind
+# of their own and an upload path that does not pass through tool arguments.
+_TEXT_MEDIA_TYPE = re.compile(
+    r"^(?:text/[a-z0-9][a-z0-9.+-]*"
+    r"|application/(?:json|x-ndjson|yaml|x-yaml|xml|toml|sql|csv|javascript|x-sh"
+    r"|[a-z0-9][a-z0-9.-]*\+(?:json|xml|yaml)))$"
+)
+
+
+class ArtifactBeginInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    filename: Annotated[SafeText, Field(min_length=1, max_length=255)]
+    media_type: Annotated[str, Field(min_length=3, max_length=100)]
+    declared_chunks: int = Field(ge=1)
+    description: Annotated[SafeText, Field(max_length=1000)] | None = None
+
+    @model_validator(mode="after")
+    def validate_metadata(self) -> "ArtifactBeginInput":
+        if self.filename in {".", ".."} or any(
+            character in "/\\" or ord(character) < 32 for character in self.filename
+        ):
+            raise ValueError("filename must be a plain name without path separators")
+        self.media_type = self.media_type.strip().lower()
+        if not _TEXT_MEDIA_TYPE.fullmatch(self.media_type):
+            raise ValueError("media_type must be a text type such as text/csv or application/json")
+        for value in (self.filename, self.description):
+            secret = detect_secret(value) if value else None
+            if secret:
+                raise ValueError(f"suspected {secret}; store only a reference to the secret")
+        return self
+
+
 class AssertionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -72,6 +106,8 @@ class AssertionInput(BaseModel):
     observed_at: Timestamp | None = None
     sensitivity: Sensitivity = Sensitivity.NORMAL
     supersedes_id: UUID | None = None
+    # IDs returned by commit_knowledge_artifact; the assertion describes those artifacts.
+    artifact_ids: list[UUID] = Field(default_factory=list, max_length=8)
 
     @model_validator(mode="after")
     def validate_semantics(self) -> "AssertionInput":
@@ -87,6 +123,7 @@ class AssertionInput(BaseModel):
         for source in self.sources:
             unique_sources.setdefault(str(source.url), source)
         self.sources = list(unique_sources.values())
+        self.artifact_ids = list(dict.fromkeys(self.artifact_ids))
         if self.status is AssertionStatus.SUPERSEDED and self.supersedes_id:
             raise ValueError("a new correction cannot itself be submitted as superseded")
         return self
@@ -105,6 +142,16 @@ class SourceView(BaseModel):
     title: str | None = None
     publisher: str | None = None
     retrieved_at: datetime | None = None
+
+
+class ArtifactRef(BaseModel):
+    """What an assertion shows of a linked artifact; the content is read separately."""
+
+    id: UUID
+    filename: str
+    media_type: str
+    size_bytes: int
+    description: str | None = None
 
 
 class AssertionView(BaseModel):
@@ -128,6 +175,7 @@ class AssertionView(BaseModel):
     supersedes_id: UUID | None
     embedding_state: EmbeddingState
     sources: list[SourceView] = Field(default_factory=list)
+    artifacts: list[ArtifactRef] = Field(default_factory=list)
 
 
 class RejectedItem(BaseModel):

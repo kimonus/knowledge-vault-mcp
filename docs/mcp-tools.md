@@ -11,9 +11,10 @@ A failed call is an MCP tool error whose text starts with a stable code:
 |---|---|---|
 | `invalid_request` | An argument is malformed or out of bounds | Correct the argument |
 | `unauthorized`, `forbidden` | No credential, or the credential lacks the required scope | Do not retry |
-| `not_found` | The batch, assertion, or confirmation token does not exist for this principal | Do not retry |
+| `not_found` | The batch, assertion, artifact, or confirmation token does not exist for this principal | Do not retry |
+| `secret_detected` | An artifact's text or metadata contains a secret-shaped value; the artifact was discarded | Do not resubmit the value; store a reference instead |
 | `conflict` | The request contradicts accepted state, for example a changed part payload or an expired batch | Follow the message |
-| `batch_incomplete` | Commit was called before every declared part and item arrived; the message lists missing parts | Append the missing parts, then commit again |
+| `batch_incomplete` | Commit was called before every declared part, item, or artifact chunk arrived; the message lists what is missing | Append the missing parts, then commit again |
 | `rate_limited` | The per-principal budget for this operation class is exhausted | Retry after a pause |
 | `internal_error` | The server failed unexpectedly; no detail is disclosed | Retry the same idempotent call |
 
@@ -53,7 +54,7 @@ This identifies delivered guidance; it is not a stored batch version or a hot-up
    `replayed: true`.
 2. Call `append_knowledge` for every one-based `part_number`. Each assertion requires `content`,
    `kind`, and `origin`, and may carry `status`, `confidence`, validity timestamps, `topics`,
-   `sensitivity`, `sources`, and `supersedes_id`.
+   `sensitivity`, `sources`, `supersedes_id`, and `artifact_ids` (see [Artifacts](#artifacts)).
 3. Call `commit_knowledge_flush` only after every part is accepted. Retry with the same batch ID if
    the response is lost. The stable result contains inserted/confirmed/enriched/superseded/
    conflict/rejected counts and assertion IDs.
@@ -98,13 +99,63 @@ Parts and commits are idempotent. Reusing a part number with different content o
 totals is a `conflict`. A batch that passed its expiry cannot be appended to or committed; begin a
 new flush with a new idempotency key.
 
+## Artifacts
+
+An artifact is a text file that is itself part of the knowledge: a CSV table, a script, a
+Markdown document, a JSON result. It is stored whole and exactly, and is linked to the assertions
+that describe it. Search runs over assertions, so an artifact is found through them.
+
+1. `begin_knowledge_artifact(idempotency_key, filename, media_type, declared_chunks,
+   description?)` opens an upload. `filename` is a plain name without path separators;
+   `media_type` must be a text type (`text/*`, `application/json`, `application/yaml`,
+   `application/xml`, `application/toml`, `application/sql`, `application/csv`,
+   `application/x-ndjson`, `application/javascript`, `application/x-sh`, or a `+json`/`+xml`/
+   `+yaml` suffix type). Identical arguments return the same upload with `replayed: true`.
+2. `append_knowledge_artifact(artifact_id, chunk_number, text)` stages one chunk, at most
+   `KNOWLEDGE_VAULT_ARTIFACT_MAX_CHUNK_CHARS` (16,000) characters. Chunks are joined in numeric
+   order without a separator and may arrive in any order. The same chunk can be repeated; a
+   different payload for an accepted number is a `conflict`.
+3. `commit_knowledge_artifact(artifact_id)` stores the artifact and returns `{artifact_id,
+   filename, media_type, size_bytes, sha256, deduplicated, replayed}`. If the same text is already
+   stored, `artifact_id` is that earlier artifact's ID and `deduplicated` is true.
+4. Put the returned `artifact_id` into `artifact_ids` (at most 8) of at least one assertion in a
+   flush, normally of kind `artifact_observation`, saying what the artifact is and what it shows.
+   A flush that names an unknown or uncommitted artifact fails with `not_found`. Submitting
+   wording that already exists adds the link to the existing assertion.
+5. `get_knowledge_artifact(artifact_id, offset?, limit?)` returns one page of the text with
+   `total_chars` and `next_offset` (`null` at the end), marked `untrusted_data: true`.
+   `get_knowledge`, `search_knowledge`, and `fetch` list each assertion's artifacts as `{id,
+   filename, media_type, size_bytes, description}` without their content.
+
+Limits: `KNOWLEDGE_VAULT_ARTIFACT_MAX_CHUNKS` (64) chunks and
+`KNOWLEDGE_VAULT_ARTIFACT_MAX_BYTES` (1 MiB) per artifact. Chunking exists because hosted clients
+cap the size of a single tool argument; a client that hits such a cap should send smaller chunks.
+
+Rules the server enforces:
+
+- **Text only.** Images and other binary files are refused. Record an `artifact_observation`
+  describing them and report that the file itself was not preserved.
+- **Secrets discard the artifact.** A secret-shaped value in the file name, description, a chunk,
+  or across a chunk boundary discards the whole upload, including chunks already staged, and
+  returns `secret_detected`. Unlike assertions, there is no per-item rejection: an artifact is
+  stored whole or not at all.
+- **An artifact lives only while an assertion references it.** An upload that is not committed
+  within `KNOWLEDGE_VAULT_STAGING_TTL_SECONDS` is discarded, and a stored artifact that no
+  assertion references is deleted after `KNOWLEDGE_VAULT_STAGING_RETENTION_SECONDS`.
+  `forget_knowledge` deletes the artifacts that only the forgotten assertions describe; its
+  preview reports them as `artifact_count` and its result as `deleted_artifact_count`.
+
+The HTTP equivalents are `POST /api/v1/artifacts`, `PUT /api/v1/artifacts/{id}/chunks/{n}`,
+`POST /api/v1/artifacts/{id}/commit`, and `GET /api/v1/artifacts/{id}?offset=&limit=`.
+
 ## Retrieval and administration
 
 - `search_knowledge(query, filters?, limit?, cursor?)`: hybrid search with lifecycle, kind, topic,
   origin, sensitivity, confidence, and validity filters. The cursor is signed and bound to the
   query and filters; it is stable while the corpus is unchanged, and concurrent writes can shift
   ranks between pages.
-- `get_knowledge(assertion_id)`: retrieve one assertion with its provenance `sources`.
+- `get_knowledge(assertion_id)`: retrieve one assertion with its provenance `sources` and the
+  `artifacts` linked to it.
 - `list_knowledge_conflicts(limit?)`: list unresolved possible conflicts. A possible conflict is
   recorded when a new assertion and a current one of the same kind differ only by a negation,
   whether or not they share a topic. It is resolved automatically when one of its assertions is
@@ -113,7 +164,8 @@ new flush with a new idempotency key.
   identifies the one it replaces. If the corrected wording already exists (for example when
   reverting to an earlier statement), that existing assertion becomes current again and the named
   one is superseded.
-- `get_knowledge_statistics()`: content-free counts and embedding queue state, plus
+- `get_knowledge_statistics()`: content-free counts (including `artifacts_total`) and embedding
+  queue state, plus
   `operations`: seconds since the worker and the backup last succeeded (`null` if never).
 - `forget_knowledge(dry_run, assertion_ids?, confirmation_token?)`: admin-only two-step deletion.
 
@@ -128,6 +180,7 @@ forget_knowledge(dry_run=false, confirmation_token=preview.confirmation_token)
 ```
 
 The token is short-lived, bound to the authenticated principal and exact ID set, and single-use.
-Confirmation permanently removes assertion content, sources, vectors, and related queue state.
+Confirmation permanently removes assertion content, sources, vectors, related queue state, and
+artifacts that no remaining assertion describes.
 The preview also lists `superseded_predecessor_ids`: assertions that the selected ones replaced
 and that stay superseded—and therefore outside default search—after the deletion.

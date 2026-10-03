@@ -3,7 +3,8 @@
 [![CI](https://github.com/kimonus/knowledge-vault-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/kimonus/knowledge-vault-mcp/actions/workflows/ci.yml)
 
 Knowledge Vault is a private, single-user MCP and HTTP service for durable facts extracted from
-conversations. It stores atomic assertions and provenance, never chat transcripts. PostgreSQL
+conversations. It stores atomic assertions and provenance, and the text artifacts (tables, code,
+documents) those assertions describe, never chat transcripts. PostgreSQL
 provides durable state and full-text search; pgvector and a local multilingual model add semantic
 retrieval without sending assertion text to a hosted embedding service.
 

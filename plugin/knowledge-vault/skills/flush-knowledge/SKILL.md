@@ -36,6 +36,25 @@ For every assertion:
 - Never submit credentials, passwords, access tokens, private keys, cookies, or secret values. A
   non-secret reference such as "credential is stored in Kubernetes Secret X" is allowed.
 
+## Artifacts
+
+When a text file produced or examined in the conversation is itself part of the knowledge—a CSV
+table, a script, a Markdown document, a JSON result—store it whole before the flush:
+
+1. `begin_knowledge_artifact` with a new idempotency key, a plain file name, a text media type and
+   the exact number of chunks.
+2. `append_knowledge_artifact` for every numbered chunk, within the advertised size. Copy the text
+   exactly; never summarise, reformat or truncate inside an artifact.
+3. `commit_knowledge_artifact`, then list the returned `artifact_id` in `artifact_ids` of at least
+   one assertion that says what the artifact is and what it shows. An artifact that no assertion
+   references is deleted.
+
+Retry a failed call with identical arguments. Never upload a file that contains credentials: a
+detected secret discards the whole artifact, and the detector does not know every secret shape.
+Images and other binary files cannot be stored; record an `artifact_observation` describing them
+and say in the report that the file itself was not preserved. Report stored, deduplicated,
+rejected and unpreserved artifacts separately from assertion counts.
+
 Use `supersedes_id` only when the conversation explicitly corrects an assertion whose server ID is
 known. Do not infer a supersession target from semantic similarity.
 

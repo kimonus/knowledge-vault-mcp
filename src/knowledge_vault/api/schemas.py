@@ -22,6 +22,22 @@ class AppendPartRequest(BaseModel):
     assertions: list[Any] = Field(min_length=1, max_length=1000)
 
 
+class BeginArtifactRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    idempotency_key: str = Field(min_length=1, max_length=200)
+    filename: str
+    media_type: str
+    declared_chunks: int
+    description: str | None = None
+
+
+class AppendArtifactChunkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str
+
+
 class SearchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -20,9 +20,11 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR, UUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, deferred, mapped_column, relationship
 
 from knowledge_vault.domain.enums import (
+    ArtifactState,
+    ArtifactStorage,
     AssertionKind,
     AssertionOrigin,
     AssertionStatus,
@@ -102,6 +104,10 @@ class AssertionRow(Base):
 
     sources: Mapped[list["SourceRow"]] = relationship(
         back_populates="assertion", cascade="all, delete-orphan", lazy="selectin"
+    )
+    # Read-only: links are written as `AssertionArtifactRow` rows by the ingestion service.
+    artifacts: Mapped[list["ArtifactRow"]] = relationship(
+        secondary="assertion_artifacts", viewonly=True, lazy="selectin"
     )
 
 
@@ -251,3 +257,84 @@ class HeartbeatRow(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     detail: Mapped[str | None] = mapped_column(String(200))
+
+
+class ArtifactRow(Base):
+    """A file-like piece of knowledge, stored whole and linked to the assertions describing it."""
+
+    __tablename__ = "artifacts"
+    __table_args__ = (
+        UniqueConstraint("principal_id", "idempotency_hash", name="uq_artifact_idempotency"),
+        CheckConstraint("declared_chunks > 0", name="ck_artifact_declared_chunks"),
+        CheckConstraint(_one_of("state", ArtifactState), name="ck_artifact_state"),
+        CheckConstraint(_one_of("storage", ArtifactStorage), name="ck_artifact_storage"),
+        CheckConstraint(
+            "state <> 'stored' OR (content_text IS NOT NULL AND content_sha256 IS NOT NULL "
+            "AND size_bytes IS NOT NULL)",
+            name="ck_artifact_stored_content",
+        ),
+        CheckConstraint(
+            "(state = 'duplicate') = (duplicate_of IS NOT NULL)", name="ck_artifact_duplicate_of"
+        ),
+        # One stored record per content; a second upload of the same text becomes a duplicate.
+        Index(
+            "uq_artifacts_stored_content",
+            "content_sha256",
+            unique=True,
+            postgresql_where="state = 'stored'",
+        ),
+        Index("ix_artifacts_state_expiry", "state", "expires_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    principal_id: Mapped[str] = mapped_column(String(128))
+    idempotency_hash: Mapped[str] = mapped_column(String(64))
+    state: Mapped[str] = mapped_column(String(20), default="open")
+    storage: Mapped[str] = mapped_column(String(10), default="text")
+    filename: Mapped[str] = mapped_column(String(255))
+    media_type: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str | None] = mapped_column(String(1000))
+    declared_chunks: Mapped[int] = mapped_column(Integer)
+    # Deferred: listing an assertion's artifacts must not load their content.
+    content_text: Mapped[str | None] = deferred(mapped_column(Text))
+    content_sha256: Mapped[str | None] = mapped_column(String(64))
+    size_bytes: Mapped[int | None] = mapped_column(Integer)
+    duplicate_of: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("artifacts.id", ondelete="CASCADE")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    stored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Transient, unmapped: set by the service when a call repeated an earlier one.
+    replayed = False
+
+
+class ArtifactChunkRow(Base):
+    """Staged upload text. Deleted when the artifact is committed, rejected, or expires."""
+
+    __tablename__ = "artifact_chunks"
+
+    artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("artifacts.id", ondelete="CASCADE"), primary_key=True
+    )
+    chunk_number: Mapped[int] = mapped_column(Integer, primary_key=True)
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AssertionArtifactRow(Base):
+    __tablename__ = "assertion_artifacts"
+    __table_args__ = (Index("ix_assertion_artifacts_artifact", "artifact_id"),)
+
+    assertion_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assertions.id", ondelete="CASCADE"), primary_key=True
+    )
+    artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("artifacts.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

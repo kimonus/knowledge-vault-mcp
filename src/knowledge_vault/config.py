@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     max_part_items: int = Field(default=100, ge=1, le=1000)
     max_parts: int = Field(default=100, ge=1, le=1000)
     max_page_size: int = Field(default=50, ge=1, le=200)
+    # Text artifacts are uploaded in numbered chunks because hosted clients cap the size of a
+    # single tool argument; the product of the two limits bounds one artifact.
+    artifact_max_chunk_chars: int = Field(default=16_000, ge=256, le=100_000)
+    artifact_max_chunks: int = Field(default=64, ge=1, le=1000)
+    artifact_max_bytes: int = Field(default=1_048_576, ge=1024, le=16_777_216)
     staging_ttl_seconds: int = Field(default=86_400, ge=60)
     staging_retention_seconds: int = Field(default=604_800, ge=60)
     maintenance_interval_seconds: float = Field(default=300.0, ge=1, le=86_400)

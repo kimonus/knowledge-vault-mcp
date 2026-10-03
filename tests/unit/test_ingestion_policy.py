@@ -57,7 +57,12 @@ def test_policy_bounds_and_readback_rules_cannot_be_replaced_by_operator_text() 
         max_batch_items=17,
         max_part_items=3,
         max_parts=6,
+        artifact_max_chunk_chars=4000,
+        artifact_max_chunks=9,
     )
+    assert "at most 4000 characters each,\n  9 chunks" in instructions
+    assert "an\n  unreferenced artifact is deleted" in instructions
+    assert "binary files cannot be stored" in instructions
     assert len(CORE_INSTRUCTIONS) <= 512
     assert instructions.startswith(CORE_INSTRUCTIONS)
     assert "Maximum 17 items per flush, 3 items per part, 6 parts" in instructions

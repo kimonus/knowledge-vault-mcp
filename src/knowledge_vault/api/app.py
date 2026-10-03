@@ -17,7 +17,9 @@ from knowledge_vault.api.middleware import (
     RequestSizeLimitMiddleware,
 )
 from knowledge_vault.api.schemas import (
+    AppendArtifactChunkRequest,
     AppendPartRequest,
+    BeginArtifactRequest,
     BeginFlushRequest,
     CorrectionRequest,
     ForgetConfirmRequest,
@@ -29,16 +31,20 @@ from knowledge_vault.container import Container
 from knowledge_vault.domain.models import CommitResult, ProblemDetail
 from knowledge_vault.domain.responses import (
     AbortResponse,
+    AppendArtifactResponse,
     AppendResponse,
+    ArtifactContentResponse,
     AssertionResponse,
+    BeginArtifactResponse,
     BeginFlushResponse,
+    CommitArtifactResponse,
     ConflictListResponse,
     ForgetPreviewResponse,
     ForgetResultResponse,
     SearchResponse,
     StatisticsResponse,
 )
-from knowledge_vault.mcp.server import create_mcp_server
+from knowledge_vault.mcp.server import artifact_page, create_mcp_server
 from knowledge_vault.observability.metrics import DB_POOL, HEARTBEAT_AGE
 from knowledge_vault.services.errors import KnowledgeVaultError, RateLimitedError
 
@@ -228,6 +234,71 @@ def create_app(container: Container) -> FastAPI:
     ) -> AbortResponse:
         aborted = await container.ingestion.abort(principal.id, batch_id)
         return AbortResponse(batch_id=str(batch_id), aborted=aborted)
+
+    @app.post("/api/v1/artifacts", status_code=201)
+    async def begin_artifact(
+        body: BeginArtifactRequest,
+        principal: Principal = Depends(require_scope(Scope.WRITE)),
+    ) -> BeginArtifactResponse:
+        artifact = await container.artifacts.begin(
+            principal.id,
+            body.idempotency_key,
+            body.filename,
+            body.media_type,
+            body.declared_chunks,
+            body.description,
+        )
+        return BeginArtifactResponse(
+            artifact_id=str(artifact.id),
+            state=artifact.state,
+            declared_chunks=artifact.declared_chunks,
+            replayed=artifact.replayed,
+        )
+
+    @app.put("/api/v1/artifacts/{artifact_id}/chunks/{chunk_number}")
+    async def append_artifact_chunk(
+        artifact_id: UUID,
+        chunk_number: int,
+        body: AppendArtifactChunkRequest,
+        principal: Principal = Depends(require_scope(Scope.WRITE)),
+    ) -> AppendArtifactResponse:
+        accepted, replayed = await container.artifacts.append(
+            principal.id, artifact_id, chunk_number, body.text
+        )
+        return AppendArtifactResponse(
+            artifact_id=str(artifact_id),
+            chunk_number=chunk_number,
+            accepted_chars=accepted,
+            replayed=replayed,
+        )
+
+    @app.post("/api/v1/artifacts/{artifact_id}/commit")
+    async def commit_artifact(
+        artifact_id: UUID,
+        principal: Principal = Depends(require_scope(Scope.WRITE)),
+    ) -> CommitArtifactResponse:
+        stored = await container.artifacts.commit(principal.id, artifact_id)
+        return CommitArtifactResponse(
+            artifact_id=str(stored.artifact_id),
+            filename=stored.filename,
+            media_type=stored.media_type,
+            size_bytes=stored.size_bytes,
+            sha256=stored.sha256,
+            deduplicated=stored.deduplicated,
+            replayed=stored.replayed,
+        )
+
+    @app.get("/api/v1/artifacts/{artifact_id}")
+    async def get_artifact(
+        artifact_id: UUID,
+        offset: int = Query(default=0, ge=0),
+        limit: int = Query(default=8000, ge=1),
+        principal: Principal = Depends(require_scope(Scope.READ)),
+    ) -> ArtifactContentResponse:
+        del principal
+        return artifact_page(
+            await container.artifacts.read(artifact_id, offset=offset, limit=limit)
+        )
 
     @app.post("/api/v1/search")
     async def search_knowledge(

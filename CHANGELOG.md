@@ -5,6 +5,23 @@ stable release.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-03
+
+### Added
+
+- **Text artifacts.** A file that is itself part of the knowledge—CSV, code, Markdown, JSON—can
+  be stored whole and linked to the assertions that describe it: `begin_knowledge_artifact`,
+  `append_knowledge_artifact`, `commit_knowledge_artifact`, `get_knowledge_artifact`, the
+  `artifact_ids` field on assertions, and the matching `/api/v1/artifacts` routes. Uploads are
+  chunked and idempotent, identical content is stored once, a secret-shaped value discards the
+  whole artifact, and an artifact is deleted when no assertion references it, including through
+  `forget_knowledge`. Binary files are refused. Assertion responses gain an `artifacts` list,
+  the forget preview and result gain `artifact_count` and `deleted_artifact_count`, and
+  statistics gain `artifacts_total`.
+- **Operator action required.** The upgrade adds revision `0004_text_artifacts`; the chart's
+  migration Job applies it. Artifact text is stored in PostgreSQL and is covered by the existing
+  backup. Reconnect clients so that they receive the new tools and guidance.
+
 ## [0.1.1] - 2026-10-03
 
 ### Fixed
