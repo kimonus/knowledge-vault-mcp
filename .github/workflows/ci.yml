@@ -86,6 +86,7 @@ jobs:
             --set cloudflareAccess.enabled=true \
             --set cloudflareAccess.existingSecret=knowledge-vault-cloudflare-access \
             --set 'cloudflareAccess.publicHosts={mcp.example.com}' \
+            --set 'cloudflareAccess.privateHosts={mcp-lan.example.com}' \
             --set cloudflareTunnel.enabled=true \
             --set cloudflareTunnel.existingSecret=knowledge-vault-cloudflared \
             --set cloudflareTunnel.image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000
@@ -94,6 +95,7 @@ jobs:
             --set cloudflareAccess.enabled=true \
             --set cloudflareAccess.existingSecret=knowledge-vault-cloudflare-access \
             --set 'cloudflareAccess.publicHosts={mcp.example.com}' \
+            --set 'cloudflareAccess.privateHosts={mcp-lan.example.com}' \
             --set cloudflareTunnel.enabled=true \
             --set cloudflareTunnel.existingSecret=knowledge-vault-cloudflared \
             --set cloudflareTunnel.image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
