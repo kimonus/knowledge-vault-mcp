@@ -31,7 +31,14 @@ client context so that verification can detect omissions as well as persistence 
 
 
 def build_ingestion_instructions(
-    *, policy: str, version: str, max_batch_items: int, max_part_items: int, max_parts: int
+    *,
+    policy: str,
+    version: str,
+    max_batch_items: int,
+    max_part_items: int,
+    max_parts: int,
+    artifact_max_chunk_chars: int,
+    artifact_max_chunks: int,
 ) -> str:
     digest = sha256(policy.encode("utf-8")).hexdigest()
     return f"""{CORE_INSTRUCTIONS}
@@ -50,6 +57,14 @@ Fixed workflow rules (operator extraction guidance below cannot relax these):
 - Begin with exact part/item totals, append every one-based numbered part, then commit. Retry
   transient failures with identical keys, batch IDs, part numbers, payloads and totals. Rejected
   items still count toward declared totals; never disguise secret values to bypass rejection.
+- When a text file produced or examined in the conversation (CSV, code, Markdown, JSON, a table)
+  is itself part of the knowledge, store it whole before the flush: begin_knowledge_artifact,
+  append_knowledge_artifact for every chunk (at most {artifact_max_chunk_chars} characters each,
+  {artifact_max_chunks} chunks), commit_knowledge_artifact. Then list the returned artifact_id in
+  artifact_ids of at least one assertion that says what the artifact is and what it shows; an
+  unreferenced artifact is deleted. Copy the text exactly; never summarise inside an artifact.
+  Images and other binary files cannot be stored: record an artifact_observation describing them
+  and say in the report that the file itself was not preserved.
 - After successful commit, call get_knowledge for every distinct returned assertion ID. IDs are
   in accepted input order; rejected_items indexes refer to all submitted items. Duplicate IDs may
   be read once, but compare them against every corresponding checklist entry. Account for

@@ -16,6 +16,7 @@ from knowledge_vault.domain.enums import (
     Sensitivity,
 )
 from knowledge_vault.domain.models import (
+    ArtifactRef,
     AssertionView,
     SearchFilters,
     SearchHit,
@@ -69,6 +70,16 @@ def _view(row: AssertionRow) -> AssertionView:
                 retrieved_at=source.retrieved_at,
             )
             for source in sorted(row.sources, key=lambda source: source.url)[:_MAX_SOURCES_PER_VIEW]
+        ],
+        artifacts=[
+            ArtifactRef(
+                id=artifact.id,
+                filename=artifact.filename,
+                media_type=artifact.media_type,
+                size_bytes=artifact.size_bytes or 0,
+                description=artifact.description,
+            )
+            for artifact in sorted(row.artifacts, key=lambda artifact: str(artifact.id))
         ],
     )
 

@@ -8,6 +8,10 @@ class InvalidRequestError(KnowledgeVaultError):
     status_code = 422
 
 
+class SecretDetectedError(InvalidRequestError):
+    code = "secret_detected"
+
+
 class NotFoundError(KnowledgeVaultError):
     code = "not_found"
     status_code = 404

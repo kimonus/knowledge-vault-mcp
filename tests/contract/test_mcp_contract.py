@@ -26,6 +26,10 @@ async def test_tool_discovery_contract(settings) -> None:
         "append_knowledge",
         "commit_knowledge_flush",
         "abort_knowledge_flush",
+        "begin_knowledge_artifact",
+        "append_knowledge_artifact",
+        "commit_knowledge_artifact",
+        "get_knowledge_artifact",
         "search_knowledge",
         "get_knowledge",
         "list_knowledge_conflicts",
@@ -137,6 +141,60 @@ async def test_authenticated_mcp_tool_lifecycle(integration_container) -> None:
         assert appended.structured_content["accepted"] == 1
         committed = await server.call_tool("commit_knowledge_flush", {"batch_id": batch_id})
         assertion_id = committed.structured_content["assertion_ids"][0]
+
+        upload = await server.call_tool(
+            "begin_knowledge_artifact",
+            {
+                "idempotency_key": "mcp-artifact",
+                "filename": "tools.csv",
+                "media_type": "text/csv",
+                "declared_chunks": 2,
+            },
+        )
+        artifact_id = upload.structured_content["artifact_id"]
+        for number, text in ((1, "tool,language\n"), (2, "search,pl\n")):
+            chunk = await server.call_tool(
+                "append_knowledge_artifact",
+                {"artifact_id": artifact_id, "chunk_number": number, "text": text},
+            )
+            assert chunk.structured_content["accepted_chars"] == len(text)
+        stored = await server.call_tool("commit_knowledge_artifact", {"artifact_id": artifact_id})
+        assert stored.structured_content["artifact_id"] == artifact_id
+        assert stored.structured_content["deduplicated"] is False
+        page = await server.call_tool(
+            "get_knowledge_artifact", {"artifact_id": artifact_id, "limit": 14}
+        )
+        assert page.structured_content["content"] == "tool,language\n"
+        assert page.structured_content["next_offset"] == 14
+        assert page.structured_content["untrusted_data"] is True
+        with pytest.raises(ToolError, match="secret_detected: suspected"):
+            rejected = await server.call_tool(
+                "begin_knowledge_artifact",
+                {
+                    "idempotency_key": "mcp-artifact-secret",
+                    "filename": "keys.txt",
+                    "media_type": "text/plain",
+                    "declared_chunks": 1,
+                },
+            )
+            await server.call_tool(
+                "append_knowledge_artifact",
+                {
+                    "artifact_id": rejected.structured_content["artifact_id"],
+                    "chunk_number": 1,
+                    "text": "key: sk-" + "abcdefghijklmnopqrstuvwxyz123456",
+                },
+            )
+        with pytest.raises(ToolError, match="invalid_request: media_type"):
+            await server.call_tool(
+                "begin_knowledge_artifact",
+                {
+                    "idempotency_key": "mcp-artifact-binary",
+                    "filename": "chart.png",
+                    "media_type": "image/png",
+                    "declared_chunks": 1,
+                },
+            )
 
         compatible = await server.call_tool("search", {"query": "multilingual MCP"})
         assert compatible.structured_content["results"][0]["id"] == assertion_id

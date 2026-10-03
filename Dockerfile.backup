@@ -19,7 +19,7 @@ FROM scratch
 LABEL org.opencontainers.image.title="Knowledge Vault backup" \
       org.opencontainers.image.description="Pinned pg_dump and restic backup helper" \
       org.opencontainers.image.licenses="Apache-2.0" \
-      org.opencontainers.image.version="0.1.1"
+      org.opencontainers.image.version="0.2.0"
 ENV PATH="/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin"
 # Flatten the sanitized stage so deleted upstream test keys and gosu are absent from every layer.
 # hadolint ignore=DL3067

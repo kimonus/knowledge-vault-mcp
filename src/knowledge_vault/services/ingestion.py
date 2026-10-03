@@ -12,7 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from knowledge_vault.config import Settings
-from knowledge_vault.domain.enums import AssertionStatus, BatchState, EmbeddingState
+from knowledge_vault.domain.enums import (
+    ArtifactState,
+    AssertionStatus,
+    BatchState,
+    EmbeddingState,
+)
 from knowledge_vault.domain.models import (
     AssertionInput,
     CommitCounts,
@@ -21,6 +26,8 @@ from knowledge_vault.domain.models import (
 )
 from knowledge_vault.observability.metrics import ASSERTION_OUTCOMES, BATCH_TRANSITIONS
 from knowledge_vault.persistence.tables import (
+    ArtifactRow,
+    AssertionArtifactRow,
     AssertionRow,
     ConflictRow,
     EmbeddingJobRow,
@@ -322,6 +329,7 @@ class IngestionService:
             existing.confirmation_count += 1
             existing.last_confirmed_at = datetime.now(UTC)
             changed = self._enrich(existing, item) or changed
+            changed = await self._link_artifacts(session, existing.id, item.artifact_ids) or changed
             outcome = "enriched_updated" if changed else "confirmed_existing"
             return _Applied(existing.id, outcome, [], superseded)
 
@@ -359,10 +367,53 @@ class IngestionService:
         )
         session.add(row)
         await session.flush()
+        await self._link_artifacts(session, row.id, item.artifact_ids)
         if self._settings.embeddings_enabled:
             session.add(EmbeddingJobRow(assertion_id=row.id, model=self._settings.embedding_model))
         conflicts = await self._record_conflicts(session, row)
         return _Applied(row.id, "inserted", conflicts, item.supersedes_id is not None)
+
+    @staticmethod
+    async def _link_artifacts(
+        session: AsyncSession, assertion_id: UUID, artifact_ids: list[UUID]
+    ) -> bool:
+        """Link stored artifacts to an assertion. Return whether a link was added."""
+        if not artifact_ids:
+            return False
+        stored = set(
+            (
+                await session.scalars(
+                    select(ArtifactRow.id)
+                    .where(
+                        ArtifactRow.id.in_(artifact_ids),
+                        ArtifactRow.state == ArtifactState.STORED,
+                    )
+                    # Keeps the artifacts from being purged as unreferenced while they are linked.
+                    .with_for_update()
+                )
+            ).all()
+        )
+        for artifact_id in artifact_ids:
+            if artifact_id not in stored:
+                raise NotFoundError(
+                    f"artifact {artifact_id} was not found; commit the artifact before the flush"
+                )
+        linked = set(
+            (
+                await session.scalars(
+                    select(AssertionArtifactRow.artifact_id).where(
+                        AssertionArtifactRow.assertion_id == assertion_id
+                    )
+                )
+            ).all()
+        )
+        added = [artifact_id for artifact_id in artifact_ids if artifact_id not in linked]
+        session.add_all(
+            AssertionArtifactRow(assertion_id=assertion_id, artifact_id=artifact_id)
+            for artifact_id in added
+        )
+        await session.flush()
+        return bool(added)
 
     @staticmethod
     async def _supersede(session: AsyncSession, assertion_id: UUID) -> None:

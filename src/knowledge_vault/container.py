@@ -9,6 +9,7 @@ from knowledge_vault.embeddings.base import EmbeddingProvider
 from knowledge_vault.embeddings.providers import SentenceTransformerProvider
 from knowledge_vault.persistence.database import Database
 from knowledge_vault.services.administration import AdministrationService
+from knowledge_vault.services.artifacts import ArtifactService
 from knowledge_vault.services.ingestion import IngestionService
 from knowledge_vault.services.operations import OperationsService
 from knowledge_vault.services.search import SearchService
@@ -24,6 +25,7 @@ class Container:
     ingestion: IngestionService
     search: SearchService
     administration: AdministrationService
+    artifacts: ArtifactService
     operations: OperationsService
     embedder: EmbeddingProvider | None
     tracer: Any | None = None
@@ -62,6 +64,7 @@ def build_container(
         ingestion=ingestion,
         search=search,
         administration=administration,
+        artifacts=ArtifactService(database.sessions, settings),
         operations=operations,
         embedder=effective_embedder,
         tracer=tracer,

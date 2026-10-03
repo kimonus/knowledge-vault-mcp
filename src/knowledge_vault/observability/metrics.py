@@ -13,6 +13,9 @@ BATCH_TRANSITIONS = Counter(
 ASSERTION_OUTCOMES = Counter(
     "knowledge_vault_assertion_outcomes_total", "Assertion ingestion outcomes", ("outcome",)
 )
+ARTIFACT_OUTCOMES = Counter(
+    "knowledge_vault_artifact_outcomes_total", "Artifact upload outcomes", ("outcome",)
+)
 SEARCH_LATENCY = Histogram(
     "knowledge_vault_search_duration_seconds", "Knowledge search latency", ("mode",)
 )

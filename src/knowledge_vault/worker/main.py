@@ -37,6 +37,7 @@ async def _worker() -> None:
 
     async def maintenance() -> None:
         await container.ingestion.expire_and_purge()
+        await container.artifacts.purge()
         await container.administration.purge_confirmation_tokens()
         # Lets the watchdog and the statistics tool tell that the worker loop is alive.
         await container.operations.beat(WORKER)

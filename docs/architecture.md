@@ -36,8 +36,8 @@ authentication or scope checks.
   and retries with capped exponential backoff and jitter. Claims carry a lease: a claim that
   outlives `KNOWLEDGE_VAULT_EMBEDDING_CLAIM_TIMEOUT_SECONDS` returns to the queue. The same
   process periodically expires abandoned flush batches and purges staging metadata.
-- PostgreSQL: the source of truth for assertions, sources, lifecycle state, conflicts, flush state,
-  deletion audit records, jobs, text indexes, and vectors.
+- PostgreSQL: the source of truth for assertions, sources, text artifacts, lifecycle state,
+  conflicts, flush state, deletion audit records, jobs, text indexes, and vectors.
 - Migration Job: executes Alembic; API and worker init containers wait until the database is at
   the newest revision shipped in their image.
 - Watchdog (optional CronJob): reads heartbeats and job counters, fails when the worker or the

@@ -4,12 +4,15 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import CursorResult, delete, func, select, update
+from sqlalchemy import CursorResult, delete, exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import aliased
 
-from knowledge_vault.domain.enums import AssertionStatus
+from knowledge_vault.domain.enums import ArtifactState, AssertionStatus
 from knowledge_vault.domain.models import AssertionInput, CommitResult
 from knowledge_vault.persistence.tables import (
+    ArtifactRow,
+    AssertionArtifactRow,
     AssertionRow,
     ConfirmationTokenRow,
     ConflictRow,
@@ -19,6 +22,19 @@ from knowledge_vault.persistence.tables import (
 )
 from knowledge_vault.services.errors import ConflictError, InvalidRequestError, NotFoundError
 from knowledge_vault.services.ingestion import IngestionService
+
+
+def _only_described_by(assertion_ids: list[UUID]) -> Any:
+    """Artifacts linked to these assertions and to no other."""
+    link = AssertionArtifactRow
+    other = aliased(AssertionArtifactRow)
+    return select(link.artifact_id).where(
+        link.assertion_id.in_(assertion_ids),
+        ~exists().where(
+            other.artifact_id == link.artifact_id,
+            other.assertion_id.notin_(assertion_ids),
+        ),
+    )
 
 
 class AdministrationService:
@@ -99,6 +115,15 @@ class AdministrationService:
                     )
                 ).all()
             )
+            artifact_count = (
+                await session.scalar(
+                    select(func.count()).select_from(
+                        _only_described_by(found).distinct().subquery()
+                    )
+                )
+                if found
+                else 0
+            )
             token = secrets.token_urlsafe(32)
             session.add(
                 ConfirmationTokenRow(
@@ -112,9 +137,13 @@ class AdministrationService:
             "matched_ids": [str(item) for item in found],
             "matched_count": len(found),
             "superseded_predecessor_ids": [str(item) for item in hidden_predecessors],
+            "artifact_count": artifact_count or 0,
             "confirmation_token": token,
             "expires_in_seconds": 600,
-            "warning": "Confirmation permanently deletes assertion content and derived embeddings.",
+            "warning": (
+                "Confirmation permanently deletes assertion content, derived embeddings, and "
+                "artifacts that no other assertion describes."
+            ),
         }
 
     async def confirm_forgetting(self, principal_id: str, token: str) -> dict[str, Any]:
@@ -133,8 +162,14 @@ class AdministrationService:
                 .where(AssertionRow.supersedes_id.in_(ids))
                 .values(supersedes_id=None)
             )
+            # An artifact is kept only while an assertion describes it.
+            artifact_ids = list((await session.scalars(_only_described_by(ids))).all())
             result = await session.execute(delete(AssertionRow).where(AssertionRow.id.in_(ids)))
             deleted_count = int(cast(CursorResult[Any], result).rowcount or 0)
+            artifacts = await session.execute(
+                delete(ArtifactRow).where(ArtifactRow.id.in_(artifact_ids))
+            )
+            deleted_artifacts = int(cast(CursorResult[Any], artifacts).rowcount or 0)
             confirmation.used_at = now
             correlation_id = secrets.token_hex(16)
             session.add(
@@ -144,7 +179,11 @@ class AdministrationService:
                     correlation_id=UUID(correlation_id),
                 )
             )
-        return {"deleted_count": deleted_count, "correlation_id": correlation_id}
+        return {
+            "deleted_count": deleted_count,
+            "deleted_artifact_count": deleted_artifacts,
+            "correlation_id": correlation_id,
+        }
 
     async def purge_confirmation_tokens(self) -> int:
         """Delete confirmation tokens that can no longer be used."""
@@ -179,6 +218,11 @@ class AdministrationService:
                 .select_from(ConflictRow)
                 .where(ConflictRow.resolved_at.is_(None))
             )
+            artifacts = await session.scalar(
+                select(func.count())
+                .select_from(ArtifactRow)
+                .where(ArtifactRow.state == ArtifactState.STORED)
+            )
             heartbeat_rows = (
                 await session.execute(
                     select(
@@ -194,6 +238,7 @@ class AdministrationService:
             "by_kind": {str(key): count for key, count in kind_rows},
             "embedding_jobs": {str(key): count for key, count in job_rows},
             "unresolved_conflicts": conflicts or 0,
+            "artifacts_total": artifacts or 0,
             "operations": {
                 "worker_heartbeat_age_seconds": heartbeat_ages.get("worker"),
                 "backup_heartbeat_age_seconds": heartbeat_ages.get("backup"),
