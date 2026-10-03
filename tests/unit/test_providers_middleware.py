@@ -1,4 +1,6 @@
+import asyncio
 import sys
+import time
 from types import SimpleNamespace
 from typing import Any
 
@@ -77,6 +79,63 @@ async def test_sentence_transformer_provider_wraps_load_error(
     provider = SentenceTransformerProvider("broken", dimensions=2)
     with pytest.raises(EmbeddingsUnavailableError, match="could not be loaded"):
         await provider.embed(["private text"])
+
+
+async def test_sentence_transformer_provider_loads_once_under_concurrent_first_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Three searches at once each loaded a copy of the model and the API ran out of memory."""
+    loads: list[str] = []
+    active = 0
+    most_active = 0
+
+    class SlowModel:
+        def __init__(self, model_id: str, *, local_files_only: bool) -> None:
+            del local_files_only
+            time.sleep(0.05)
+            loads.append(model_id)
+
+        def encode(self, texts: list[str], *, normalize_embeddings: bool) -> list[list[float]]:
+            nonlocal active, most_active
+            del normalize_embeddings
+            active += 1
+            most_active = max(most_active, active)
+            time.sleep(0.01)
+            active -= 1
+            return [[1.0, 0.0] for _ in texts]
+
+    monkeypatch.setitem(
+        sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=SlowModel)
+    )
+    provider = SentenceTransformerProvider("model", dimensions=2)
+    results = await asyncio.gather(*(provider.embed([f"query {n}"]) for n in range(5)))
+    assert results == [[[1.0, 0.0]]] * 5
+    assert loads == ["model"]
+    assert most_active == 1
+
+
+async def test_sentence_transformer_provider_backs_off_once_for_concurrent_failed_loads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts: list[str] = []
+
+    class BrokenModel:
+        def __init__(self, model_id: str, *, local_files_only: bool) -> None:
+            del local_files_only
+            time.sleep(0.02)
+            attempts.append(model_id)
+            raise RuntimeError("missing weights")
+
+    monkeypatch.setitem(
+        sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=BrokenModel)
+    )
+    provider = SentenceTransformerProvider("model", dimensions=2)
+    outcomes = await asyncio.gather(
+        *(provider.embed(["query"]) for _ in range(4)), return_exceptions=True
+    )
+    assert all(isinstance(outcome, EmbeddingsUnavailableError) for outcome in outcomes)
+    assert attempts == ["model"]
+    assert provider.degraded is True
 
 
 async def test_size_limit_handles_non_http_declared_and_streamed_bodies() -> None:

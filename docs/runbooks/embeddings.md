@@ -51,7 +51,9 @@ download the model into the user's Hugging Face cache.
 
 The default model occupies about 1.3 GiB in each process that loads it (measured on the reference
 deployment: 1.1 GiB peak while loading, 1.27 GiB in the worker after embedding 1,726 assertions).
-The worker loads it when it starts embedding; the API loads it on the first search. The chart's
+The worker loads it when it starts embedding; the API loads it on the first search. Each
+process holds exactly one copy: requests that arrive during the load wait for it. Release 0.1.0
+did not guarantee that—simultaneous first searches each loaded a copy and exhausted the limit. The chart's
 default limits (2 GiB each) allow for that. Do not lower the API limit below that unless
 `config.embeddingsEnabled` is `false`, or the first search will have the Pod killed for memory.
 
