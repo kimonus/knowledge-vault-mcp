@@ -165,6 +165,6 @@ Run on the working tree on 2026-10-01 (Python 3.12.14, uv 0.12.21, Docker 29.1.3
 | MCP Inspector 2.4.0 `tools/list` against the real entry module | passed | 12 tools |
 | Markdown local links, YAML/JSON parse, `git diff --check` | passed | |
 | NetworkPolicies on an enforcing CNI | not run | would need a second cluster on the host that runs the live one |
-| Release workflow | not run | requires a tag push |
+| Release workflow | passed | not run at the time of this table; since then `v0.1.0`, `v0.1.1`, and `v0.2.0` were published and their image signatures verified |
 | Codex plugin validator | not run | validator not installed |
 | Homelab deployment | passed | migration Job completed; API and worker rolled out with no restarts; logs are JSON only |

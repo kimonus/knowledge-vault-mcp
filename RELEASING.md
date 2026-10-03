@@ -32,12 +32,18 @@ their cached fixtures; the scan now runs on the fresh checkout.
 
 ## Tag and publish
 
-Create an annotated, signed tag from the reviewed `main` commit and push only that tag:
+Create an annotated, signed tag from the reviewed `main` commit—the one the rehearsal passed
+on—and push only that tag:
 
 ```bash
-git tag -s v0.1.0 -m "Knowledge Vault v0.1.0"
-git push origin v0.1.0
+git tag -s vX.Y.Z -m "Knowledge Vault vX.Y.Z"
+git push origin vX.Y.Z
 ```
+
+`git tag -s` signs with the key named by this repository's `user.signingkey`. Use a key made for
+releases whose identity matches the commit identity, and register its public half with the
+hosting account so the tag shows as verified. Release 0.1.0 was tagged without a signature,
+before that key existed; later tags are signed.
 
 The release workflow verifies the tag/version agreement, reruns quality and security gates, and
 then publishes:
