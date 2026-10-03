@@ -5,6 +5,13 @@ stable release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Two `begin` calls that arrived together with the same idempotency key could both try to create
+  the batch (or artifact upload), and one failed with an internal error instead of returning the
+  other's record. The loser now returns the existing record. The test for this had been passing
+  by timing and now forces the race.
+
 ## [0.2.0] - 2026-10-03
 
 ### Added

@@ -26,11 +26,13 @@ from knowledge_vault.services.errors import (
     NotFoundError,
     SecretDetectedError,
 )
+from knowledge_vault.services.ingestion import violates
 
 # A secret can straddle two chunks, so each chunk is scanned together with this much of its
 # neighbours. The assembled text is scanned once more on commit.
 _BOUNDARY_CHARS = 512
 _STORED_CONTENT_INDEX = "uq_artifacts_stored_content"
+_IDEMPOTENCY_CONSTRAINT = "uq_artifact_idempotency"
 
 
 def _idempotency_hash(principal_id: str, key: str) -> str:
@@ -38,8 +40,7 @@ def _idempotency_hash(principal_id: str, key: str) -> str:
 
 
 def _lost_content_race(error: IntegrityError) -> bool:
-    diagnostics = getattr(error.orig, "diag", None)
-    return getattr(diagnostics, "constraint_name", None) == _STORED_CONTENT_INDEX
+    return violates(error, _STORED_CONTENT_INDEX)
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,35 +105,45 @@ class ArtifactService:
                 f"declared_chunks must be between 1 and {self._settings.artifact_max_chunks}"
             )
         key_hash = _idempotency_hash(principal_id, idempotency_key)
-        async with self._sessions.begin() as session:
-            existing = await session.scalar(
-                select(ArtifactRow).where(
-                    ArtifactRow.principal_id == principal_id,
-                    ArtifactRow.idempotency_hash == key_hash,
-                )
-            )
-            if existing:
-                if (
-                    existing.filename != metadata.filename
-                    or existing.media_type != metadata.media_type
-                    or existing.declared_chunks != metadata.declared_chunks
-                    or existing.description != metadata.description
-                ):
-                    raise ConflictError("idempotency key was already used for another artifact")
-                existing.replayed = True
-                return existing
-            artifact = ArtifactRow(
-                principal_id=principal_id,
-                idempotency_hash=key_hash,
-                filename=metadata.filename,
-                media_type=metadata.media_type,
-                description=metadata.description,
-                declared_chunks=metadata.declared_chunks,
-                expires_at=datetime.now(UTC)
-                + timedelta(seconds=self._settings.staging_ttl_seconds),
-            )
-            session.add(artifact)
-        return artifact
+        for _ in range(2):
+            try:
+                async with self._sessions.begin() as session:
+                    existing = await session.scalar(
+                        select(ArtifactRow).where(
+                            ArtifactRow.principal_id == principal_id,
+                            ArtifactRow.idempotency_hash == key_hash,
+                        )
+                    )
+                    if existing:
+                        if (
+                            existing.filename != metadata.filename
+                            or existing.media_type != metadata.media_type
+                            or existing.declared_chunks != metadata.declared_chunks
+                            or existing.description != metadata.description
+                        ):
+                            raise ConflictError(
+                                "idempotency key was already used for another artifact"
+                            )
+                        existing.replayed = True
+                        return existing
+                    artifact = ArtifactRow(
+                        principal_id=principal_id,
+                        idempotency_hash=key_hash,
+                        filename=metadata.filename,
+                        media_type=metadata.media_type,
+                        description=metadata.description,
+                        declared_chunks=metadata.declared_chunks,
+                        expires_at=datetime.now(UTC)
+                        + timedelta(seconds=self._settings.staging_ttl_seconds),
+                    )
+                    session.add(artifact)
+            except IntegrityError as error:
+                # A concurrent begin with the same key inserted first; the rerun returns its row.
+                if not violates(error, _IDEMPOTENCY_CONSTRAINT):
+                    raise
+                continue
+            return artifact
+        raise ConflictError("begin conflicted with a concurrent request; retry the same call")
 
     async def append(
         self, principal_id: str, artifact_id: UUID, chunk_number: int, text: str
