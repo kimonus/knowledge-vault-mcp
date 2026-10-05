@@ -5,6 +5,18 @@ stable release.
 
 ## [Unreleased]
 
+### Changed
+
+- The commit result names the records worth reading back. `commit_knowledge_flush` and
+  `correct_knowledge` return `readback_ids`: the IDs of items that kept stored values instead of
+  submitted ones or that created a possible conflict. It is empty for a flush that only inserted
+  records. The instructions and the `commit_knowledge_flush`, `correct_knowledge` and
+  `get_knowledge` descriptions now say to read back those IDs only. A client that took all its
+  guidance from the server was observed to read every inserted record back under 0.3.0, because
+  the rule left the choice to its judgment.
+- **Operator action required.** Roll the API out and reconnect clients so that they receive the
+  new descriptions.
+
 ## [0.3.0] - 2026-10-05
 
 ### Security

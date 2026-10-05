@@ -618,6 +618,7 @@ async def test_commit_reports_what_happened_to_each_item(integration_container) 
     )
     channel_id, router_id, _ = stored.assertion_ids
     assert [entry.outcome for entry in stored.items] == ["inserted"] * 3
+    assert stored.readback_ids == []
     assert all(not entry.ignored_fields for entry in stored.items)
 
     result = await flush(
@@ -651,6 +652,9 @@ async def test_commit_reports_what_happened_to_each_item(integration_container) 
     assert contradiction.conflict_ids == result.conflict_ids
     assert len(contradiction.conflict_ids) == 1
     assert all(not entry.conflict_ids for entry in (confirmed, enriched, replacement))
+    # Only the record that kept stored values and the one that conflicts are worth reading;
+    # the enriched record and the replacement are exactly what was submitted.
+    assert result.readback_ids == [confirmed.assertion_id, contradiction.assertion_id]
 
     # The stored result replays unchanged and holds no assertion text.
     async with container.database.sessions() as session:
@@ -659,7 +663,11 @@ async def test_commit_reports_what_happened_to_each_item(integration_container) 
         )
         assert batch is not None
         assert "channel" not in str(batch.result)
-        legacy = {key: value for key, value in batch.result.items() if key != "items"}
+        legacy = {
+            key: value
+            for key, value in batch.result.items()
+            if key not in ("items", "readback_ids")
+        }
     assert await container.ingestion.commit(P, result.batch_id) == result
 
     # A result committed before per-item outcomes existed still replays.
@@ -669,4 +677,5 @@ async def test_commit_reports_what_happened_to_each_item(integration_container) 
         )
     replayed = await container.ingestion.commit(P, result.batch_id)
     assert replayed.items == []
+    assert replayed.readback_ids == []
     assert replayed.assertion_ids == result.assertion_ids

@@ -103,10 +103,12 @@ the whole checklist and report that reconciliation was skipped.
 7. After commit succeeds, check `items`: one entry per accepted item with its `index` among all
    submitted items, `assertion_id`, `outcome`, `superseded_id`, `conflict_ids` and
    `ignored_fields`; `rejected_items` uses the same indexes. An `inserted` item is stored exactly
-   as submitted and needs no readback. Call `get_knowledge` only for an item whose outcome is not
-   the one planned, whose `ignored_fields` is not empty (the stored record kept its own values for
-   those fields), or that has `conflict_ids`. If `items` is empty, read every distinct ID in
-   `assertion_ids` instead. Also check whether the extraction itself missed useful information.
+   as submitted, so reading it back returns what you sent. The commit result is the verification:
+   call `get_knowledge` only for the IDs in `readback_ids`—records that kept their stored values
+   for the fields named in `ignored_fields`, or that created a possible conflict. When
+   `readback_ids` is empty, read nothing back and report the flush as verified by the commit
+   result. You may also read one record whose outcome is not the one you planned. Also check
+   whether the extraction itself missed useful information.
 8. Honor rate limits, pause and retry transient read failures. A failed read does not undo commit:
    report "committed, verification incomplete" with unchecked IDs; do not repeat writes. Report
    mismatches explicitly. Repair safe omissions with a new flush and key; use a known

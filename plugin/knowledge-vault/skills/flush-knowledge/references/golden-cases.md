@@ -16,7 +16,7 @@ append_knowledge(batch_id=B, part_number=1, assertions=[...])
 ...
 append_knowledge(batch_id=B, part_number=N, assertions=[...])
 commit_knowledge_flush(batch_id=B)
-get_knowledge(assertion_id=ID)   # only for items with an unplanned outcome
+get_knowledge(assertion_id=ID)   # only for IDs in readback_ids; usually none
 ```
 
 `M` counts only what the vault does not already hold. Report server commit counts, assertions
@@ -32,8 +32,9 @@ the access point moved from channel 36 to 44 during the conversation.
 
 Submit 7 items: the 4 new ones, the 2 added details as their own assertions, and "The access point
 uses channel 44." with `supersedes_id` of the stored channel assertion. Do not resubmit the 18.
-Commit returns `inserted: 7`, `superseded: 1`, and seven `items` with outcome `inserted`, one of
-them with `superseded_id`. Nothing is read back. Report 7 stored, 1 superseded, and 18 already
+Commit returns `inserted: 7`, `superseded: 1`, seven `items` with outcome `inserted`, one of them
+with `superseded_id`, and an empty `readback_ids`. Nothing is read back: not the new records and
+not the correction. Report 7 stored, 1 superseded, and 18 already
 stored with their IDs.
 
 Do not submit all 25 reworded: the server would insert 25 records, leave the outdated channel
@@ -45,7 +46,7 @@ The conversation re-read the router's configuration and confirmed a stored asser
 a documentation URL for another. Submit both with `content` copied exactly from the stored
 records, the second with the new source. Commit returns `confirmed_existing` and
 `enriched_updated`. An entry in `ignored_fields` means the stored record kept its own value for
-that field; read that record once and report the difference.
+that field; its ID is then in `readback_ids`. Read that record once and report the difference.
 
 ## Reconciliation unavailable
 
@@ -101,7 +102,7 @@ stored exactly as submitted.
 
 ## Readback failure after commit
 
-Commit succeeds and two items need readback. The first read succeeds; the second returns a
+Commit succeeds with two IDs in `readback_ids`. The first read succeeds; the second returns a
 transient error.
 Retry the second read, respecting rate limits. Do not repeat begin/append or create another flush
 because of the read failure. If verification cannot finish, report "committed, verification

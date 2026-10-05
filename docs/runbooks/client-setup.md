@@ -91,9 +91,8 @@ When flushing:
 6. Call `begin_knowledge_flush` with exact part and assertion totals.
 7. Call `append_knowledge` for every numbered part; retry with identical inputs.
 8. Call `commit_knowledge_flush` only after all parts are accepted.
-9. Check `items` in the commit result. Inserted items are stored exactly as submitted. Call
-   `get_knowledge` only for items with an unplanned outcome, `ignored_fields` or `conflict_ids`,
-   and honor rate limits.
+9. The commit result is the verification. Inserted items are stored exactly as submitted. Call
+   `get_knowledge` only for the IDs in `readback_ids`; when it is empty, read nothing back.
 10. Report commit counts, assertions skipped as already stored, rejections, missing information and
     unavailable context. If a read fails, report committed but verification incomplete; do not
     repeat committed writes. Repair safe omissions in a new flush with a fresh key. Stop and report

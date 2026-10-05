@@ -203,8 +203,7 @@ idempotently, and report persistence only after a successful commit. Preserve ex
 details. A flush is incremental: before beginning it searches the vault once per subject and
 submits only what is new, changed or refined; it never drops knowledge the vault lacks, and it
 supersedes only an assertion it read in the session and that the conversation explicitly changes.
-The server still never merges or supersedes by similarity. After commit the client checks the
-per-item outcomes and reads back only items with an unplanned outcome, ignored fields or
-conflicts. Failed readback means committed but verification incomplete; never repeat writes just
+The server still never merges or supersedes by similarity. The commit result is the
+verification: the client reads back only the IDs in `readback_ids` and nothing when it is empty. Failed readback means committed but verification incomplete; never repeat writes just
 to retry a read. Report rejections, discrepancies and unavailable context without claiming
 lossless unseen-history capture.

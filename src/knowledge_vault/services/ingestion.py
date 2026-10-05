@@ -314,6 +314,13 @@ class IngestionService:
                 counts=counts,
                 assertion_ids=assertion_ids,
                 items=items,
+                readback_ids=list(
+                    dict.fromkeys(
+                        entry.assertion_id
+                        for entry in items
+                        if entry.ignored_fields or entry.conflict_ids
+                    )
+                ),
                 conflict_ids=conflict_ids,
                 rejected_items=rejected_items,
             )
