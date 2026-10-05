@@ -7,6 +7,11 @@ stable release.
 
 ### Fixed
 
+- Both images upgrade `libpcre2-8-0` to `10.42-1+deb12u2`, which fixes CVE-2026-103111 (an
+  out-of-bounds write on a crafted regular expression). No published digest of the pinned Python
+  or PostgreSQL base image contains the fix yet, so the Dockerfiles install the pinned package;
+  the step is to be removed when the base digests are next moved. Images released as 0.2.0 and
+  earlier carry the vulnerable package.
 - Two `begin` calls that arrived together with the same idempotency key could both try to create
   the batch (or artifact upload), and one failed with an internal error instead of returning the
   other's record. The loser now returns the existing record. The test for this had been passing
