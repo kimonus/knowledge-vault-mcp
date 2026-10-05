@@ -1,8 +1,8 @@
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -21,6 +21,7 @@ from knowledge_vault.domain.enums import (
 from knowledge_vault.domain.models import (
     AssertionInput,
     CommitCounts,
+    CommitItem,
     CommitResult,
     RejectedItem,
 )
@@ -74,9 +75,10 @@ def _idempotency_hash(principal_id: str, key: str) -> str:
 @dataclass(frozen=True, slots=True)
 class _Applied:
     assertion_id: UUID
-    outcome: str
+    outcome: Literal["inserted", "confirmed_existing", "enriched_updated"]
     conflict_ids: list[UUID]
-    superseded: bool
+    superseded_id: UUID | None = None
+    ignored_fields: list[str] = field(default_factory=list[str])
 
 
 class IngestionService:
@@ -271,6 +273,7 @@ class IngestionService:
 
             counts = CommitCounts()
             assertion_ids: list[UUID] = []
+            items: list[CommitItem] = []
             conflict_ids: list[UUID] = []
             rejected_items: list[RejectedItem] = []
             ordered_parts = sorted(batch.parts, key=lambda part: part.part_number)
@@ -287,10 +290,20 @@ class IngestionService:
                     item = AssertionInput.model_validate(raw)
                     applied = await self._apply_item(session, item)
                     assertion_ids.append(applied.assertion_id)
+                    items.append(
+                        CommitItem(
+                            index=global_index,
+                            assertion_id=applied.assertion_id,
+                            outcome=applied.outcome,
+                            superseded_id=applied.superseded_id,
+                            conflict_ids=applied.conflict_ids,
+                            ignored_fields=applied.ignored_fields,
+                        )
+                    )
                     setattr(counts, applied.outcome, getattr(counts, applied.outcome) + 1)
                     if applied.outcome == "inserted" and self._settings.embeddings_enabled:
                         counts.embedding_pending += 1
-                    if applied.superseded:
+                    if applied.superseded_id:
                         counts.superseded += 1
                     counts.possible_conflicts += len(applied.conflict_ids)
                     conflict_ids.extend(applied.conflict_ids)
@@ -300,6 +313,7 @@ class IngestionService:
                 batch_id=batch.id,
                 counts=counts,
                 assertion_ids=assertion_ids,
+                items=items,
                 conflict_ids=conflict_ids,
                 rejected_items=rejected_items,
             )
@@ -325,14 +339,12 @@ class IngestionService:
         )
         if existing:
             changed = False
-            superseded = False
             if item.supersedes_id:
                 # An explicit correction back to already-known wording: retire the named
                 # assertion and make the existing row carry the submitted status again.
                 if item.supersedes_id == existing.id:
                     raise ConflictError("an assertion cannot supersede itself")
                 await self._supersede(session, item.supersedes_id)
-                superseded = True
                 if existing.status != item.status:
                     existing.status = item.status
                     changed = True
@@ -346,8 +358,13 @@ class IngestionService:
             existing.last_confirmed_at = datetime.now(UTC)
             changed = self._enrich(existing, item) or changed
             changed = await self._link_artifacts(session, existing.id, item.artifact_ids) or changed
-            outcome = "enriched_updated" if changed else "confirmed_existing"
-            return _Applied(existing.id, outcome, [], superseded)
+            return _Applied(
+                existing.id,
+                "enriched_updated" if changed else "confirmed_existing",
+                [],
+                item.supersedes_id,
+                self._ignored_fields(existing, item),
+            )
 
         if item.supersedes_id:
             await self._supersede(session, item.supersedes_id)
@@ -387,7 +404,26 @@ class IngestionService:
         if self._settings.embeddings_enabled:
             session.add(EmbeddingJobRow(assertion_id=row.id, model=self._settings.embedding_model))
         conflicts = await self._record_conflicts(session, row)
-        return _Applied(row.id, "inserted", conflicts, item.supersedes_id is not None)
+        return _Applied(row.id, "inserted", conflicts, item.supersedes_id)
+
+    @staticmethod
+    def _ignored_fields(existing: AssertionRow, item: AssertionInput) -> list[str]:
+        """Name the submitted fields that an exact-content match left as they were stored.
+
+        Call it after the match has been applied. Only names are returned, never values.
+        """
+        pairs: list[tuple[str, object, object]] = [
+            ("content", existing.content, item.content),
+            ("kind", existing.kind, item.kind),
+            ("origin", existing.origin, item.origin),
+            ("status", existing.status, item.status),
+            ("confidence", existing.confidence, item.confidence),
+            ("valid_from", existing.valid_from, item.valid_from),
+            ("valid_to", existing.valid_to, item.valid_to),
+            ("observed_at", existing.observed_at, item.observed_at),
+            ("sensitivity", existing.sensitivity, item.sensitivity),
+        ]
+        return [name for name, stored, submitted in pairs if stored != submitted]
 
     @staticmethod
     async def _link_artifacts(

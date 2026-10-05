@@ -38,7 +38,7 @@ the structured value and the same value as JSON text content.
 ## Ingestion
 
 The MCP initialization response includes server instructions: fixed trigger, safety, batching and
-readback rules plus a versioned operator extraction policy. The default policy preserves exhaustive
+reconciliation and verification rules plus a versioned operator extraction policy. The default policy preserves exhaustive
 substantive detail from available context, including independently reproducible procedures.
 Clients decide whether to expose these instructions to their model; they are guidance, not a
 replacement for server validation or scope checks. The server cannot see the client's conversation
@@ -49,6 +49,10 @@ The version is a 1–64 character label using letters, digits, dots, underscores
 start with a letter or digit. The instructions also include a SHA-256 digest of the policy text.
 This identifies delivered guidance; it is not a stored batch version or a hot-update protocol.
 
+Before beginning, reconcile the planned assertions with the vault: one `search_knowledge` call per
+subject with a short keyword query, then submit only what is new, changed or refined (see
+[Incremental flushes](#incremental-flushes)).
+
 1. Call `begin_knowledge_flush` with a unique `idempotency_key`, `declared_parts`, and
    `declared_items`. Repeating the call with identical arguments returns the same batch with
    `replayed: true`.
@@ -57,16 +61,16 @@ This identifies delivered guidance; it is not a stored batch version or a hot-up
    `sensitivity`, `sources`, `supersedes_id`, and `artifact_ids` (see [Artifacts](#artifacts)).
 3. Call `commit_knowledge_flush` only after every part is accepted. Retry with the same batch ID if
    the response is lost. The stable result contains inserted/confirmed/enriched/superseded/
-   conflict/rejected counts and assertion IDs.
-4. After commit succeeds, call `get_knowledge` for each distinct returned assertion ID and compare
-   content, metadata and provenance with the planned extraction. IDs follow accepted input order;
-   `rejected_items` indexes cover all submitted items. Duplicate IDs can be read once but must be
-   checked against each corresponding input. Account for documented normalization, deduplication,
-   enrichment and explicit supersession. Respect read rate limits. Report commit counts, verified
-   records, rejections, discrepancies, and any unavailable/compacted context. If a read fails,
-   report **committed, verification incomplete**; do not repeat writes. Readback confirms
-   persistence, not semantic completeness. Repair safe omissions in a new flush with a fresh key;
-   an explicit correction uses its known `supersedes_id`. Stop if that corrective flush still fails
+   conflict/rejected counts, assertion IDs, and `items` (see
+   [Per-item outcomes](#per-item-outcomes)).
+4. After commit succeeds, check `items`. An `inserted` item is stored exactly as submitted and
+   needs no readback. Call `get_knowledge` only for an item whose outcome is not the one planned,
+   whose `ignored_fields` is not empty, or that has `conflict_ids`; if `items` is empty, read
+   every distinct ID in `assertion_ids`. Respect read rate limits. Report commit counts,
+   assertions skipped as already stored, records read back, rejections, discrepancies, and any
+   unavailable/compacted context. If a read fails, report **committed, verification incomplete**;
+   do not repeat writes. A commit confirms persistence, not semantic completeness. Repair safe
+   omissions in a new flush with a fresh key. Stop if that corrective flush still fails
    verification and report the discrepancy.
 5. Call `abort_knowledge_flush` to purge an incomplete open batch.
 
@@ -85,6 +89,57 @@ Example assertion:
 
 Valid `origin` values are `user`, `assistant`, `joint`, `external_source`, and `artifact`.
 Timestamps without a UTC offset are interpreted as UTC.
+
+### Incremental flushes
+
+The server merges only assertions whose content is identical after Unicode, case and whitespace
+normalization. Such a match is counted as `confirmed_existing`, or as `enriched_updated` when it
+added topics, sources, artifact links or a higher confidence, or raised an uncertain or disputed
+status to current. Enrichment never changes wording. The same fact in other words is inserted as a
+new record, and a possible conflict is recorded only between statements that differ by a negation.
+The server never merges or supersedes by similarity.
+
+A client that flushes repeatedly therefore reconciles first:
+
+- Group planned assertions by subject and call `search_knowledge` once per subject, with a short
+  keyword query and a small `limit`. Full-text matching requires every query word, so a whole
+  sentence finds little. One search per assertion, or paging through the vault, is not needed.
+- Already stored with the same meaning: do not submit. To record that a fact was observed again,
+  or to add a source or topic, submit the stored `content` unchanged.
+- Adds detail to a stored assertion that remains true: submit only the added detail as its own
+  assertion.
+- Replaces a stored assertion: submit the new statement with `supersedes_id`. The target must be
+  an assertion the client read in this session and that the conversation explicitly changes or
+  contradicts; similar wording alone never selects one.
+- Unclear, or search unavailable: submit, and say so in the report.
+
+### Per-item outcomes
+
+`commit_knowledge_flush` and `correct_knowledge` return `items`, one entry per accepted item in
+input order:
+
+```json
+{
+  "index": 3,
+  "assertion_id": "…",
+  "outcome": "inserted",
+  "superseded_id": "…",
+  "conflict_ids": [],
+  "ignored_fields": []
+}
+```
+
+- `index` is the position among all submitted items, as in `rejected_items`.
+- `outcome` is `inserted`, `confirmed_existing`, or `enriched_updated`.
+- `superseded_id` is the assertion this item retired, or null.
+- `conflict_ids` lists the possible conflicts this item created.
+- `ignored_fields` names the submitted fields—among `content`, `kind`, `origin`, `status`,
+  `confidence`, `valid_from`, `valid_to`, `observed_at`, `sensitivity`—that differ from the
+  matched record and were not applied to it. `content` appears when only case or spacing differs.
+  It is always empty for `inserted`.
+
+The entries hold no assertion text. A result committed by a version without per-item outcomes
+replays with an empty `items`.
 
 ### Per-item rejection
 

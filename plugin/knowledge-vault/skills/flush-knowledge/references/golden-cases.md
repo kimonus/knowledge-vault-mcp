@@ -10,16 +10,48 @@ User: `flush knowledge to my MCP`
 Expected: extract every meaningful assertion in available context, then call:
 
 ```text
+search_knowledge(query=short keywords, limit=small)   # once per subject
 begin_knowledge_flush(key=K, declared_parts=N, declared_items=M)
 append_knowledge(batch_id=B, part_number=1, assertions=[...])
 ...
 append_knowledge(batch_id=B, part_number=N, assertions=[...])
 commit_knowledge_flush(batch_id=B)
-get_knowledge(assertion_id=each distinct returned ID)
+get_knowledge(assertion_id=ID)   # only for items with an unplanned outcome
 ```
 
-Compare readback with every planned assertion, then report server commit counts, records verified,
-rejections and omissions. Disclose context compaction if known.
+`M` counts only what the vault does not already hold. Report server commit counts, assertions
+skipped as already stored, records read back, rejections and omissions. Disclose context compaction
+if known.
+
+## Incremental flush
+
+Context yields 25 assertions about a home network. Four searches (router, access point, addressing,
+DNS) show that 18 are already stored, 4 are new, 2 add detail to stored assertions (a channel width
+for a stored channel, a firmware version for a stored model), and 1 contradicts a stored assertion:
+the access point moved from channel 36 to 44 during the conversation.
+
+Submit 7 items: the 4 new ones, the 2 added details as their own assertions, and "The access point
+uses channel 44." with `supersedes_id` of the stored channel assertion. Do not resubmit the 18.
+Commit returns `inserted: 7`, `superseded: 1`, and seven `items` with outcome `inserted`, one of
+them with `superseded_id`. Nothing is read back. Report 7 stored, 1 superseded, and 18 already
+stored with their IDs.
+
+Do not submit all 25 reworded: the server would insert 25 records, leave the outdated channel
+current, and report no conflict.
+
+## Reaffirmed and enriched
+
+The conversation re-read the router's configuration and confirmed a stored assertion, and it found
+a documentation URL for another. Submit both with `content` copied exactly from the stored
+records, the second with the new source. Commit returns `confirmed_existing` and
+`enriched_updated`. An entry in `ignored_fields` means the stored record kept its own value for
+that field; read that record once and report the difference.
+
+## Reconciliation unavailable
+
+`search_knowledge` fails after a retry. Flush the whole extraction, and report that reconciliation
+was skipped and duplicates of stored assertions may have been created. Never withhold knowledge
+because the search failed.
 
 ## Natural variants
 
@@ -63,12 +95,14 @@ Context describes a recipe using 300 g flour, 210 g water, 6 g salt, 1 g yeast, 
 8 minutes, fermenting for 12 hours at 20°C, and baking for 25 minutes at 230°C after preheating.
 It rejects a 30-minute bake because it burned the crust. Store the complete reproducible procedure
 and the rejected alternative with its reason as independently useful records. Do not replace the
-recipe with "make bread using a long fermentation". Fetch every committed ID and compare quantities,
-units, temperatures, timing, ordering and the rejected alternative with the extraction checklist.
+recipe with "make bread using a long fermentation". Before append, compare quantities, units,
+temperatures, timing, ordering and the rejected alternative with the context; an `inserted` item is
+stored exactly as submitted.
 
 ## Readback failure after commit
 
-Commit succeeds with two IDs. The first read succeeds; the second returns a transient error.
+Commit succeeds and two items need readback. The first read succeeds; the second returns a
+transient error.
 Retry the second read, respecting rate limits. Do not repeat begin/append or create another flush
 because of the read failure. If verification cannot finish, report "committed, verification
 incomplete", one record verified, and the unchecked ID. Do not claim that nothing was saved.
@@ -76,15 +110,15 @@ incomplete", one record verified, and the unchecked ID. Do not claim that nothin
 ## Duplicate IDs and rejected items
 
 Three submitted items include two exact normalized duplicates and one secret-shaped rejection.
-Commit returns two copies of the same ID and rejected index 2. Read the ID once, compare it against
-both accepted checklist entries, and report one distinct verified record plus partial preservation
-due to rejection. Never claim that all three items were saved or try to encode the rejected secret.
+Commit returns two copies of the same ID—`items` shows `inserted` for index 0 and
+`confirmed_existing` for index 1—and rejected index 2. Report one distinct record plus partial
+preservation due to rejection. Never claim that all three items were saved or try to encode the rejected secret.
 
 ## Readback discrepancy
 
 A saved procedure is missing an essential non-secret parameter from available context. Report the
 omission and submit a complete corrected procedure in a new flush with a fresh key and the known
-`supersedes_id`. Fetch its returned ID. If the corrective flush still has a discrepancy, report it
+`supersedes_id`. If the corrective flush still has a discrepancy, report it
 and stop rather than repeatedly correcting or deleting assertions.
 
 ## Negative cases

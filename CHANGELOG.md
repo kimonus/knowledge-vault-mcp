@@ -5,6 +5,27 @@ stable release.
 
 ## [Unreleased]
 
+### Changed
+
+- **Flushes are incremental.** The delivered instructions, the tool descriptions and the flush
+  skill now tell a client to search the vault once per subject before `begin_knowledge_flush` and
+  to submit only what is new, changed or refined. The server merges only identical normalized
+  text, so a repeated flush of a re-worded conversation used to insert every assertion again.
+  A client may now supersede an assertion that it read in the session and that the conversation
+  explicitly changes; before, a supersession needed an ID already known to the conversation.
+- Clients no longer read every committed record back. They read only items whose outcome was not
+  the planned one, that report ignored fields, or that created a possible conflict.
+- **Operator action required.** Roll the API out and reconnect clients so that they receive the
+  new instructions; update a locally installed flush skill and any copied fallback agent rules
+  from `docs/runbooks/client-setup.md`.
+
+### Added
+
+- `commit_knowledge_flush`, `correct_knowledge` and the matching HTTP routes return `items`: for
+  each accepted item its index, assertion ID, outcome, the assertion it superseded, the possible
+  conflicts it created, and the submitted fields that an exact-content match did not apply. The
+  entries hold no assertion text. No migration is needed.
+
 ### Fixed
 
 - Both images upgrade `libpcre2-8-0` to `10.42-1+deb12u2`, which fixes CVE-2026-103111 (an

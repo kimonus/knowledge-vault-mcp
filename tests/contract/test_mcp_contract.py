@@ -80,7 +80,7 @@ async def test_initialization_delivers_policy_over_mcp_transport(settings, custo
             instructions = initialization.instructions
             assert instructions is not None
             assert instructions.startswith(CORE_INSTRUCTIONS)
-            assert "get_knowledge" in instructions[:512]
+            assert "search_knowledge" in instructions[:512]
             if custom:
                 assert instructions.endswith(policy + "\n")
                 assert "Operator extraction policy version: recipe-2" in instructions

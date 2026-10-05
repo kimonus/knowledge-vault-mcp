@@ -177,7 +177,7 @@ remains bound.
 
 The MCP server sends fixed workflow rules followed by the operator's extraction guidance during
 initialization. The packaged default preserves exact substantive details, reproducible procedures
-and alternatives, and requires readback of committed records. Customize it in an operator-local
+and alternatives, reconciles a flush with stored knowledge, and verifies commit outcomes. Customize it in an operator-local
 values file (non-secret text only):
 
 ```yaml
@@ -221,8 +221,8 @@ batches. No live policy-update API, database policy table or background watcher 
 
 If a client ignores MCP server instructions, install the flush skill or the fallback agent rules
 in [client-setup.md](client-setup.md). Instructions cannot grant the server access to unseen chat
-history or guarantee that an LLM extracted every detail; readback confirms persistence and supports
-client-side comparison.
+history or guarantee that an LLM extracted every detail; the commit result confirms persistence
+and tells the client which records to read back.
 
 ## Upgrade and removal
 
