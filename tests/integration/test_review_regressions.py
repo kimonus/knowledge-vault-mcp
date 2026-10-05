@@ -601,3 +601,72 @@ async def test_conflicts_are_detected_without_shared_topics(integration_containe
     )
     assert unrelated.counts.possible_conflicts == 0
     assert len(await container.administration.list_conflicts()) == 2
+
+
+@pytest.mark.integration
+async def test_commit_reports_what_happened_to_each_item(integration_container) -> None:
+    """A client can tell from the commit alone which items need no readback."""
+    container = integration_container
+    stored = await flush(
+        container,
+        "outcomes-seed",
+        [
+            item("The access point uses channel 36.", kind="configuration", confidence=0.8),
+            item("The router sits in the hallway."),
+            item("user likes coffee"),
+        ],
+    )
+    channel_id, router_id, _ = stored.assertion_ids
+    assert [entry.outcome for entry in stored.items] == ["inserted"] * 3
+    assert all(not entry.ignored_fields for entry in stored.items)
+
+    result = await flush(
+        container,
+        "outcomes-incremental",
+        [
+            # Same text apart from case and spacing, with metadata that the match does not apply.
+            item(
+                "the access point  uses channel 36.",
+                kind="user_fact",
+                confidence=0.5,
+                sensitivity="private",
+            ),
+            {"content": "password=correct-horse-battery-staple", "kind": "user_fact"},
+            item("The router sits in the hallway.", topics=["review", "network"]),
+            item("The access point uses channel 44.", supersedes_id=str(channel_id)),
+            item("user does not likes coffee"),
+        ],
+    )
+    confirmed, enriched, replacement, contradiction = result.items
+    assert [entry.index for entry in result.items] == [0, 2, 3, 4]
+    assert [entry.index for entry in result.rejected_items] == [1]
+    assert [entry.assertion_id for entry in result.items] == result.assertion_ids
+
+    assert (confirmed.assertion_id, confirmed.outcome) == (channel_id, "confirmed_existing")
+    assert confirmed.ignored_fields == ["content", "kind", "confidence", "sensitivity"]
+    assert (enriched.assertion_id, enriched.outcome) == (router_id, "enriched_updated")
+    assert enriched.ignored_fields == []
+    assert (replacement.outcome, replacement.superseded_id) == ("inserted", channel_id)
+    assert contradiction.outcome == "inserted"
+    assert contradiction.conflict_ids == result.conflict_ids
+    assert len(contradiction.conflict_ids) == 1
+    assert all(not entry.conflict_ids for entry in (confirmed, enriched, replacement))
+
+    # The stored result replays unchanged and holds no assertion text.
+    async with container.database.sessions() as session:
+        batch = await session.scalar(
+            select(FlushBatchRow).where(FlushBatchRow.id == result.batch_id)
+        )
+        assert batch is not None
+        assert "channel" not in str(batch.result)
+        legacy = {key: value for key, value in batch.result.items() if key != "items"}
+    assert await container.ingestion.commit(P, result.batch_id) == result
+
+    # A result committed before per-item outcomes existed still replays.
+    async with container.database.sessions.begin() as session:
+        await session.execute(
+            update(FlushBatchRow).where(FlushBatchRow.id == result.batch_id).values(result=legacy)
+        )
+    replayed = await container.ingestion.commit(P, result.batch_id)
+    assert replayed.items == []
+    assert replayed.assertion_ids == result.assertion_ids

@@ -1,6 +1,6 @@
 import re
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, HttpUrl, model_validator
@@ -194,10 +194,25 @@ class CommitCounts(BaseModel):
     embedding_pending: int = 0
 
 
+class CommitItem(BaseModel):
+    """What the commit did with one accepted item. Holds no assertion content."""
+
+    # Position among all submitted items, as in `rejected_items`.
+    index: int
+    assertion_id: UUID
+    outcome: Literal["inserted", "confirmed_existing", "enriched_updated"]
+    superseded_id: UUID | None = None
+    conflict_ids: list[UUID] = Field(default_factory=list)
+    # Submitted fields that differ from the existing record and were not applied to it.
+    ignored_fields: list[str] = Field(default_factory=list)
+
+
 class CommitResult(BaseModel):
     batch_id: UUID
     counts: CommitCounts
     assertion_ids: list[UUID] = Field(default_factory=list)
+    # Empty in results that were stored before per-item outcomes existed.
+    items: list[CommitItem] = Field(default_factory=list)
     conflict_ids: list[UUID] = Field(default_factory=list)
     rejected_items: list[RejectedItem] = Field(default_factory=list)
 

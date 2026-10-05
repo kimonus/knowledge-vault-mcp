@@ -56,6 +56,13 @@ async def test_exact_procedure_details_survive_commit_retry_and_full_readback(
         assert committed["counts"]["inserted"] == 2
         assert committed["counts"]["confirmed_existing"] == 1
         assert committed["assertion_ids"][0] == committed["assertion_ids"][1]
+        assert [(entry["index"], entry["outcome"]) for entry in committed["items"]] == [
+            (0, "inserted"),
+            (1, "confirmed_existing"),
+            (2, "inserted"),
+        ]
+        assert [entry["assertion_id"] for entry in committed["items"]] == committed["assertion_ids"]
+        assert all(entry["ignored_fields"] == [] for entry in committed["items"])
         records = {}
         for assertion_id in dict.fromkeys(committed["assertion_ids"]):
             result = await server.call_tool("get_knowledge", {"assertion_id": assertion_id})

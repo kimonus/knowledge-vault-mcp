@@ -223,8 +223,9 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
             "Begin a resumable knowledge flush. Supply a unique client idempotency key and exact "
             "part/item totals. Repeating identical begin arguments safely returns the prior batch. "
             "Only begin on an explicit save/flush request; preserve exact reproducible details. "
-            "Next call append_knowledge for every numbered part, then commit_knowledge_flush, "
-            "then get_knowledge for every returned ID to verify against your extraction checklist."
+            "Before beginning, search the vault per subject and plan only assertions that are "
+            "new, changed or refined. Next call append_knowledge for every numbered part, then "
+            "commit_knowledge_flush."
         ),
         annotations=WRITE_IDEMPOTENT,
     )
@@ -279,8 +280,9 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
     @tool(
         description=(
             "Atomically commit a complete flush. Safe to retry: a repeated commit returns the same "
-            "server counts and IDs. After success, read each distinct assertion_id with "
-            "get_knowledge and compare content/provenance with your extraction checklist. "
+            "server counts and IDs. `items` reports each accepted item's outcome: an inserted "
+            "item is stored exactly as submitted and needs no readback. Read back with "
+            "get_knowledge only items with an unplanned outcome, ignored_fields or conflict_ids. "
             "Report committed but verification incomplete if readback fails; do not repeat writes. "
             "Rejected items mean partial preservation. Never claim lossless preservation of "
             "unavailable conversation context."

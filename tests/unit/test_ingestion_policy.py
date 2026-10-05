@@ -67,6 +67,11 @@ def test_policy_bounds_and_readback_rules_cannot_be_replaced_by_operator_text() 
     assert instructions.startswith(CORE_INSTRUCTIONS)
     assert "Maximum 17 items per flush, 3 items per part, 6 parts" in instructions
     assert "committed but verification incomplete" in instructions
+    assert "Reconcile the plan with the vault before begin" in instructions
+    assert "call search_knowledge once per subject" in instructions
+    assert "An inserted item is stored exactly as submitted" in instructions
+    assert "similar wording\n  alone never selects a target" in instructions
+    assert "get_knowledge for every" not in instructions
     assert "Operator extraction policy version: v2" in instructions
     assert hashlib.sha256(policy.encode()).hexdigest() in instructions
     assert instructions.endswith(policy + "\n")

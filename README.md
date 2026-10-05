@@ -15,8 +15,8 @@ and a Codex plugin skill activated only by an explicit request such as
 `flush knowledge to my MCP`.
 
 The server also sends extraction guidance through MCP initialization, so supporting remote clients
-receive the workflow without installing a local skill. It preserves exact substantive details and
-requires readback of committed records. Operators can customize the non-secret guidance through
+receive the workflow without installing a local skill. It preserves exact substantive details,
+reconciles a flush with what is already stored, and verifies items from the commit result. Operators can customize the non-secret guidance through
 the chart's ConfigMap-backed `config.ingestionPolicy` and `config.ingestionPolicyVersion` values;
 see [policy configuration](docs/runbooks/minikube.md#configure-client-ingestion-guidance). Policy
 changes require a rollout and client reconnection/refresh. The server sees submitted assertions,
