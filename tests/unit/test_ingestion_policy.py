@@ -59,6 +59,7 @@ def test_policy_bounds_and_readback_rules_cannot_be_replaced_by_operator_text() 
         max_parts=6,
         artifact_max_chunk_chars=4000,
         artifact_max_chunks=9,
+        max_check_candidates=11,
     )
     assert "at most 4000 characters each,\n  9 chunks" in instructions
     assert "an\n  unreferenced artifact is deleted" in instructions
@@ -68,7 +69,8 @@ def test_policy_bounds_and_readback_rules_cannot_be_replaced_by_operator_text() 
     assert "Maximum 17 items per flush, 3 items per part, 6 parts" in instructions
     assert "committed but verification incomplete" in instructions
     assert "Reconcile the plan with the vault before begin" in instructions
-    assert "call search_knowledge once per subject" in instructions
+    assert "texts, at most\n  11 per call" in instructions
+    assert "If the check fails, flush the whole plan" in instructions
     assert "An inserted item is stored exactly as submitted" in instructions
     assert "call\n  get_knowledge only for the IDs in `readback_ids`" in instructions
     assert "is empty, do not read anything back" in instructions

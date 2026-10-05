@@ -49,8 +49,8 @@ The version is a 1–64 character label using letters, digits, dots, underscores
 start with a letter or digit. The instructions also include a SHA-256 digest of the policy text.
 This identifies delivered guidance; it is not a stored batch version or a hot-update protocol.
 
-Before beginning, reconcile the planned assertions with the vault: one `search_knowledge` call per
-subject with a short keyword query, then submit only what is new, changed or refined (see
+Before beginning, reconcile the planned assertions with the vault: pass their texts to
+`check_knowledge_candidates`, then submit only what is new, changed or refined (see
 [Incremental flushes](#incremental-flushes)).
 
 1. Call `begin_knowledge_flush` with a unique `idempotency_key`, `declared_parts`, and
@@ -100,9 +100,10 @@ The server never merges or supersedes by similarity.
 
 A client that flushes repeatedly therefore reconciles first:
 
-- Group planned assertions by subject and call `search_knowledge` once per subject, with a short
-  keyword query and a small `limit`. Full-text matching requires every query word, so a whole
-  sentence finds little. One search per assertion, or paging through the vault, is not needed.
+- Call `check_knowledge_candidates` with the planned assertion texts (see
+  [Candidate check](#candidate-check)). One call covers up to 50 of them. `search_knowledge` is
+  for looking further into one subject: full-text matching requires every query word, so use a
+  short keyword query; one search per assertion, or paging through the vault, is not needed.
 - Already stored with the same meaning: do not submit. To record that a fact was observed again,
   or to add a source or topic, submit the stored `content` unchanged.
 - Adds detail to a stored assertion that remains true: submit only the added detail as its own
@@ -111,6 +112,59 @@ A client that flushes repeatedly therefore reconciles first:
   an assertion the client read in this session and that the conversation explicitly changes or
   contradicts; similar wording alone never selects one.
 - Unclear, or search unavailable: submit, and say so in the report.
+
+### Candidate check
+
+`check_knowledge_candidates(candidates, limit?, min_similarity?)` compares up to 50 planned
+assertion texts with the vault in one read-only call and stores nothing. `limit` (1–5, default 3)
+bounds the matches per candidate; `min_similarity` (0–1, default 0.65) is the lowest cosine
+similarity that is reported.
+
+```json
+{
+  "results": [
+    {
+      "index": 0,
+      "matches": [
+        {
+          "id": "…",
+          "content": "The access point uses channel 36 on the 5 GHz band.",
+          "truncated": false,
+          "kind": "configuration",
+          "status": "current",
+          "exact": false,
+          "similarity": 0.83
+        }
+      ],
+      "error": null
+    }
+  ],
+  "embedding_degraded": false,
+  "untrusted_data": true
+}
+```
+
+- `index` is the candidate's position in the request.
+- A match with `exact: true` has the same content after normalization: submitting the candidate
+  would confirm that record. It is reported whatever its status, so a client sees when a wording
+  it is about to submit was superseded earlier.
+- The other matches are current, uncertain or disputed assertions, nearest first. Superseded
+  assertions are not offered.
+- `content` is the first 400 characters of the stored assertion; `truncated` tells whether more
+  follows. `get_knowledge` returns the whole record.
+- `similarity` compares embeddings and depends on the embedding model. With the default model, a
+  reworded fact is typically above 0.8 and a different fact on the same subject between 0.65 and
+  0.8, but the ranges overlap: the number orders the matches and never replaces reading them.
+- A candidate that is empty, too long, or shaped like a secret gets an `error` (`code`,
+  `message`) and no matches; the other candidates are unaffected.
+- When embeddings are unavailable, `embedding_degraded` is true, matches are found by shared
+  words (a stored assertion must contain at least two fifths of the candidate's distinct words)
+  and `similarity` is null.
+- A record whose embedding is still pending is found only by an exact match, so a fact stored
+  seconds earlier can be missed by a reworded candidate.
+
+The server compares; it never merges. Candidate texts are not stored or logged. The HTTP
+equivalent is `POST /api/v1/candidates/check`.
 
 ### Per-item outcomes
 
@@ -213,6 +267,8 @@ The HTTP equivalents are `POST /api/v1/artifacts`, `PUT /api/v1/artifacts/{id}/c
   origin, sensitivity, confidence, and validity filters. The cursor is signed and bound to the
   query and filters; it is stable while the corpus is unchanged, and concurrent writes can shift
   ranks between pages.
+- `check_knowledge_candidates(candidates, limit?, min_similarity?)`: the closest stored assertions
+  for each planned assertion text; see [Candidate check](#candidate-check).
 - `get_knowledge(assertion_id)`: retrieve one assertion with its provenance `sources` and the
   `artifacts` linked to it.
 - `list_knowledge_conflicts(limit?)`: list unresolved possible conflicts. A possible conflict is

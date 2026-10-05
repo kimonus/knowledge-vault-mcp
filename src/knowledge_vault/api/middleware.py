@@ -329,6 +329,7 @@ _STATIC_ROUTES = frozenset(
         "/api/docs",
         "/api/v1/flushes",
         "/api/v1/search",
+        "/api/v1/candidates/check",
         "/api/v1/conflicts",
         "/api/v1/corrections",
         "/api/v1/forget/preview",

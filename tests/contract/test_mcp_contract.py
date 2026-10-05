@@ -31,6 +31,7 @@ async def test_tool_discovery_contract(settings) -> None:
         "commit_knowledge_artifact",
         "get_knowledge_artifact",
         "search_knowledge",
+        "check_knowledge_candidates",
         "get_knowledge",
         "list_knowledge_conflicts",
         "correct_knowledge",
@@ -83,7 +84,7 @@ async def test_initialization_delivers_policy_over_mcp_transport(settings, custo
             instructions = initialization.instructions
             assert instructions is not None
             assert instructions.startswith(CORE_INSTRUCTIONS)
-            assert "search_knowledge" in instructions[:512]
+            assert "check_knowledge_candidates" in instructions[:512]
             if custom:
                 assert instructions.endswith(policy + "\n")
                 assert "Operator extraction policy version: recipe-2" in instructions

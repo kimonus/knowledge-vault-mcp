@@ -10,7 +10,7 @@ User: `flush knowledge to my MCP`
 Expected: extract every meaningful assertion in available context, then call:
 
 ```text
-search_knowledge(query=short keywords, limit=small)   # once per subject
+check_knowledge_candidates(candidates=[every planned assertion text])
 begin_knowledge_flush(key=K, declared_parts=N, declared_items=M)
 append_knowledge(batch_id=B, part_number=1, assertions=[...])
 ...
@@ -25,8 +25,8 @@ if known.
 
 ## Incremental flush
 
-Context yields 25 assertions about a home network. Four searches (router, access point, addressing,
-DNS) show that 18 are already stored, 4 are new, 2 add detail to stored assertions (a channel width
+Context yields 25 assertions about a home network. One `check_knowledge_candidates` call with the
+25 texts shows that 18 are already stored, 4 are new, 2 add detail to stored assertions (a channel width
 for a stored channel, a firmware version for a stored model), and 1 contradicts a stored assertion:
 the access point moved from channel 36 to 44 during the conversation.
 
@@ -50,9 +50,10 @@ that field; its ID is then in `readback_ids`. Read that record once and report t
 
 ## Reconciliation unavailable
 
-`search_knowledge` fails after a retry. Flush the whole extraction, and report that reconciliation
-was skipped and duplicates of stored assertions may have been created. Never withhold knowledge
-because the search failed.
+`check_knowledge_candidates` fails after a retry. Flush the whole extraction, and report that
+reconciliation was skipped and duplicates of stored assertions may have been created. Never
+withhold knowledge because the check failed. When the result has `embedding_degraded: true`, the
+matches were found by shared words only and carry no similarity; use them the same way.
 
 ## Natural variants
 
