@@ -5,6 +5,24 @@ stable release.
 
 ## [Unreleased]
 
+### Added
+
+- `check_knowledge_candidates` (HTTP: `POST /api/v1/candidates/check`): a read-only call that
+  takes up to 50 planned assertion texts and returns, for each, the closest stored assertions
+  with ID, an excerpt, kind, status and similarity, and marks a text that is already stored
+  exactly. An unusable or secret-shaped candidate gets its own error. Without embeddings it
+  falls back to shared words. The server compares and never merges.
+
+### Changed
+
+- The instructions, the `begin_knowledge_flush` description and the flush skill reconcile a flush
+  with `check_knowledge_candidates` instead of one keyword search per subject. Under 0.3.1 a
+  client searched for `knowledge-vault` with a limit of 10 in a vault of about 1,800 assertions,
+  did not see the stored fact, and inserted it again in other words.
+- **Operator action required.** Roll the API out and reconnect clients so that they receive the
+  new tool and instructions. The check embeds every candidate in the API process, so its cost
+  grows with the number of candidates in a call.
+
 ## [0.3.1] - 2026-10-05
 
 ### Changed

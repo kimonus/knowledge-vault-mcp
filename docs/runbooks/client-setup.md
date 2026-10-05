@@ -82,8 +82,8 @@ When flushing:
    commands, procedures, alternatives and their reasons. Keep a checklist of planned records.
 2. Store concise assertions and provenance, not conversation transcripts or message graphs.
 3. Never store passwords, tokens, private keys, cookies, connection strings, or other secrets.
-4. Before writing, call `search_knowledge` once per subject with a short keyword query and a small
-   limit. Do not submit what is already stored with the same meaning. Submit new knowledge, added
+4. Before writing, pass the planned assertion texts to `check_knowledge_candidates` and read the
+   stored assertions it returns. Do not submit what is already stored with the same meaning. Submit new knowledge, added
    detail as its own assertion, and a replacement with `supersedes_id` of the stored assertion that
    the conversation explicitly changes. To reaffirm or add a source, copy the stored content
    exactly. If unsure or if search fails, submit and say so.

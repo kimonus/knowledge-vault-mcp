@@ -247,6 +247,40 @@ class SearchPage(BaseModel):
     embedding_degraded: bool = False
 
 
+class CandidateMatch(BaseModel):
+    """A stored assertion that may already say what a candidate says."""
+
+    id: UUID
+    # The first characters of the stored content; `truncated` tells whether more follows.
+    content: str
+    truncated: bool = False
+    kind: AssertionKind
+    status: AssertionStatus
+    # True when the content is identical after normalization: submitting the candidate would
+    # confirm this record instead of inserting a new one.
+    exact: bool = False
+    # Cosine similarity of the embeddings; null when the match was found by words only.
+    similarity: float | None = Field(default=None, ge=-1.0, le=1.0)
+
+
+class CandidateError(BaseModel):
+    code: str
+    message: str
+
+
+class CandidateCheck(BaseModel):
+    # Position of the candidate in the request.
+    index: int
+    matches: list[CandidateMatch] = Field(default_factory=list)
+    # Set when the candidate could not be checked; the other candidates are unaffected.
+    error: CandidateError | None = None
+
+
+class CandidateCheckPage(BaseModel):
+    results: list[CandidateCheck]
+    embedding_degraded: bool = False
+
+
 class ProblemDetail(BaseModel):
     type: str = "about:blank"
     title: str

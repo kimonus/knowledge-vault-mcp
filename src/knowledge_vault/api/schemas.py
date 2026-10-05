@@ -47,6 +47,16 @@ class SearchRequest(BaseModel):
     cursor: str | None = None
 
 
+class CandidateCheckRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Candidates are checked one by one by the search service, so that an unusable one gets its
+    # own error instead of failing the request.
+    candidates: list[Any] = Field(min_length=1, max_length=50)
+    limit: int = 3
+    min_similarity: float = 0.65
+
+
 class CorrectionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -103,6 +103,11 @@ async def test_mcp_flush_rejects_items_individually_and_explains_errors(
 
         for name, arguments, expected in [
             ("search_knowledge", {"query": "x", "limit": 9999}, "invalid_request: limit"),
+            (
+                "check_knowledge_candidates",
+                {"candidates": ["x"], "limit": 9999},
+                "invalid_request: limit",
+            ),
             ("fetch", {"id": "not-a-uuid"}, "invalid_request: id must be a UUID"),
             (
                 "get_knowledge",
@@ -512,6 +517,16 @@ async def test_http_and_mcp_return_the_same_shapes(
         _, mcp_page = await mcp.call("search_knowledge", {"query": "shapes", "limit": 5})
         http_page = (await http.post("/api/v1/search", json={"query": "shapes", "limit": 5})).json()
         assert http_page == mcp_page and http_page["untrusted_data"] is True
+
+        candidates = {"candidates": ["shapes  AGREE.", "password=correct-horse-battery-staple"]}
+        _, mcp_check = await mcp.call("check_knowledge_candidates", candidates)
+        http_check = (await http.post("/api/v1/candidates/check", json=candidates)).json()
+        assert http_check == mcp_check and http_check["untrusted_data"] is True
+        known, secret = http_check["results"]
+        assert (known["matches"][0]["id"], known["matches"][0]["exact"]) == (assertion_id, True)
+        assert secret["error"]["code"] == "secret_detected" and secret["matches"] == []
+        rejected = await http.post("/api/v1/candidates/check", json={"candidates": []})
+        assert rejected.status_code == 422
 
         _, mcp_statistics = await mcp.call("get_knowledge_statistics")
         http_statistics = (await http.get("/api/v1/statistics")).json()

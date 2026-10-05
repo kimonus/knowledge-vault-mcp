@@ -21,6 +21,7 @@ from knowledge_vault.api.schemas import (
     AppendPartRequest,
     BeginArtifactRequest,
     BeginFlushRequest,
+    CandidateCheckRequest,
     CorrectionRequest,
     ForgetConfirmRequest,
     ForgetPreviewRequest,
@@ -37,6 +38,7 @@ from knowledge_vault.domain.responses import (
     AssertionResponse,
     BeginArtifactResponse,
     BeginFlushResponse,
+    CandidateCheckResponse,
     CommitArtifactResponse,
     ConflictListResponse,
     ForgetPreviewResponse,
@@ -310,6 +312,17 @@ def create_app(container: Container) -> FastAPI:
             body.query, body.filters, limit=body.limit, cursor=body.cursor
         )
         return SearchResponse(**page.model_dump())
+
+    @app.post("/api/v1/candidates/check")
+    async def check_candidates(
+        body: CandidateCheckRequest,
+        principal: Principal = Depends(require_scope(Scope.READ)),
+    ) -> CandidateCheckResponse:
+        del principal
+        page = await container.search.check_candidates(
+            body.candidates, limit=body.limit, min_similarity=body.min_similarity
+        )
+        return CandidateCheckResponse(**page.model_dump())
 
     @app.get("/api/v1/assertions/{assertion_id}")
     async def get_assertion(

@@ -3,7 +3,8 @@ import json
 import time
 from uuid import UUID
 
-from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy import Select, Text, and_, cast, func, or_, select
+from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -18,11 +19,17 @@ from knowledge_vault.domain.enums import (
 from knowledge_vault.domain.models import (
     ArtifactRef,
     AssertionView,
+    CandidateCheck,
+    CandidateCheckPage,
+    CandidateError,
+    CandidateMatch,
     SearchFilters,
     SearchHit,
     SearchPage,
     SourceView,
 )
+from knowledge_vault.domain.normalization import content_hash, normalize_content
+from knowledge_vault.domain.secrets import detect_secret
 from knowledge_vault.embeddings.base import EmbeddingProvider
 from knowledge_vault.observability.metrics import SEARCH_LATENCY
 from knowledge_vault.persistence.tables import AssertionRow
@@ -32,6 +39,55 @@ from knowledge_vault.services.ranking import reciprocal_rank_fusion
 
 # Enrichment can attach more sources over time; responses stay bounded.
 _MAX_SOURCES_PER_VIEW = 32
+
+# Bounds of a candidate check: candidates per call, matches per candidate, and how much of a
+# stored assertion is returned. Together they cap the response at a few thousand words.
+MAX_CHECK_CANDIDATES = 50
+MAX_CHECK_MATCHES = 5
+_CHECK_EXCERPT_CHARS = 400
+_MAX_CANDIDATE_CHARS = 16_000
+# Words-only matching, used when embeddings are unavailable, reads this much of a candidate.
+_LEXICAL_CANDIDATE_CHARS = 1_000
+# ...and accepts a stored assertion that contains at least this share (2/5) of its words.
+_LEXICAL_SHARE_NUMERATOR = 2
+_LEXICAL_SHARE_DENOMINATOR = 5
+# A candidate is compared with assertions a client could still confirm, refine or supersede.
+_CHECKED_STATUSES = (
+    AssertionStatus.CURRENT,
+    AssertionStatus.UNCERTAIN,
+    AssertionStatus.DISPUTED,
+)
+
+
+def _candidate_error(candidate: object) -> CandidateError | None:
+    if not isinstance(candidate, str) or not candidate.strip():
+        return CandidateError(
+            code="invalid_candidate", message="a candidate must be non-empty text"
+        )
+    if len(candidate) > _MAX_CANDIDATE_CHARS or "\x00" in candidate:
+        return CandidateError(
+            code="invalid_candidate",
+            message=f"a candidate must have at most {_MAX_CANDIDATE_CHARS} characters and no NUL",
+        )
+    secret = detect_secret(candidate)
+    if secret:
+        return CandidateError(
+            code="secret_detected",
+            message=f"suspected {secret}; a secret value must not be submitted or stored",
+        )
+    return None
+
+
+def _match(row: AssertionRow, *, exact: bool, similarity: float | None) -> CandidateMatch:
+    return CandidateMatch(
+        id=row.id,
+        content=row.content[:_CHECK_EXCERPT_CHARS],
+        truncated=len(row.content) > _CHECK_EXCERPT_CHARS,
+        kind=AssertionKind(row.kind),
+        status=AssertionStatus(row.status),
+        exact=exact,
+        similarity=similarity,
+    )
 
 
 def _query_hash(query: str, filters: SearchFilters) -> str:
@@ -213,6 +269,122 @@ class SearchService:
             time.perf_counter() - started
         )
         return SearchPage(results=results, next_cursor=next_cursor, embedding_degraded=degraded)
+
+    async def check_candidates(
+        self,
+        candidates: list[str],
+        *,
+        limit: int = 3,
+        min_similarity: float = 0.65,
+    ) -> CandidateCheckPage:
+        """Find, for each planned assertion, the stored assertions closest to it.
+
+        Nothing is written and nothing is merged: the caller decides whether a candidate is
+        already stored, refines a record, or replaces one. An unusable candidate gets an error
+        of its own and never fails the others.
+        """
+        started = time.perf_counter()
+        if not 1 <= len(candidates) <= MAX_CHECK_CANDIDATES:
+            raise InvalidRequestError(
+                f"provide 1 through {MAX_CHECK_CANDIDATES} candidates per call"
+            )
+        if not 1 <= limit <= MAX_CHECK_MATCHES:
+            raise InvalidRequestError(f"limit must be between 1 and {MAX_CHECK_MATCHES}")
+        if not 0.0 <= min_similarity <= 1.0:
+            raise InvalidRequestError("min_similarity must be between 0 and 1")
+
+        errors = [_candidate_error(candidate) for candidate in candidates]
+        usable = [index for index, error in enumerate(errors) if error is None]
+        hashes = {index: content_hash(normalize_content(candidates[index])) for index in usable}
+
+        vectors: dict[int, list[float]] = {}
+        degraded = not (self._embedder and self._settings.embeddings_enabled)
+        if usable and self._embedder and not degraded:
+            try:
+                embedded = await self._embedder.embed([candidates[index] for index in usable])
+                vectors = dict(zip(usable, embedded, strict=True))
+                degraded = False
+            except Exception:
+                degraded = True
+
+        results: list[CandidateCheck] = []
+        async with self._sessions() as session:
+            exact_rows = {
+                row.content_hash: row
+                for row in (
+                    await session.scalars(
+                        select(AssertionRow).where(
+                            AssertionRow.content_hash.in_(set(hashes.values()))
+                        )
+                    )
+                ).all()
+            }
+            for index, error in enumerate(errors):
+                if error is not None:
+                    results.append(CandidateCheck(index=index, error=error))
+                    continue
+                matches: list[CandidateMatch] = []
+                exact = exact_rows.get(hashes[index])
+                if exact is not None:
+                    matches.append(_match(exact, exact=True, similarity=1.0))
+                near = select(AssertionRow).where(
+                    AssertionRow.status.in_(_CHECKED_STATUSES),
+                    AssertionRow.content_hash != hashes[index],
+                )
+                if index in vectors:
+                    distance = AssertionRow.embedding.cosine_distance(vectors[index])
+                    rows = (
+                        await session.execute(
+                            near.add_columns(distance.label("distance"))
+                            .where(
+                                AssertionRow.embedding_state == EmbeddingState.READY,
+                                AssertionRow.embedding.is_not(None),
+                                AssertionRow.embedding_model == self._settings.embedding_model,
+                                distance <= 1.0 - min_similarity,
+                            )
+                            .order_by(distance, AssertionRow.id)
+                            .limit(limit)
+                        )
+                    ).tuples()
+                    matches.extend(
+                        _match(row, exact=False, similarity=round(1.0 - float(found), 3))
+                        for row, found in rows
+                    )
+                else:
+                    # Rank by how many distinct words a stored assertion shares with the
+                    # candidate, and require a fair share of them: term frequency would let a
+                    # long record full of common words outrank the one that says the same thing.
+                    excerpt = candidates[index][:_LEXICAL_CANDIDATE_CHARS]
+                    words = func.tsvector_to_array(func.to_tsvector("simple", excerpt))
+                    any_word = cast(
+                        func.replace(cast(func.plainto_tsquery("simple", excerpt), Text), "&", "|"),
+                        TSQUERY,
+                    )
+                    stored_word = func.unnest(
+                        func.tsvector_to_array(AssertionRow.search_vector)
+                    ).column_valued("word")
+                    shared = (
+                        select(func.count()).where(stored_word == func.any(words)).scalar_subquery()
+                    )
+                    rows_by_words = (
+                        await session.scalars(
+                            near.where(
+                                AssertionRow.search_vector.op("@@")(any_word),
+                                shared * _LEXICAL_SHARE_DENOMINATOR
+                                >= func.cardinality(words) * _LEXICAL_SHARE_NUMERATOR,
+                            )
+                            .order_by(shared.desc(), AssertionRow.id)
+                            .limit(limit)
+                        )
+                    ).all()
+                    matches.extend(
+                        _match(row, exact=False, similarity=None) for row in rows_by_words
+                    )
+                results.append(CandidateCheck(index=index, matches=matches))
+        SEARCH_LATENCY.labels(mode="check_text" if degraded else "check").observe(
+            time.perf_counter() - started
+        )
+        return CandidateCheckPage(results=results, embedding_degraded=degraded)
 
     async def get(self, assertion_id: UUID) -> AssertionView:
         async with self._sessions() as session:
