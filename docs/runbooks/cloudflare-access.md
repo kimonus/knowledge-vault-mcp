@@ -90,9 +90,9 @@ cloudflareTunnel:
 `publicHosts` is required: the origin refuses every request for those hostnames that does not
 carry a valid signed assertion, whatever other credential is attached. Host names are compared
 after removing the port, letter case, and a trailing dot, and a request with a missing or repeated
-`Host` header is rejected. `privateHosts` is strongly recommended: with it, device bearer tokens
-are accepted only for the listed private hostnames and every other hostname—including in-cluster
-Service names—requires an assertion. Health probes are exempt so that the kubelet can reach the
+`Host` header is rejected. `privateHosts` is required as well, and the chart and the service fail
+closed without it: device bearer tokens are accepted only for the listed private hostnames and
+every other hostname—including in-cluster Service names—requires an assertion. Health probes are exempt so that the kubelet can reach the
 Pod by IP. Also set `config.publicBaseUrl` to `https://PUBLIC_MCP_HOST`; it is advertised in MCP
 resource metadata and in search result URLs.
 
