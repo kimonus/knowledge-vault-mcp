@@ -198,12 +198,13 @@ an explicit architecture decision. Policy updates require Pod rollout and client
 
 The flush skill activates only on the explicit phrase `flush knowledge to my MCP` or a clear
 natural variant. It must extract currently available context into atomic assertions, exclude
-secrets and transcript structure, use the resumable begin/append/commit sequence, retry
-idempotently, and report persistence only after a successful commit. Preserve exact reproducible
-details. A flush is incremental: before beginning it checks the planned assertions against the
-vault with `check_knowledge_candidates` and submits only what is new, changed or refined; it never drops knowledge the vault lacks, and it
-supersedes only an assertion it read in the session and that the conversation explicitly changes.
-The server still never merges or supersedes by similarity. The commit result is the
-verification: the client reads back only the IDs in `readback_ids` and nothing when it is empty. Failed readback means committed but verification incomplete; never repeat writes just
-to retry a read. Report rejections, discrepancies and unavailable context without claiming
-lossless unseen-history capture.
+secrets, transcript structure and the client's own system or agent instructions, use the resumable
+begin/append/commit sequence, retry idempotently, and report persistence only after a successful
+commit. Preserve exact reproducible details. A flush is incremental: before beginning it checks the
+planned assertions against the vault with `check_knowledge_candidates` and submits only what is
+new, changed or refined; it never drops knowledge the vault lacks, and it supersedes only an
+assertion it read in the session and that the conversation explicitly changes. The server still
+never merges or supersedes by similarity. The commit result is the verification: the client reads
+back only the IDs in `readback_ids` and nothing when it is empty. Failed readback means committed
+but verification incomplete; never repeat writes just to retry a read. Report rejections,
+discrepancies and unavailable context without claiming lossless unseen-history capture.

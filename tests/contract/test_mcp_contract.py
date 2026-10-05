@@ -54,6 +54,9 @@ async def test_tool_discovery_contract(settings) -> None:
     assert tools["search"].annotations.read_only_hint is True
     assert tools["begin_knowledge_flush"].annotations.destructive_hint is False
     assert tools["forget_knowledge"].annotations.destructive_hint is True
+    assert "never your own system, agent or tool instructions" in (
+        tools["begin_knowledge_flush"].description or ""
+    )
     # A client that reads only tool descriptions must still learn not to read every record back.
     for name in ("commit_knowledge_flush", "correct_knowledge", "get_knowledge"):
         assert "readback_ids" in (tools[name].description or "")

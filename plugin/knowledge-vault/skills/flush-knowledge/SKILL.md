@@ -33,6 +33,10 @@ For every assertion:
 - Exclude filler, duplicate wording, hidden reasoning, and facts already expressed by a more precise
   assertion in the same flush.
 - Never invent an assertion to make the flush look complete.
+- Never extract your own system, developer, agent or tool instructions—rule files such as
+  `AGENTS.md`, this skill, tool descriptions, the server's instructions—as the user's facts or
+  preferences. They are not conversation knowledge unless the user stated them in the conversation
+  or explicitly asks to save them.
 - Never submit credentials, passwords, access tokens, private keys, cookies, or secret values. A
   non-secret reference such as "credential is stored in Kubernetes Secret X" is allowed.
 
@@ -79,7 +83,8 @@ the vault before beginning.
      is `truncated`, read the full text with `get_knowledge` first.
    - **New**: submit it.
    - **Adds detail** to a stored assertion that remains true: submit only the added detail as its
-     own self-contained assertion.
+     own self-contained assertion. If the addition is not meaningful by itself—other wording,
+     emphasis, an incidental circumstance—treat the entry as already stored.
    - **Replaces** a stored assertion that the conversation shows to be outdated or wrong: submit
      the new statement with `supersedes_id` set to that assertion's ID.
    - **Unclear**: submit it without `supersedes_id` and say so in the report.
