@@ -5,6 +5,21 @@ stable release.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-05
+
+### Security
+
+- **Operator action required when Cloudflare Access is enabled.** `cloudflareAccess.privateHosts`
+  (`KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_PRIVATE_HOSTS`) is now required. With an empty list the
+  origin accepted device bearer tokens for every hostname that was not published, so a caller who
+  could reach the origin directly with a stolen token and an arbitrary `Host` header bypassed the
+  Access identity policy. The chart refuses to render and the service refuses to start without
+  the list, and `.invalid` placeholder names are rejected. Set it to the LAN/WireGuard hostname
+  before upgrading.
+- Hostnames are compared after Unicode compatibility folding, and the ideographic, fullwidth and
+  halfwidth full stops count as label separators, so an equivalent spelling of a hostname cannot
+  select a different authentication rule.
+
 ### Changed
 
 - **Flushes are incremental.** The delivered instructions, the tool descriptions and the flush
