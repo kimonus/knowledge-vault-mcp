@@ -1,6 +1,6 @@
 {
   "name": "knowledge-vault",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Flush atomic knowledge assertions to a private Knowledge Vault MCP.",
   "author": {
     "name": "kimonus"

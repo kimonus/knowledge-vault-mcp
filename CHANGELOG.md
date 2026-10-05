@@ -5,6 +5,8 @@ stable release.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-05
+
 ### Changed
 
 - The fixed flush rules, the `begin_knowledge_flush` description and the flush skill tell a
