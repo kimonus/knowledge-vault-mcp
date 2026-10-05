@@ -5,11 +5,11 @@ fullnameOverride: knowledge-vault
 
 image:
   repository: knowledge-vault
-  tag: "0.3.0"
+  tag: "0.3.1"
   pullPolicy: Never
 backupImage:
   repository: knowledge-vault-backup
-  tag: "0.3.0"
+  tag: "0.3.1"
   pullPolicy: Never
 
 config:

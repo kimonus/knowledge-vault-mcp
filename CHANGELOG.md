@@ -5,6 +5,8 @@ stable release.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-05
+
 ### Changed
 
 - The commit result names the records worth reading back. `commit_knowledge_flush` and
