@@ -13,7 +13,12 @@ RUN git clone --filter=blob:none https://github.com/restic/restic.git . \
     && ./restic version
 
 FROM postgres:17-bookworm@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652 AS postgres-runtime
-RUN rm -f /usr/local/bin/gosu /etc/ssl/private/ssl-cert-snakeoil.key
+# The pinned base image predates the fix for CVE-2026-103111. Remove the upgrade when the base
+# image digest is moved to one that already ships this version or a later one.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends --only-upgrade libpcre2-8-0=10.42-1+deb12u2 \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /usr/local/bin/gosu /etc/ssl/private/ssl-cert-snakeoil.key
 
 FROM scratch
 LABEL org.opencontainers.image.title="Knowledge Vault backup" \

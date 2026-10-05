@@ -19,6 +19,11 @@ LABEL org.opencontainers.image.title="Knowledge Vault" \
       org.opencontainers.image.description="Private personal knowledge MCP server" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.version="0.2.0"
+# The pinned base image predates the fix for CVE-2026-103111. Remove this step when the base
+# image digest is moved to one that already ships this version or a later one.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends --only-upgrade libpcre2-8-0=10.42-1+deb12u2 \
+    && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 10001 knowledge-vault \
     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent knowledge-vault
 WORKDIR /app
