@@ -63,10 +63,9 @@ subject with a short keyword query, then submit only what is new, changed or ref
    the response is lost. The stable result contains inserted/confirmed/enriched/superseded/
    conflict/rejected counts, assertion IDs, and `items` (see
    [Per-item outcomes](#per-item-outcomes)).
-4. After commit succeeds, check `items`. An `inserted` item is stored exactly as submitted and
-   needs no readback. Call `get_knowledge` only for an item whose outcome is not the one planned,
-   whose `ignored_fields` is not empty, or that has `conflict_ids`; if `items` is empty, read
-   every distinct ID in `assertion_ids`. Respect read rate limits. Report commit counts,
+4. After commit succeeds, the result is the verification. An `inserted` item is stored exactly
+   as submitted. Call `get_knowledge` only for the IDs in `readback_ids`; when it is empty, read
+   nothing back. Respect read rate limits. Report commit counts,
    assertions skipped as already stored, records read back, rejections, discrepancies, and any
    unavailable/compacted context. If a read fails, report **committed, verification incomplete**;
    do not repeat writes. A commit confirms persistence, not semantic completeness. Repair safe
@@ -138,8 +137,13 @@ input order:
   matched record and were not applied to it. `content` appears when only case or spacing differs.
   It is always empty for `inserted`.
 
-The entries hold no assertion text. A result committed by a version without per-item outcomes
-replays with an empty `items`.
+`readback_ids` lists, once each, the assertion IDs of the items that have `ignored_fields` or
+`conflict_ids`. These are the only records whose stored state can differ from what the client
+submitted, so they are the only ones worth reading after a commit. It is empty for a flush that
+only inserted records, including one that superseded others.
+
+The entries hold no assertion text. A result committed by a version without these fields replays
+with them empty.
 
 ### Per-item rejection
 

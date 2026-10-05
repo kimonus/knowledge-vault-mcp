@@ -213,6 +213,9 @@ class CommitResult(BaseModel):
     assertion_ids: list[UUID] = Field(default_factory=list)
     # Empty in results that were stored before per-item outcomes existed.
     items: list[CommitItem] = Field(default_factory=list)
+    # The only records worth reading after this commit: those that kept stored values instead of
+    # submitted ones, or that created a possible conflict. Empty means nothing needs readback.
+    readback_ids: list[UUID] = Field(default_factory=list)
     conflict_ids: list[UUID] = Field(default_factory=list)
     rejected_items: list[RejectedItem] = Field(default_factory=list)
 
