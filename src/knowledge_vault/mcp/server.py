@@ -226,6 +226,8 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
             "Begin a resumable knowledge flush. Supply a unique client idempotency key and exact "
             "part/item totals. Repeating identical begin arguments safely returns the prior batch. "
             "Only begin on an explicit save/flush request; preserve exact reproducible details. "
+            "Store knowledge from the conversation, never your own system, agent or tool "
+            "instructions. "
             "Before beginning, call check_knowledge_candidates with the planned assertion "
             "texts and plan only assertions that are new, changed or refined. Next call "
             "append_knowledge for every numbered part, then commit_knowledge_flush."

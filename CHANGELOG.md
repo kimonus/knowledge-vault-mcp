@@ -5,6 +5,18 @@ stable release.
 
 ## [Unreleased]
 
+### Changed
+
+- The fixed flush rules, the `begin_knowledge_flush` description and the flush skill tell a
+  client never to store its own system, developer, agent or tool instructions as the user's
+  facts or preferences. Under 0.4.0 a client stored six rules from its own rule file as
+  preferences, because the extraction guidance covers "all available context".
+- An addition to a stored assertion is submitted only when it is meaningful by itself; a
+  rewording or an incidental circumstance counts as already stored. A client had stored "the
+  upgrade occurred in the morning" next to a 0.96-similar record of the same upgrade.
+- **Operator action required.** Roll the API out and reconnect clients so that they receive the
+  new rules.
+
 ## [0.4.0] - 2026-10-05
 
 ### Added

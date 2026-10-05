@@ -107,11 +107,16 @@ A client that flushes repeatedly therefore reconciles first:
 - Already stored with the same meaning: do not submit. To record that a fact was observed again,
   or to add a source or topic, submit the stored `content` unchanged.
 - Adds detail to a stored assertion that remains true: submit only the added detail as its own
-  assertion.
+  assertion, and only when it is meaningful by itself; a rewording or an incidental circumstance
+  counts as already stored.
 - Replaces a stored assertion: submit the new statement with `supersedes_id`. The target must be
   an assertion the client read in this session and that the conversation explicitly changes or
   contradicts; similar wording alone never selects one.
 - Unclear, or search unavailable: submit, and say so in the report.
+
+A client's own system, developer, agent or tool instructions are not conversation knowledge. The
+fixed rules tell clients never to store them as the user's facts or preferences unless the user
+stated them in the conversation or asks to save them.
 
 ### Candidate check
 

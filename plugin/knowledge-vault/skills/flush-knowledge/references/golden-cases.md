@@ -123,6 +123,19 @@ omission and submit a complete corrected procedure in a new flush with a fresh k
 `supersedes_id`. If the corrective flush still has a discrepancy, report it
 and stop rather than repeatedly correcting or deleting assertions.
 
+## Agent instructions are not knowledge
+
+The client runs with a rule file that says to write to the vault only on an explicit request and
+to report progress in a fixed format. The conversation is about a router. Extract only the router
+knowledge. Do not store "the user wants writes only on an explicit request" or the progress-report
+rule as preferences: the user did not say them in this conversation.
+
+## Restated fact with an incidental addition
+
+The conversation says a deployment was upgraded "this morning"; the check returns a stored
+assertion with the same upgrade and date at similarity 0.96. Treat it as already stored. Do not
+submit "the upgrade occurred in the morning" as a new assertion.
+
 ## Negative cases
 
 The following must not call begin/append/commit:
