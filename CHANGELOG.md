@@ -5,6 +5,8 @@ stable release.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-05
+
 ### Added
 
 - `check_knowledge_candidates` (HTTP: `POST /api/v1/candidates/check`): a read-only call that
