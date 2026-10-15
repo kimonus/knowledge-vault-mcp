@@ -31,7 +31,7 @@ jobs:
       - run: uv run python scripts/check_coverage.py coverage.json
       - run: uv run pip-audit --path .venv/lib/python3.12/site-packages --progress-spinner off
       - run: uv run bandit -q -r src
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage
           path: |
@@ -61,7 +61,7 @@ jobs:
           "$RUNNER_TEMP/bin/trivy" image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL knowledge-vault-backup:ci
       - run: |
           "$RUNNER_TEMP/bin/syft" knowledge-vault:ci -o cyclonedx-json=knowledge-vault.sbom.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sbom
           path: knowledge-vault.sbom.json
