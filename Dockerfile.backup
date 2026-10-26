@@ -1,22 +1,23 @@
 # syntax=docker/dockerfile:1.11
-FROM golang:1.26.8-bookworm@sha256:a688600ca24f8a4d3ca77f95b0dd40704a9fc787c826660eb7ba0b641b8b175d AS restic-builder
+FROM golang:1.26.10-bookworm@sha256:632dff7351799a5a9954a48dc06670ade72ee44e8c351cdc0e5a57af2fea21af AS restic-builder
 ARG RESTIC_COMMIT=6aa3a516ce654808a1f28f9fa21e9b7c8e6e90bf
 WORKDIR /src
 # All upgraded modules below are explicitly version-pinned.
 # hadolint ignore=DL3062
 RUN git clone --filter=blob:none https://github.com/restic/restic.git . \
     && git checkout --detach "${RESTIC_COMMIT}" \
-    && go get golang.org/x/crypto@v0.55.0 golang.org/x/net@v0.58.0 \
-      golang.org/x/text@v0.41.0 google.golang.org/grpc@v1.83.2 \
+    && go get golang.org/x/crypto@v0.57.0 golang.org/x/net@v0.60.0 \
+      golang.org/x/text@v0.42.0 google.golang.org/grpc@v1.83.2 \
+      github.com/klauspost/compress@v1.18.7 \
     && go mod tidy \
     && go run build.go \
     && ./restic version
 
-FROM postgres:17-bookworm@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652 AS postgres-runtime
-# The pinned base image predates the fix for CVE-2026-103111. Remove the upgrade when the base
-# image digest is moved to one that already ships this version or a later one.
+FROM postgres:17-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27 AS postgres-runtime
+# Keep the OpenSSL fix until the pinned base contains it; gosu is unused by this image.
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends --only-upgrade libpcre2-8-0=10.42-1+deb12u2 \
+    && apt-get install --yes --no-install-recommends --only-upgrade \
+      libssl3=3.0.22-1~deb12u2 openssl=3.0.22-1~deb12u2 \
     && rm -rf /var/lib/apt/lists/* \
     && rm -f /usr/local/bin/gosu /etc/ssl/private/ssl-cert-snakeoil.key
 

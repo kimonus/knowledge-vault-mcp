@@ -1,7 +1,14 @@
 # syntax=docker/dockerfile:1.11
-FROM ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff AS uv
 
-FROM python:3.12.14-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e AS builder
+FROM python:3.12.15-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70 AS python-base
+# The refreshed base fixes Perl and PCRE2 but still predates the OpenSSL CVE-2026-84782 fix.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends --only-upgrade \
+      libssl3=3.0.22-1~deb12u2 openssl=3.0.22-1~deb12u2 \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM python-base AS builder
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -14,16 +21,11 @@ COPY migrations ./migrations
 COPY alembic.ini ./
 RUN uv sync --locked --no-dev --extra embeddings --no-editable
 
-FROM python:3.12.14-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e AS runtime
+FROM python-base AS runtime
 LABEL org.opencontainers.image.title="Knowledge Vault" \
       org.opencontainers.image.description="Private personal knowledge MCP server" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.version="0.4.1"
-# The pinned base image predates the fix for CVE-2026-103111. Remove this step when the base
-# image digest is moved to one that already ships this version or a later one.
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends --only-upgrade libpcre2-8-0=10.42-1+deb12u2 \
-    && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 10001 knowledge-vault \
     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent knowledge-vault
 WORKDIR /app

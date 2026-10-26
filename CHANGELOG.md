@@ -5,6 +5,21 @@ stable release.
 
 ## [Unreleased]
 
+### Security
+
+- Update certifi, filelock, opentelemetry-api, setuptools and virtualenv to patched versions and enforce
+  minimum safe versions when resolving dependencies. Refresh the pinned Python 3.12 and
+  PostgreSQL 17 images for the Perl and PCRE2 fixes, and explicitly upgrade OpenSSL in both
+  images because the refreshed bases still predate that fix.
+- Update the pinned uv and Go build images and the artifact upload action; use the same uv
+  version in CI, release verification and container builds.
+- Update restic's pinned Go modules, including x/net and klauspost/compress, to fix the
+  additional vulnerabilities found in the backup image.
+- Install the embedding dependencies in CI and release verification so the dependency audit
+  checks the complete application runtime, including setuptools.
+- **Operator action required.** Rebuild and redeploy the application and backup images to pick
+  up the dependency and OS fixes; existing Pods keep their installed versions until replaced.
+
 ## [0.4.1] - 2026-10-05
 
 ### Changed
