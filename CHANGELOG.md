@@ -9,7 +9,7 @@ stable release.
 
 ### Security
 
-- Update certifi, filelock, opentelemetry-api, setuptools and virtualenv to patched versions and
+- Update certifi, filelock, Mako, opentelemetry-api, setuptools and virtualenv to patched versions and
   enforce minimum safe versions when resolving dependencies. Refresh the pinned Python 3.12 and
   PostgreSQL 17 images for the Perl and PCRE2 fixes, and explicitly upgrade OpenSSL in both
   images because the refreshed bases still predate that fix.
