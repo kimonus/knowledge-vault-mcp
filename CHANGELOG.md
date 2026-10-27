@@ -5,6 +5,12 @@ stable release.
 
 ## [Unreleased]
 
+### Security
+
+- Update msgpack to 1.2.4 for CVE-2026-114613 and enforce `msgpack>=1.2.3` when resolving
+  dependencies. msgpack reaches the project only through the pip-audit developer tool; the
+  application and its images do not include it.
+
 ## [0.4.2] - 2026-10-26
 
 ### Security
