@@ -109,7 +109,7 @@ async def integration_container(postgres_url: str, settings: Settings) -> AsyncI
             text(
                 "TRUNCATE confirmation_tokens, deletion_audit, knowledge_conflicts, "
                 "embedding_jobs, flush_parts, flush_batches, assertion_sources, assertions, "
-                "artifacts "
+                "artifacts, knowledge_contexts, topic_aliases "
                 "RESTART IDENTITY CASCADE"
             )
         )

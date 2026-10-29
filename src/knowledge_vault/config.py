@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     embedding_dimensions: int = Field(default=384, ge=8, le=4096)
     embeddings_enabled: bool = True
+    usage_tracking_enabled: bool = True
     # Model weights are loaded from local files only unless a developer opts in explicitly.
     embedding_allow_download: bool = False
     max_request_bytes: int = Field(default=2_000_000, ge=1024)

@@ -1,5 +1,15 @@
 # Database migration and rollback
 
+## 0.5.0 / migration 0005
+
+Back up and restore-test before upgrading. 0005 adds assertion metadata with server defaults,
+contexts, relationships, aliases, usage aggregates and expiring maintenance receipts. Existing
+text, IDs, sources, embeddings and supersession pointers are retained; confidence is not migrated
+to verified evidence. The preceding application can read/write on the expanded schema. Prefer
+application rollback while retaining it. Downgrading 0005 destroys its metadata/links/counters;
+do not downgrade a real vault merely to roll back application images. Refresh client tool schemas
+and the flush skill after migration. Production data repair is a separate previewable operation.
+
 Alembic owns schema changes. The Helm post-install/post-upgrade Job runs `alembic upgrade head`; API
 and worker init containers wait until `alembic current` reports the newest revision contained in
 their own image. During an upgrade the new Pods therefore do not start until the migration has

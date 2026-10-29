@@ -509,13 +509,21 @@ async def test_http_and_mcp_return_the_same_shapes(
         _, committed = await mcp.call("commit_knowledge_flush", {"batch_id": begun["batch_id"]})
         assertion_id = committed["assertion_ids"][0]
 
-        _, via_mcp = await mcp.call("get_knowledge", {"assertion_id": assertion_id})
-        via_http = (await http.get(f"/api/v1/assertions/{assertion_id}")).json()
+        _, via_mcp = await mcp.call(
+            "get_knowledge", {"assertion_id": assertion_id, "purpose": "maintenance"}
+        )
+        via_http = (await http.get(f"/api/v1/assertions/{assertion_id}?purpose=maintenance")).json()
         assert via_http == via_mcp
         assert via_http["untrusted_data"] is True
 
-        _, mcp_page = await mcp.call("search_knowledge", {"query": "shapes", "limit": 5})
-        http_page = (await http.post("/api/v1/search", json={"query": "shapes", "limit": 5})).json()
+        _, mcp_page = await mcp.call(
+            "search_knowledge", {"query": "shapes", "limit": 5, "purpose": "maintenance"}
+        )
+        http_page = (
+            await http.post(
+                "/api/v1/search", json={"query": "shapes", "limit": 5, "purpose": "maintenance"}
+            )
+        ).json()
         assert http_page == mcp_page and http_page["untrusted_data"] is True
 
         candidates = {"candidates": ["shapes  AGREE.", "password=correct-horse-battery-staple"]}

@@ -16,6 +16,7 @@ from knowledge_vault.domain.enums import (
     EmbeddingState,
     Sensitivity,
 )
+from knowledge_vault.domain.maintenance import KnowledgeMetadata, Purpose, UsageView
 from knowledge_vault.domain.models import (
     ArtifactRef,
     AssertionView,
@@ -31,10 +32,11 @@ from knowledge_vault.domain.models import (
 from knowledge_vault.domain.normalization import content_hash, normalize_content
 from knowledge_vault.domain.secrets import detect_secret
 from knowledge_vault.embeddings.base import EmbeddingProvider
-from knowledge_vault.observability.metrics import SEARCH_LATENCY
-from knowledge_vault.persistence.tables import AssertionRow
+from knowledge_vault.observability.metrics import SEARCH_LATENCY, USAGE_EVENTS
+from knowledge_vault.persistence.tables import AssertionRow, TopicAliasRow
 from knowledge_vault.services.cursors import Cursor, CursorCodec, InvalidCursorError
 from knowledge_vault.services.errors import InvalidRequestError, NotFoundError
+from knowledge_vault.services.maintenance import UsageService
 from knowledge_vault.services.ranking import reciprocal_rank_fusion
 
 # Enrichment can attach more sources over time; responses stay bounded.
@@ -101,6 +103,8 @@ def _query_hash(query: str, filters: SearchFilters) -> str:
 
 def _view(row: AssertionRow) -> AssertionView:
     return AssertionView(
+        **{name: getattr(row, name) for name in KnowledgeMetadata.model_fields},
+        revision=row.revision,
         id=row.id,
         content=row.content,
         kind=AssertionKind(row.kind),
@@ -180,6 +184,19 @@ class SearchService:
             conditions.append(AssertionRow.created_at >= filters.created_after)
         if filters.created_before:
             conditions.append(AssertionRow.created_at < filters.created_before)
+        if filters.context_id:
+            conditions.append(AssertionRow.context_id == filters.context_id)
+        if filters.facet:
+            conditions.append(AssertionRow.facet == filters.facet)
+        for field, values in (
+            ("evidence_state", filters.evidence_states),
+            ("temporal_role", filters.temporal_roles),
+            ("workflow_state", filters.workflow_states),
+        ):
+            if values:
+                conditions.append(getattr(AssertionRow, field).in_(values))
+        if filters.review_due:
+            conditions.append(AssertionRow.review_after <= func.now())
         return statement.where(and_(*conditions))
 
     async def search(
@@ -189,6 +206,9 @@ class SearchService:
         *,
         limit: int = 20,
         cursor: str | None = None,
+        purpose: Purpose = "normal",
+        event_id: UUID | None = None,
+        principal: str = "retrieval",
     ) -> SearchPage:
         started = time.perf_counter()
         query = " ".join(query.split())
@@ -204,9 +224,30 @@ class SearchService:
         if boundary and boundary.query_hash != query_hash:
             raise InvalidCursorError("cursor does not belong to this query and filter set")
 
-        base = self._filtered(effective_filters)
+        async with self._sessions() as alias_session:
+            aliases = {
+                a: c
+                for a, c in (
+                    await alias_session.execute(
+                        select(TopicAliasRow.alias, TopicAliasRow.canonical).limit(1000)
+                    )
+                ).all()
+            }
+        topic_values = set(effective_filters.topics)
+        for alias, canonical in aliases.items():
+            if alias in topic_values or canonical in topic_values:
+                topic_values.update((alias, canonical))
+        expanded = effective_filters.model_copy(update={"topics": sorted(topic_values)})
+        base = self._filtered(expanded)
         candidate_limit = min(max(limit * 5, 50), 250)
-        tsquery = func.websearch_to_tsquery("simple", query)
+        lexical_query = query
+        if query.casefold() in aliases:
+            lexical_query = query + " OR " + aliases[query.casefold()]
+        elif query.casefold() in aliases.values():
+            lexical_query = " OR ".join(
+                [query, *[a for a, c in aliases.items() if c == query.casefold()]]
+            )
+        tsquery = func.websearch_to_tsquery("simple", lexical_query)
         text_statement = (
             base.add_columns(func.ts_rank_cd(AssertionRow.search_vector, tsquery).label("rank"))
             .where(AssertionRow.search_vector.op("@@")(tsquery))
@@ -261,6 +302,13 @@ class SearchService:
             SearchHit(assertion=_view(rows_by_id[item.item]), score=item.score)
             for item in page_items
         ]
+        await self._account(
+            [hit.assertion for hit in results],
+            purpose=purpose,
+            event_id=event_id,
+            principal=principal,
+            operation="search",
+        )
         next_cursor = None
         if has_more and page_items:
             final = page_items[-1]
@@ -386,7 +434,14 @@ class SearchService:
         )
         return CandidateCheckPage(results=results, embedding_degraded=degraded)
 
-    async def get(self, assertion_id: UUID) -> AssertionView:
+    async def get(
+        self,
+        assertion_id: UUID,
+        *,
+        purpose: Purpose = "normal",
+        event_id: UUID | None = None,
+        principal: str = "retrieval",
+    ) -> AssertionView:
         async with self._sessions() as session:
             row = await session.scalar(
                 select(AssertionRow)
@@ -395,4 +450,33 @@ class SearchService:
             )
         if not row:
             raise NotFoundError("assertion was not found")
-        return _view(row)
+        view = _view(row)
+        await self._account(
+            [view], purpose=purpose, event_id=event_id, principal=principal, operation="fetch"
+        )
+        return view
+
+    async def _account(
+        self,
+        views: list[AssertionView],
+        *,
+        purpose: Purpose,
+        event_id: UUID | None,
+        principal: str,
+        operation: str,
+    ) -> None:
+        if purpose not in {"normal", "maintenance"}:
+            raise InvalidRequestError("invalid retrieval purpose")
+        usage = UsageService(self._sessions)
+        ids = [v.id for v in views]
+        try:
+            if purpose == "normal" and self._settings.usage_tracking_enabled:
+                await usage.record(ids, event_id=event_id, principal=principal, operation=operation)
+            recorded = await usage.views(ids)
+            for view in views:
+                view.usage = recorded.get(view.id, UsageView())
+        except Exception:
+            # Operational failure is content-free and never turns a valid read into a failure.
+            USAGE_EVENTS.labels(outcome="failed").inc()
+            for view in views:
+                view.usage = UsageView(available=False)

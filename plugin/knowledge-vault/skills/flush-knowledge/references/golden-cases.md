@@ -146,3 +146,15 @@ The following must not call begin/append/commit:
 - `Summarize this chat.`
 - `Remember this` when the user has not asked to use their MCP and another memory mechanism is in
   scope.
+# 0.5.0 maintenance behavior
+
+- A whole procedure includes its appliance/context, preparation, ordered actions and caveats in a
+  usable record; necessary parts get ordered links after commit. Missing details stay unknown.
+- A statement copied from earlier advice uses reported/inferred evidence as appropriate, never
+  verified merely because confidence defaults to 1.0. Dates come from evidence, not creation time.
+- Reconciliation/readback calls use purpose=maintenance; a copied or fetched record alone does not
+  trigger report_knowledge_usage. Report actual contribution explicitly only when appropriate.
+- A request to repair a date fetches the revision, previews metadata changes and applies with the
+  same expected revision; a stale revision causes reread/review. Changed meaning uses supersession.
+- A resolved question links to its actual answer. A proposed plan is not marked completed solely
+  because it was saved. Similar statements are candidates for review, never automatic deletion.

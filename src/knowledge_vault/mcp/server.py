@@ -14,6 +14,7 @@ from pydantic import AnyHttpUrl, Field, SkipValidation
 from knowledge_vault.auth.mcp import MCPTokenVerifier
 from knowledge_vault.auth.tokens import Scope
 from knowledge_vault.container import Container
+from knowledge_vault.domain.maintenance import Purpose
 from knowledge_vault.domain.models import AssertionInput, CommitResult, SearchFilters
 from knowledge_vault.domain.responses import (
     AbortResponse,
@@ -32,6 +33,7 @@ from knowledge_vault.domain.responses import (
     StatisticsResponse,
 )
 from knowledge_vault.ingestion_policy import build_ingestion_instructions
+from knowledge_vault.mcp.maintenance import register_maintenance_tools
 from knowledge_vault.mcp.schemas import (
     CompatibilityFetchOutput,
     CompatibilitySearchOutput,
@@ -181,8 +183,10 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
         annotations=READ_ONLY,
     )
     async def search(query: str) -> CompatibilitySearchOutput:
-        principal(Scope.READ)
-        page = await container.search.search(query, limit=min(20, settings.max_page_size))
+        principal_id = principal(Scope.READ)
+        page = await container.search.search(
+            query, limit=min(20, settings.max_page_size), principal=principal_id
+        )
         return CompatibilitySearchOutput(
             results=[
                 CompatibilitySearchResult(
@@ -202,8 +206,8 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
         annotations=READ_ONLY,
     )
     async def fetch(id: str) -> CompatibilityFetchOutput:
-        principal(Scope.READ)
-        assertion = await container.search.get(_uuid(id, "id"))
+        principal_id = principal(Scope.READ)
+        assertion = await container.search.get(_uuid(id, "id"), principal=principal_id)
         return CompatibilityFetchOutput(
             id=str(assertion.id),
             title=f"{assertion.kind}: {str(assertion.id)[:8]}",
@@ -414,9 +418,19 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
         filters: SearchFilters | None = None,
         limit: int = 20,
         cursor: str | None = None,
+        purpose: Purpose = "normal",
+        event_id: UUID | None = None,
     ) -> SearchResponse:
-        principal(Scope.READ)
-        page = await container.search.search(query, filters, limit=limit, cursor=cursor)
+        principal_id = principal(Scope.READ)
+        page = await container.search.search(
+            query,
+            filters,
+            limit=limit,
+            cursor=cursor,
+            purpose=purpose,
+            event_id=event_id,
+            principal=principal_id,
+        )
         return SearchResponse(**page.model_dump())
 
     @tool(
@@ -452,9 +466,16 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
         ),
         annotations=READ_ONLY,
     )
-    async def get_knowledge(assertion_id: str) -> AssertionResponse:
-        principal(Scope.READ)
-        view = await container.search.get(_uuid(assertion_id, "assertion_id"))
+    async def get_knowledge(
+        assertion_id: str, purpose: Purpose = "normal", event_id: UUID | None = None
+    ) -> AssertionResponse:
+        principal_id = principal(Scope.READ)
+        view = await container.search.get(
+            _uuid(assertion_id, "assertion_id"),
+            purpose=purpose,
+            event_id=event_id,
+            principal=principal_id,
+        )
         return AssertionResponse(**view.model_dump())
 
     @tool(
@@ -518,4 +539,5 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
         principal(Scope.READ)
         return StatisticsResponse.model_validate(await container.administration.statistics())
 
+    register_maintenance_tools(container, tool, principal, READ_ONLY, WRITE_IDEMPOTENT)
     return server

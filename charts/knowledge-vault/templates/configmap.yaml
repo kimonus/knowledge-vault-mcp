@@ -14,6 +14,7 @@ data:
   KNOWLEDGE_VAULT_INGESTION_POLICY: {{ .Values.config.ingestionPolicy | quote }}
   {{- end }}
   KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED: {{ .Values.config.embeddingsEnabled | quote }}
+  KNOWLEDGE_VAULT_USAGE_TRACKING_ENABLED: {{ .Values.config.usageTrackingEnabled | quote }}
   KNOWLEDGE_VAULT_EMBEDDING_MODEL: {{ .Values.config.embeddingModel | quote }}
   KNOWLEDGE_VAULT_EMBEDDING_DIMENSIONS: {{ .Values.config.embeddingDimensions | int64 | quote }}
   KNOWLEDGE_VAULT_LOG_LEVEL: {{ .Values.config.logLevel | quote }}

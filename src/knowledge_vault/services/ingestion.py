@@ -288,6 +288,21 @@ class IngestionService:
                         global_index += 1
                         continue
                     item = AssertionInput.model_validate(raw)
+                    from knowledge_vault.services.maintenance import validate_metadata_refs
+
+                    try:
+                        await validate_metadata_refs(session, item)
+                        if item.workflow_state == "resolved":
+                            raise InvalidRequestError(
+                                "insert a question before explicitly linking its resolution"
+                            )
+                    except InvalidRequestError as error:
+                        rejected_items.append(
+                            RejectedItem(index=global_index, code=error.code, message=str(error))
+                        )
+                        counts.rejected += 1
+                        global_index += 1
+                        continue
                     applied = await self._apply_item(session, item)
                     assertion_ids.append(applied.assertion_id)
                     items.append(
@@ -338,6 +353,9 @@ class IngestionService:
         await session.execute(delete(FlushPartRow).where(FlushPartRow.batch_id == batch.id))
 
     async def _apply_item(self, session: AsyncSession, item: AssertionInput) -> _Applied:
+        from knowledge_vault.services.maintenance import validate_metadata_refs
+
+        await validate_metadata_refs(session, item)
         existing = await session.scalar(
             select(AssertionRow)
             .options(selectinload(AssertionRow.sources))
@@ -384,6 +402,18 @@ class IngestionService:
             origin=item.origin,
             status=item.status,
             confidence=item.confidence,
+            **item.model_dump(
+                include={
+                    "evidence_state",
+                    "temporal_role",
+                    "workflow_state",
+                    "last_verified_at",
+                    "review_after",
+                    "context_id",
+                    "facet",
+                }
+            ),
+            provenance=[p.model_dump(mode="json") for p in item.provenance],
             topics=item.topics,
             valid_from=item.valid_from,
             valid_to=item.valid_to,
@@ -430,6 +460,25 @@ class IngestionService:
             ("observed_at", existing.observed_at, item.observed_at),
             ("sensitivity", existing.sensitivity, item.sensitivity),
         ]
+        for name in (
+            "evidence_state",
+            "temporal_role",
+            "workflow_state",
+            "last_verified_at",
+            "review_after",
+            "context_id",
+            "facet",
+        ):
+            if name in item.model_fields_set:
+                pairs.append((name, getattr(existing, name), getattr(item, name)))
+        if "provenance" in item.model_fields_set:
+            pairs.append(
+                (
+                    "provenance",
+                    existing.provenance,
+                    [p.model_dump(mode="json") for p in item.provenance],
+                )
+            )
         return [name for name, stored, submitted in pairs if stored != submitted]
 
     @staticmethod
