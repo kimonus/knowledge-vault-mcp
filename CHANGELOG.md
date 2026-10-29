@@ -5,6 +5,34 @@ stable release.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-29
+
+### Security
+
+- Require msgpack 1.2.3 or later for CVE-2026-114613, found by the release dependency audit.
+
+### Added
+
+- Independent evidence, temporal and workflow metadata, verification/review dates, named contexts,
+  facet keys and non-web provenance. Existing assertions retain unknown evidence and unchanged text.
+- Previewable, revision-checked and idempotent metadata correction, including lowering confidence,
+  repairing dates and updating existing URL source metadata without changing a claim's meaning.
+- Ordered procedure parts, prerequisites, supporting/equivalent assertions and explicit question
+  resolution; bounded related-record inspection, topic aliases and advisory curation/review queues.
+- Separate aggregate retrieval/fetch/use counters. Maintenance reads and candidate checks are
+  excluded; actual use requires an explicit writer report. No popularity-driven ranking/deletion.
+
+### Changed
+
+- **Operator action required:** restore-test a backup before migration 0005; upgrade with the Helm
+  migration job, then reconnect clients/update the flush skill. New metadata is additive and
+  unknown values are not invented. Prefer application rollback on the expanded schema; downgrading
+  0005 discards its metadata, links and counters.
+- Retrieval can maintain incidental usage telemetry; disable with config.usageTrackingEnabled.
+  Failed accounting does not fail retrieval and is flagged in usage.available and a metric.
+- Confirmed forgetting cascades new assertion metadata/audit/usage/links, removes contexts left
+  unreferenced by the deleted records, and reopens questions whose last retained answer was deleted.
+
 ## [0.4.2] - 2026-10-26
 
 ### Security

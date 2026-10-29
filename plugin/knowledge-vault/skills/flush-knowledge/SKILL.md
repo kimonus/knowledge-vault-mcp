@@ -40,6 +40,28 @@ For every assertion:
 - Never submit credentials, passwords, access tokens, private keys, cookies, or secret values. A
   non-secret reference such as "credential is stored in Kubernetes Secret X" is allowed.
 
+## Context, evidence and maintenance metadata
+
+When supported by the connected server, use `evidence_state` to distinguish unknown, reported,
+inferred and verified claims; legacy numeric confidence is not proof. Populate observation/source
+dates only when known. Use `temporal_role` for historical observations versus ongoing state and
+`review_after` for changing information that should be rechecked. Never infer verification,
+completion, freshness or missing dates from access counters or record creation time.
+
+Name a procedure's appliance/project/context in its text. If several records share a named
+context, create it explicitly and use its UUID. For necessary procedure parts, preserve complete
+prerequisites and add ordered `part_of` links after committing the records. Do not leave steps
+such as “use 190 C” without their procedure and conditions. Use typed provenance for non-web
+evidence with opaque conversation/file/observation references; never upload transcripts.
+
+Use `purpose=maintenance` on focused search/get calls made for reconciliation, audits or readback.
+Use `update_knowledge_metadata` with the fetched revision and a new idempotency key to repair
+metadata; preview meaningful repairs with `dry_run`. Changed claim meaning still requires explicit
+supersession. A plan's completion or question's resolution requires actual evidence; a `resolves`
+link points from the question to its answer. Candidate duplicates never authorize automatic merge
+or deletion. Report actual use only when knowledge contributed to the task, not because it was
+returned by search. Older servers may lack these features; preserve the established flush contract.
+
 ## Artifacts
 
 When a text file produced or examined in the conversation is itself part of the knowledge—a CSV

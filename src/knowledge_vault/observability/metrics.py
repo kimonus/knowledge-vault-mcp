@@ -33,3 +33,4 @@ HEARTBEAT_AGE = Gauge(
 DB_POOL = Gauge(
     "knowledge_vault_database_pool_connections", "Database pool connections", ("state",)
 )
+USAGE_EVENTS = Counter("knowledge_vault_usage_events", "Usage accounting failures", ["outcome"])

@@ -9,6 +9,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy.pool import QueuePool
 
 from knowledge_vault.api.auth import require_scope
+from knowledge_vault.api.maintenance import register_maintenance_routes
 from knowledge_vault.api.middleware import (
     CloudflareAccessMiddleware,
     OAuthDiscoveryMiddleware,
@@ -29,6 +30,7 @@ from knowledge_vault.api.schemas import (
 )
 from knowledge_vault.auth.tokens import Principal, Scope
 from knowledge_vault.container import Container
+from knowledge_vault.domain.maintenance import Purpose
 from knowledge_vault.domain.models import CommitResult, ProblemDetail
 from knowledge_vault.domain.responses import (
     AbortResponse,
@@ -307,9 +309,14 @@ def create_app(container: Container) -> FastAPI:
         body: SearchRequest,
         principal: Principal = Depends(require_scope(Scope.READ)),
     ) -> SearchResponse:
-        del principal
         page = await container.search.search(
-            body.query, body.filters, limit=body.limit, cursor=body.cursor
+            body.query,
+            body.filters,
+            limit=body.limit,
+            cursor=body.cursor,
+            purpose=body.purpose,
+            event_id=body.event_id,
+            principal=principal.id,
         )
         return SearchResponse(**page.model_dump())
 
@@ -327,10 +334,13 @@ def create_app(container: Container) -> FastAPI:
     @app.get("/api/v1/assertions/{assertion_id}")
     async def get_assertion(
         assertion_id: UUID,
+        purpose: Purpose = "normal",
+        event_id: UUID | None = None,
         principal: Principal = Depends(require_scope(Scope.READ)),
     ) -> AssertionResponse:
-        del principal
-        view = await container.search.get(assertion_id)
+        view = await container.search.get(
+            assertion_id, purpose=purpose, event_id=event_id, principal=principal.id
+        )
         return AssertionResponse(**view.model_dump())
 
     @app.get("/api/v1/conflicts")
@@ -377,6 +387,7 @@ def create_app(container: Container) -> FastAPI:
         del principal
         return StatisticsResponse.model_validate(await container.administration.statistics())
 
+    register_maintenance_routes(app, container)
     # Keep this catch-all mount last so ordinary HTTP routes remain authoritative.
     app.mount("/", mcp_app)
     return app

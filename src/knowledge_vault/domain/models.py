@@ -12,6 +12,13 @@ from knowledge_vault.domain.enums import (
     EmbeddingState,
     Sensitivity,
 )
+from knowledge_vault.domain.maintenance import (
+    EvidenceState,
+    KnowledgeMetadata,
+    TemporalRole,
+    UsageView,
+    WorkflowState,
+)
 from knowledge_vault.domain.normalization import content_hash, normalize_content, normalize_topic
 from knowledge_vault.domain.secrets import detect_secret
 
@@ -91,7 +98,7 @@ class ArtifactBeginInput(BaseModel):
         return self
 
 
-class AssertionInput(BaseModel):
+class AssertionInput(KnowledgeMetadata):
     model_config = ConfigDict(extra="forbid")
 
     content: Annotated[SafeText, Field(min_length=1, max_length=16_000)]
@@ -126,6 +133,17 @@ class AssertionInput(BaseModel):
         self.artifact_ids = list(dict.fromkeys(self.artifact_ids))
         if self.status is AssertionStatus.SUPERSEDED and self.supersedes_id:
             raise ValueError("a new correction cannot itself be submitted as superseded")
+        if self.evidence_state == "verified" and (
+            not self.last_verified_at
+            or not (self.sources or any(p.kind != "unknown" for p in self.provenance))
+        ):
+            raise ValueError("verified evidence needs a verification date and provenance")
+        states = {
+            AssertionKind.PLAN: {"proposed", "active", "completed", "cancelled"},
+            AssertionKind.OPEN_QUESTION: {"unresolved", "resolved"},
+        }
+        if self.workflow_state and self.workflow_state not in states.get(self.kind, set()):
+            raise ValueError("workflow state does not apply to this assertion kind")
         return self
 
     @property
@@ -154,7 +172,7 @@ class ArtifactRef(BaseModel):
     description: str | None = None
 
 
-class AssertionView(BaseModel):
+class AssertionView(KnowledgeMetadata):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -176,6 +194,8 @@ class AssertionView(BaseModel):
     embedding_state: EmbeddingState
     sources: list[SourceView] = Field(default_factory=list)
     artifacts: list[ArtifactRef] = Field(default_factory=list)
+    revision: int = 1
+    usage: UsageView = Field(default_factory=UsageView)
 
 
 class RejectedItem(BaseModel):
@@ -234,6 +254,12 @@ class SearchFilters(BaseModel):
     valid_at: Timestamp | None = None
     created_after: Timestamp | None = None
     created_before: Timestamp | None = None
+    context_id: UUID | None = None
+    facet: str | None = Field(default=None, max_length=80)
+    evidence_states: list[EvidenceState] = Field(default_factory=list, max_length=4)
+    temporal_roles: list[TemporalRole] = Field(default_factory=list, max_length=3)
+    workflow_states: list[WorkflowState] = Field(default_factory=list, max_length=6)
+    review_due: bool = False
 
 
 class SearchHit(BaseModel):

@@ -1,5 +1,27 @@
 # MCP tool reference
 
+## Knowledge maintenance (0.5.0)
+
+See [knowledge maintenance](knowledge-maintenance.md) for fields, examples and retry semantics.
+Focused search/get accept purpose and event_id. Compatibility search/fetch keep existing shapes.
+
+| MCP tool | HTTP route | Scope |
+|---|---|---|
+| update_knowledge_metadata(request) | POST /api/v1/metadata | write |
+| create_knowledge_context(context) | POST /api/v1/contexts | write |
+| get_knowledge_context(context_id) | GET /api/v1/contexts/{id} | read |
+| link_knowledge(link) | POST /api/v1/links | write |
+| get_related_knowledge(assertion_id, limit) | GET /api/v1/assertions/{id}/related | read |
+| add_knowledge_topic_alias(alias) | POST /api/v1/topic-aliases | write |
+| list_knowledge_topic_aliases() | GET /api/v1/topic-aliases | read |
+| review_knowledge(limit, after, context_id) | GET /api/v1/review | read |
+| find_knowledge_curation_candidates(context_id, topic, limit) | GET /api/v1/curation-candidates | read |
+| report_knowledge_usage(report) | POST /api/v1/usage | write |
+
+New text/reference fields remain untrusted data. Review/related/curation limits are 1-100.
+Candidates are advisory and never authorize merging/deletion. Normal retrieval can maintain
+incidental aggregate telemetry but cannot edit claims or evidence; actual-use reports require write.
+
 Connect to `/mcp` with `Authorization: Bearer <token>`. Scopes are `knowledge:read`,
 `knowledge:write`, and `knowledge:admin`; admin also satisfies the other scope checks.
 

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -45,6 +45,8 @@ class SearchRequest(BaseModel):
     filters: SearchFilters = Field(default_factory=SearchFilters)
     limit: int = 20
     cursor: str | None = None
+    purpose: Literal["normal", "maintenance"] = "normal"
+    event_id: UUID | None = None
 
 
 class CandidateCheckRequest(BaseModel):

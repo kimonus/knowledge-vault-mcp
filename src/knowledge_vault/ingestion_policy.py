@@ -28,7 +28,16 @@ and concise provenance. Store claims and source references rather than complete 
 Distinguish decisions from proposals and successful results from untested plans. Never invent
 missing values or steps. Exclude filler and duplicate wording. Keep an extraction checklist in
 client context and compare it with the conversation before the flush, so that nothing useful is
-omitted."""
+omitted.
+
+Use evidence_state to distinguish reported or inferred claims from verified outcomes; the legacy
+confidence default is not measured certainty. Record known observation/source dates, temporal_role
+and review_after where appropriate, without inventing times. Preserve named context and complete
+procedures; link necessary parts explicitly after commit. Use typed provenance for non-web evidence,
+never transcripts. Use purpose=maintenance for reconciliation and verification reads. Repair
+metadata through update_knowledge_metadata with a fetched revision; changed meaning still requires
+supersession. Resolve questions and complete plans only with actual evidence. Access counts do not
+establish truth or authorize deletion. Report actual usage only for assertions used in the task."""
 
 
 def build_ingestion_instructions(

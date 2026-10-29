@@ -75,3 +75,9 @@ adjust it for an in-cluster or plain-HTTP target.
   unmounted drive: the Pod then fails to start with a missing-directory event.
 - `embedding_jobs_dead`: fix the cause (see [troubleshooting.md](troubleshooting.md)), then
   requeue with `knowledge-vault-reembed`.
+# Usage telemetry (0.5.0)
+
+knowledge_vault_usage_events_total{outcome="failed"} counts optional accounting failures. Reads
+continue with usage.available=false; those zero counters are not authoritative. Inspect database
+lock pressure before retrying. Disable normal accounting via config.usageTrackingEnabled if needed.
+Worker maintenance purges expired retry/audit records before recording its existing heartbeat.
