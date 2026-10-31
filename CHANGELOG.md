@@ -7,6 +7,9 @@ stable release.
 
 ### Fixed
 
+- CI waits until the configured PostgreSQL database accepts a real query before running backup,
+  restore, migration, or Inspector checks; server-level readiness no longer races database
+  creation during container initialization.
 - The watchdog CronJob skips a run more than two minutes late (`startingDeadlineSeconds: 120`).
   After a node restart the run missed during the downtime started seconds after the cluster,
   before DNS and Services were ready, and failed without checking anything.
