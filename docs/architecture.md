@@ -1,5 +1,12 @@
 # Architecture
 
+Temporal state uses an immutable PostgreSQL evidence relation alongside legacy deduplicated
+assertions. The existing transactional flush writes both; deterministic resolution reads one
+indexed identity from a consistent database statement snapshot. No cache, extra service, LLM or
+worker reconciliation can become stale after backfills. Generic hybrid search discovers evidence;
+`resolve_knowledge_state` determines current/historical support and exposes uncertainty. See
+[decision 0007](decisions/0007-temporal-evidence.md) and [usage](temporal-knowledge.md).
+
 Knowledge Vault separates protocol adapters from application services. MCP and FastAPI validate
 and authorize requests, then invoke the same ingestion, search, and administration services.
 Those services depend on domain models, SQLAlchemy repositories, and an embedding provider—not on

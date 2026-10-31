@@ -52,6 +52,11 @@ class Provenance(SafeModel):
     locator: Annotated[str, Field(min_length=1, max_length=1000)] | None = None
     title: Annotated[str, Field(max_length=200)] | None = None
     observed_at: datetime | None = None
+    conversation_id: ShortText | None = None
+    message_ids: list[ShortText] = Field(default_factory=list, max_length=16)
+    timestamp_precision: Literal["instant", "day", "month", "year", "unknown"] = "unknown"
+    timestamp_basis: Literal["message", "conversation", "source", "unknown"] = "unknown"
+    timestamp_confidence: float | None = Field(default=None, ge=0, le=1)
 
     @model_validator(mode="after")
     def locator_shape(self) -> "Provenance":

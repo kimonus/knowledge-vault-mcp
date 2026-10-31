@@ -9,6 +9,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from psycopg import sql
+from psycopg.types.json import Jsonb
 
 pytestmark = pytest.mark.integration
 
@@ -67,6 +68,15 @@ def test_legacy_upgrade_and_logical_restore(postgres_url, monkeypatch):
                 "INSERT INTO assertion_usage(assertion_id,retrieval_count) VALUES (%s,7)", (ident,)
             )
             connection.execute("INSERT INTO topic_aliases VALUES ('test-alias','legacy')")
+            connection.execute(
+                "INSERT INTO temporal_evidence"
+                "(evidence_key,assertion_id,identity_hash,payload_hash,payload) "
+                "VALUES ('synthetic-source',%s,%s,%s,%s)",
+                (ident, "a" * 64, "b" * 64, Jsonb({"synthetic": "atomic source observation"})),
+            )
+            connection.execute(
+                "INSERT INTO temporal_retirements(evidence_key) VALUES ('synthetic-source')"
+            )
 
         # Run the matching pg_dump/restore clients in the same pinned image as the DB. The dump
         # contains synthetic data only and stays in memory, never in CI artifact uploads.
@@ -87,6 +97,10 @@ def test_legacy_upgrade_and_logical_restore(postgres_url, monkeypatch):
             timeout=60,
         )
         with psycopg.connect(urls[1]) as restored:
+            assert restored.execute(
+                "SELECT payload FROM temporal_evidence WHERE evidence_key='synthetic-source'"
+            ).fetchone() == ({"synthetic": "atomic source observation"},)
+            assert restored.execute("SELECT count(*) FROM temporal_retirements").fetchone() == (1,)
             assert restored.execute(
                 "SELECT content, confidence FROM assertions WHERE id=%s", (ident,)
             ).fetchone() == (original, 0.8)

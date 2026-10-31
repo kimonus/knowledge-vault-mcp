@@ -146,6 +146,22 @@ The following must not call begin/append/commit:
 - `Summarize this chat.`
 - `Remember this` when the user has not asked to use their MCP and another memory mechanism is in
   scope.
+# Temporal backfill and reimport
+
+User explicitly requests a flush of two available original source observations: January 31
+confirms migration to MikroTik, January 1 observed Router X. Both have known source references.
+Expected: candidate-check their texts, then preserve both observations with the same exact
+property identity and different stable evidence keys, original observed dates/precision and
+snapshot/change modes. Do not use supersedes_id or March import time as chronology. The January
+1 backfill must still be submitted if its text matches: its observation is new evidence.
+
+Reimporting the same sources reuses identical keys and payloads. Evidence receipts say replayed;
+do not create new source keys merely for a new flush. A later proposal never changes confirmed
+state. A later historical recollection uses historical mode. Missing source dates remain null;
+missing identity remains unstructured. Explicitly corrected evidence read in the session uses
+corrects_key rather than a configuration-change event. Report ambiguity/conflict as unresolved.
+Commit/readback rules remain unchanged; current/history questions use resolve_knowledge_state.
+
 # 0.5.0 maintenance behavior
 
 - A whole procedure includes its appliance/context, preparation, ordered actions and caveats in a

@@ -1,5 +1,11 @@
 # Monitoring without a monitoring stack
 
+Temporal resolution exposes `knowledge_vault_temporal_resolutions_total` with fixed outcomes
+resolved/ambiguous/conflict/unknown/overflow. These count lookups, not unique conflicting properties.
+Inspect reasons through authenticated resolution and use temporal diagnostics for metadata
+coverage. Overflow returns no partial winner. No asynchronous projection or new duty needs a
+watchdog heartbeat. See [temporal limits](../temporal-knowledge.md).
+
 Knowledge Vault exposes Prometheus metrics, but a single-node personal deployment often has no
 Prometheus or Alertmanager. The watchdog covers the failures that matter there: it makes them
 visible in the cluster and can notify you.
