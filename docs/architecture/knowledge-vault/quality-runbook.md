@@ -22,6 +22,10 @@ configured model identifier, not a weights digest. The default invocation runs o
 category. Full results include per-case synthetic keys but no assertion text, source text, query
 text or credentials. Keep even synthetic reports out of production telemetry.
 
+Use `--split dev` during candidate selection and run `--split held_out` once for the selected
+candidate. Each invocation seeds only that split; compare it with an unchanged-search run using
+the same split and distractor count.
+
 The `dev` and `held_out` labels are fixed by scenario; do not tune on held-out outcomes. The
 report's binary nDCG@10 and Recall@10 score retrieval over preseeded gold assertions. Temporal
 correctness scores the separate exact-identity resolver. Three missing-model cases label the

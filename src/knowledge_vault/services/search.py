@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import time
 from uuid import UUID
 
@@ -33,7 +34,7 @@ from knowledge_vault.domain.normalization import content_hash, normalize_content
 from knowledge_vault.domain.secrets import detect_secret
 from knowledge_vault.domain.temporal import StateIdentity
 from knowledge_vault.embeddings.base import EmbeddingProvider
-from knowledge_vault.observability.metrics import SEARCH_LATENCY, USAGE_EVENTS
+from knowledge_vault.observability.metrics import SEARCH_CANDIDATES, SEARCH_LATENCY, USAGE_EVENTS
 from knowledge_vault.persistence.tables import AssertionRow, TemporalEvidenceRow, TopicAliasRow
 from knowledge_vault.services.cursors import Cursor, CursorCodec, InvalidCursorError
 from knowledge_vault.services.errors import InvalidRequestError, NotFoundError
@@ -60,6 +61,81 @@ _CHECKED_STATUSES = (
     AssertionStatus.UNCERTAIN,
     AssertionStatus.DISPUTED,
 )
+
+_QUESTION_TERMS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "choosing",
+        "current",
+        "did",
+        "do",
+        "does",
+        "exact",
+        "for",
+        "from",
+        "how",
+        "in",
+        "is",
+        "it",
+        "jak",
+        "jaka",
+        "jakie",
+        "jaki",
+        "jaką",
+        "matters",
+        "of",
+        "on",
+        "or",
+        "preferuje",
+        "the",
+        "to",
+        "tried",
+        "user",
+        "użytkownik",
+        "was",
+        "were",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "why",
+        "with",
+        "worked",
+        "для",
+        "как",
+        "какие",
+        "какой",
+        "пользователю",
+        "что",
+    }
+)
+_QUESTION_VERB_FORMS = {"purchase": "purchased", "require": "requires", "select": "selected"}
+
+
+def _question_subject_query(query: str) -> str | None:
+    """Keep subject terms conjunctive when a plain question has no strict text hits."""
+    if '"' in query or re.search(r"\b(?:AND|OR|NOT)\b|(?:^|\s)-\w", query):
+        return None
+    if "?" not in query and not re.match(
+        r"(?i)^(?:what|which|who|why|how|when|where|jak|jaki|jaka|jakie|jaką|что|какой)\b",
+        query,
+    ):
+        return None
+    terms: list[str] = []
+    for term in re.findall(r"[^\W_]+(?:[.-][^\W_]+)*", query.casefold()):
+        if len(term) >= 2 and term not in _QUESTION_TERMS and term not in terms:
+            terms.append(term)
+    if not 2 <= len(terms) <= 8:
+        return None
+    return " ".join(_QUESTION_VERB_FORMS.get(term, term) for term in terms)
 
 
 def _candidate_error(candidate: object) -> CandidateError | None:
@@ -267,6 +343,23 @@ class SearchService:
 
         async with self._sessions() as session:
             text_rows = list((await session.execute(text_statement)).tuples().all())
+            strict_count = len(text_rows)
+            fallback_count = 0
+            if not text_rows and (question_query := _question_subject_query(lexical_query)):
+                question_tsquery = func.websearch_to_tsquery("simple", question_query)
+                question_statement = (
+                    base.add_columns(
+                        func.ts_rank_cd(AssertionRow.search_vector, question_tsquery).label("rank")
+                    )
+                    .where(AssertionRow.search_vector.op("@@")(question_tsquery))
+                    .order_by(
+                        func.ts_rank_cd(AssertionRow.search_vector, question_tsquery).desc(),
+                        AssertionRow.id,
+                    )
+                    .limit(candidate_limit)
+                )
+                text_rows = list((await session.execute(question_statement)).tuples().all())
+                fallback_count = len(text_rows)
             vector_rows: list[tuple[AssertionRow, float]] = []
             if query_vector is not None:
                 distance = AssertionRow.embedding.cosine_distance(query_vector)
@@ -283,6 +376,13 @@ class SearchService:
                     .limit(candidate_limit)
                 )
                 vector_rows = list((await session.execute(vector_statement)).tuples().all())
+
+        SEARCH_CANDIDATES.labels(source="strict").observe(strict_count)
+        SEARCH_CANDIDATES.labels(source="question").observe(fallback_count)
+        SEARCH_CANDIDATES.labels(source="vector").observe(len(vector_rows))
+        SEARCH_CANDIDATES.labels(source="overlap").observe(
+            len({row.id for row, _ in text_rows} & {row.id for row, _ in vector_rows})
+        )
 
         rows_by_id: dict[UUID, AssertionRow] = {row.id: row for row, _ in text_rows}
         rows_by_id.update({row.id: row for row, _ in vector_rows})

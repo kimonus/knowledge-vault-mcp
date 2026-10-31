@@ -18,6 +18,8 @@ stable release.
   container and its log are removed.
 ### Added
 
+- Content-free fixed-label search candidate histograms for strict text, conjunctive question
+  fallback, vectors, and overlap.
 - A source-first synthetic quality harness with 63 scenario packs, disposable PostgreSQL
   retrieval/temporal scoring, 200 distractor support, and optional two-reviewer extraction and
   answer judgment aggregation. It does not read production knowledge or download models.
@@ -31,6 +33,9 @@ stable release.
 
 ### Changed
 
+- Plain questions with no strict text hit receive a bounded conjunctive subject-term fallback;
+  exact syntax and successful strict searches keep their existing behavior. No schema or MCP
+  response change. Search ranking and cursors can shift after rollout; restart pagination.
 - **Operator action required:** restore-test a backup before migration 0006, run the Helm migration
   job and refresh client schemas/flush skill. Legacy records remain unchanged and unclassified;
   gradually enrich reviewed evidence. Use corrects_key to correct structured evidence rather than
