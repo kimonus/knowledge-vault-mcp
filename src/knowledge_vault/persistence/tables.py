@@ -149,6 +149,40 @@ class AssertionRow(Base):
     )
 
 
+class TemporalEvidenceRow(Base):
+    __tablename__ = "temporal_evidence"
+    __table_args__ = (
+        CheckConstraint("length(evidence_key) BETWEEN 1 AND 200", name="ck_temporal_key"),
+        CheckConstraint("length(identity_hash) = 64", name="ck_temporal_identity"),
+        CheckConstraint("length(payload_hash) = 64", name="ck_temporal_payload_hash"),
+        CheckConstraint("jsonb_typeof(payload) = 'object'", name="ck_temporal_payload"),
+        Index("ix_temporal_identity_recorded", "identity_hash", "recorded_at", "evidence_key"),
+        Index("ix_temporal_assertion", "assertion_id"),
+    )
+    evidence_key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    assertion_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assertions.id", ondelete="CASCADE")
+    )
+    identity_hash: Mapped[str] = mapped_column(String(64))
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict[str, Any]] = mapped_column(json_type())
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class TemporalRetirementRow(Base):
+    """A retained claim stays invalid after forgetting its correcting assertion's content."""
+
+    __tablename__ = "temporal_retirements"
+    evidence_key: Mapped[str] = mapped_column(
+        String(200),
+        ForeignKey("temporal_evidence.evidence_key", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    retired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class SourceRow(Base):
     __tablename__ = "assertion_sources"
     __table_args__ = (UniqueConstraint("assertion_id", "url", name="uq_source_assertion_url"),)
@@ -170,6 +204,9 @@ class FlushBatchRow(Base):
         UniqueConstraint("principal_id", "idempotency_hash", name="uq_batch_idempotency"),
         CheckConstraint("declared_parts > 0", name="ck_batch_declared_parts"),
         CheckConstraint("declared_items > 0", name="ck_batch_declared_items"),
+        CheckConstraint(
+            "request_digest IS NULL OR length(request_digest) = 64", name="ck_batch_request_digest"
+        ),
         CheckConstraint(_one_of("state", BatchState), name="ck_batch_state"),
         Index("ix_flush_batches_expiry", "state", "expires_at"),
     )
@@ -177,6 +214,7 @@ class FlushBatchRow(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     principal_id: Mapped[str] = mapped_column(String(128))
     idempotency_hash: Mapped[str] = mapped_column(String(64))
+    request_digest: Mapped[str | None] = mapped_column(String(64))
     declared_parts: Mapped[int] = mapped_column(Integer)
     declared_items: Mapped[int] = mapped_column(Integer)
     state: Mapped[str] = mapped_column(String(20), default="open")

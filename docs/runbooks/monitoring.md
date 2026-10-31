@@ -1,5 +1,11 @@
 # Monitoring without a monitoring stack
 
+Temporal resolution exposes `knowledge_vault_temporal_resolutions_total` with fixed outcomes
+resolved/ambiguous/conflict/unknown/overflow. These count lookups, not unique conflicting properties.
+Inspect reasons through authenticated resolution and use temporal diagnostics for metadata
+coverage. Overflow returns no partial winner. No asynchronous projection or new duty needs a
+watchdog heartbeat. See [temporal limits](../temporal-knowledge.md).
+
 Knowledge Vault exposes Prometheus metrics, but a single-node personal deployment often has no
 Prometheus or Alertmanager. The watchdog covers the failures that matter there: it makes them
 visible in the cluster and can notify you.
@@ -36,6 +42,18 @@ kubectl -n knowledge-vault logs job/NAME_OF_FAILED_JOB
 
 The log line `watchdog_evaluated` lists the problem codes: `worker_stale`, `backup_stale`,
 `embedding_jobs_dead`.
+
+A container's log is gone once the node restarts or removes the container, while the failed Job
+stays. The end of a failed run's log is also kept in the Pod status:
+
+```bash
+kubectl -n knowledge-vault get pods -l app.kubernetes.io/component=watchdog \
+  -o custom-columns='POD:.metadata.name,MESSAGE:.status.containerStatuses[0].state.terminated.message'
+```
+
+A run that has no `watchdog_evaluated` line failed before it checked anything, usually because
+the database was unreachable. A run more than two minutes late, such as one missed while the
+cluster was down, is skipped rather than started while the node is still booting.
 
 ## Notifications
 

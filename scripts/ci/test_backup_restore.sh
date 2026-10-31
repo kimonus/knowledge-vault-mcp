@@ -4,6 +4,7 @@ set -eu
 image="${1:-knowledge-vault-backup:ci}"
 work_dir="$(mktemp -d)"
 database_container="knowledge-vault-backup-test-$$"
+script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
 cleanup() {
   status=$?
@@ -32,16 +33,8 @@ docker run --detach --name "${database_container}" \
   pgvector/pgvector:0.8.1-pg17-trixie@sha256:137f044b0efe3d57f39b972b9b53641b1f2045b99d879e298bbf514a25787dcf \
   >/dev/null
 
-attempt=0
-until docker exec "${database_container}" pg_isready -U knowledge_vault -d knowledge_vault \
-  >/dev/null 2>&1; do
-  attempt=$((attempt + 1))
-  if [ "${attempt}" -ge 60 ]; then
-    echo "disposable PostgreSQL did not become ready" >&2
-    exit 1
-  fi
-  sleep 1
-done
+sh "${script_dir}/wait_for_postgres_database.sh" \
+  "${database_container}" knowledge_vault knowledge_vault
 
 docker exec "${database_container}" psql -v ON_ERROR_STOP=1 \
   -U knowledge_vault -d knowledge_vault \

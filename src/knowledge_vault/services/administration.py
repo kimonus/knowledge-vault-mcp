@@ -5,6 +5,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import CursorResult, delete, exists, func, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
@@ -22,6 +23,8 @@ from knowledge_vault.persistence.tables import (
     EmbeddingJobRow,
     HeartbeatRow,
     KnowledgeContextRow,
+    TemporalEvidenceRow,
+    TemporalRetirementRow,
     TopicAliasRow,
 )
 from knowledge_vault.services.errors import ConflictError, InvalidRequestError, NotFoundError
@@ -41,6 +44,31 @@ def _only_described_by(assertion_ids: list[UUID]) -> Any:
     )
 
 
+def _temporal_retirement_targets(assertion_ids: list[UUID]) -> Any:
+    removed = aliased(TemporalEvidenceRow)
+    target = aliased(TemporalEvidenceRow)
+    return (
+        select(target.evidence_key)
+        .join(
+            removed,
+            (removed.payload["temporal"]["corrects_key"].as_string() == target.evidence_key)
+            & (removed.identity_hash == target.identity_hash),
+        )
+        .where(
+            removed.assertion_id.in_(assertion_ids),
+            target.assertion_id.notin_(assertion_ids),
+            removed.payload["temporal"]["mode"].as_string() == "correction",
+            removed.payload["evidence_state"].as_string().in_(["reported", "verified"]),
+            removed.payload["status"].as_string() == "current",
+            removed.payload["confidence"].as_float() > 0,
+            removed.payload["origin"]
+            .as_string()
+            .in_(["user", "joint", "external_source", "artifact"]),
+        )
+        .distinct()
+    )
+
+
 class AdministrationService:
     def __init__(
         self,
@@ -56,12 +84,21 @@ class AdministrationService:
         idempotency_key: str,
         correction: AssertionInput,
     ) -> CommitResult:
-        if not correction.supersedes_id:
-            raise InvalidRequestError("a correction must identify supersedes_id")
-        batch = await self._ingestion.begin(principal_id, idempotency_key, 1, 1)
-        await self._ingestion.append(
-            principal_id, batch.id, 1, [correction.model_dump(mode="json")]
+        if not correction.supersedes_id and not (
+            correction.temporal and correction.temporal.mode == "correction"
+        ):
+            raise InvalidRequestError(
+                "a correction must identify supersedes_id or temporal.corrects_key"
+            )
+        payload = correction.model_dump(mode="json")
+        batch = await self._ingestion.begin(
+            principal_id, idempotency_key, 1, 1, receipt_payload=payload
         )
+        try:
+            await self._ingestion.append(principal_id, batch.id, 1, [payload])
+        except ConflictError:
+            # Prior/concurrent identical calls may have committed; begin checked the digest.
+            return await self._ingestion.commit(principal_id, batch.id)
         return await self._ingestion.commit(principal_id, batch.id)
 
     async def list_conflicts(self, *, limit: int = 50) -> list[dict[str, Any]]:
@@ -141,6 +178,14 @@ class AdministrationService:
                 .select_from(AssertionUsageRow)
                 .where(AssertionUsageRow.assertion_id.in_(found))
             )
+            temporal_count = await session.scalar(
+                select(func.count())
+                .select_from(TemporalEvidenceRow)
+                .where(TemporalEvidenceRow.assertion_id.in_(found))
+            )
+            retired_count = await session.scalar(
+                select(func.count()).select_from(_temporal_retirement_targets(found).subquery())
+            )
             context_ids = list(
                 await session.scalars(
                     select(AssertionRow.context_id)
@@ -184,6 +229,8 @@ class AdministrationService:
             "artifact_count": artifact_count or 0,
             "relationship_count": relationship_count or 0,
             "usage_record_count": usage_count or 0,
+            "temporal_evidence_count": temporal_count or 0,
+            "temporal_retirement_count": retired_count or 0,
             "orphaned_context_count": len(orphaned_contexts),
             "reopened_question_ids": [str(ident) for ident in reopened],
             "confirmation_token": token,
@@ -242,6 +289,13 @@ class AdministrationService:
             )
             # An artifact is kept only while an assertion describes it.
             artifact_ids = list((await session.scalars(_only_described_by(ids))).all())
+            # Content-free metadata about retained claims, never the deleted correction or value.
+            # Prevents deletion from reactivating knowledge that was explicitly invalidated.
+            await session.execute(
+                insert(TemporalRetirementRow)
+                .from_select(["evidence_key"], _temporal_retirement_targets(ids))
+                .on_conflict_do_nothing()
+            )
             result = await session.execute(delete(AssertionRow).where(AssertionRow.id.in_(ids)))
             deleted_count = int(cast(CursorResult[Any], result).rowcount or 0)
             await session.execute(

@@ -46,8 +46,11 @@ from knowledge_vault.domain.responses import (
     ForgetPreviewResponse,
     ForgetResultResponse,
     SearchResponse,
+    StateResolutionResponse,
     StatisticsResponse,
+    TemporalDiagnosticsResponse,
 )
+from knowledge_vault.domain.temporal import ResolutionRequest
 from knowledge_vault.mcp.server import artifact_page, create_mcp_server
 from knowledge_vault.observability.metrics import DB_POOL, HEARTBEAT_AGE
 from knowledge_vault.services.errors import KnowledgeVaultError, RateLimitedError
@@ -303,6 +306,21 @@ def create_app(container: Container) -> FastAPI:
         return artifact_page(
             await container.artifacts.read(artifact_id, offset=offset, limit=limit)
         )
+
+    @app.post("/api/v1/state/resolve")
+    async def resolve_state(
+        body: ResolutionRequest,
+        principal: Principal = Depends(require_scope(Scope.READ)),
+    ) -> StateResolutionResponse:
+        del principal
+        return await container.temporal.resolve(body)
+
+    @app.get("/api/v1/state/diagnostics")
+    async def temporal_diagnostics(
+        principal: Principal = Depends(require_scope(Scope.READ)),
+    ) -> TemporalDiagnosticsResponse:
+        del principal
+        return await container.temporal.diagnostics()
 
     @app.post("/api/v1/search")
     async def search_knowledge(

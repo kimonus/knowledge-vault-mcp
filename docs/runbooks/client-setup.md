@@ -1,5 +1,11 @@
 # MCP client setup
 
+After upgrading to temporal evidence, refresh MCP tool schemas and the flush skill. Use
+`resolve_knowledge_state` for current/historical state questions; semantic search discovers
+assertions and get exposes temporal identities. Preserve source keys and original dates on
+reimport. See [temporal client examples](../temporal-knowledge.md). Old clients retain unstructured
+knowledge operations; structured corrections require `temporal.corrects_key`.
+
 This guide uses the maintained Cloudflare + LAN/WireGuard reference profile. It is one secure
 connectivity architecture, not an MCP requirement. With another authenticated transport, substitute
 its endpoints and authorization flow while retaining server-side scopes, TLS, origin validation,
