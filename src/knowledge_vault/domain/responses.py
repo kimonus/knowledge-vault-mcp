@@ -5,6 +5,7 @@ the other, and so that the HTTP OpenAPI document and the MCP output schemas desc
 thing.
 """
 
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -12,11 +13,46 @@ from pydantic import BaseModel, Field
 
 from knowledge_vault.domain.maintenance import ContextInput, LinkInput
 from knowledge_vault.domain.models import (
+    AssertionInput,
     AssertionView,
     CandidateCheckPage,
     RejectedItem,
     SearchPage,
 )
+from knowledge_vault.domain.temporal import StateIdentity
+
+
+class TemporalEvidenceView(BaseModel):
+    evidence_key: str
+    assertion_id: UUID
+    recorded_at: datetime
+    assertion: AssertionInput
+    disposition: Literal["supporting", "competing", "historical", "excluded", "corrected"]
+    ordering_at: datetime | None = None
+    ordering_basis: Literal["effective", "observed", "unknown"] = "unknown"
+
+
+class StateResolutionResponse(BaseModel):
+    identity: StateIdentity
+    as_of: datetime | None
+    known_at: datetime | None
+    resolver_version: str = "1"
+    outcome: Literal["resolved", "ambiguous", "conflict", "unknown"]
+    values: list[str]
+    supporting_keys: list[str]
+    competing_keys: list[str]
+    reasons: list[str]
+    evidence_total: int
+    history: list[TemporalEvidenceView]
+    next_history_after: str | None = None
+    untrusted_data: Literal[True] = True
+
+
+class TemporalDiagnosticsResponse(BaseModel):
+    fully_classified: int
+    partially_classified: int
+    unresolved: int
+    evidence_total: int
 
 
 class MutationResponse(BaseModel):
@@ -178,6 +214,8 @@ class ForgetPreviewResponse(BaseModel):
     artifact_count: int = 0
     relationship_count: int = 0
     usage_record_count: int = 0
+    temporal_evidence_count: int = 0
+    temporal_retirement_count: int = 0
     orphaned_context_count: int = 0
     reopened_question_ids: list[str] = []
     confirmation_token: str

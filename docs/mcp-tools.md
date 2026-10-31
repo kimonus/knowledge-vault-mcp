@@ -1,5 +1,32 @@
 # MCP tool reference
 
+## Temporal state (additive)
+
+`append_knowledge` accepts optional `temporal` identity/value/mode/source-key metadata; commit
+items add `evidence_key` and `evidence_outcome` (`inserted`, `replayed`). Legacy fields/defaults
+remain. Provenance optionally adds conversation/message references and timestamp precision,
+basis and confidence. No conversation or message bodies are stored.
+
+`resolve_knowledge_state(request)` requires read scope. Request: exact `identity` (`subject`,
+`property`, `scope`, `state_type`), optional `as_of` and `known_at`, `history_limit` (1–100,
+default 20) and `history_after` stable key. Shared response: outcome, values, supporting/competing
+keys, reasons, resolver version, evidence total and source-bearing paginated history. Only
+`resolved` is a supported answer. Every page resolves the complete property. HTTP equivalent:
+`POST /api/v1/state/resolve` with the request body directly.
+
+`get_knowledge_temporal_diagnostics()` requires read scope and returns fully/partially classified,
+unresolved assertion counts and evidence total. HTTP: `GET /api/v1/state/diagnostics`.
+Classification measures metadata coverage. `get_knowledge` advertises `temporal_identities` (up to
+32, with a truncation flag); search/fetch keeps its discovery contract. Generic `status=current`
+and `valid_at` filters do not establish temporal authority.
+
+`correct_knowledge` accepts a temporal correction with `corrects_key` or legacy `supersedes_id`.
+Sequential/concurrent identical retries return the original receipt; changed payload/key reuse
+is refused. A pre-upgrade receipt without a request digest can be replayed by its batch ID through
+`commit_knowledge_flush`, not by resubmitting a one-call correction.
+Legacy supersession of structured evidence is refused to prevent silent divergence. Metadata
+maintenance cannot edit immutable evidence. See [policy and examples](temporal-knowledge.md).
+
 ## Knowledge maintenance (0.5.0)
 
 See [knowledge maintenance](knowledge-maintenance.md) for fields, examples and retry semantics.

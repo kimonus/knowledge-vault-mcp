@@ -31,9 +31,10 @@ from knowledge_vault.domain.models import (
 )
 from knowledge_vault.domain.normalization import content_hash, normalize_content
 from knowledge_vault.domain.secrets import detect_secret
+from knowledge_vault.domain.temporal import StateIdentity
 from knowledge_vault.embeddings.base import EmbeddingProvider
 from knowledge_vault.observability.metrics import SEARCH_LATENCY, USAGE_EVENTS
-from knowledge_vault.persistence.tables import AssertionRow, TopicAliasRow
+from knowledge_vault.persistence.tables import AssertionRow, TemporalEvidenceRow, TopicAliasRow
 from knowledge_vault.services.cursors import Cursor, CursorCodec, InvalidCursorError
 from knowledge_vault.services.errors import InvalidRequestError, NotFoundError
 from knowledge_vault.services.maintenance import UsageService
@@ -448,9 +449,24 @@ class SearchService:
                 .options(selectinload(AssertionRow.sources))
                 .where(AssertionRow.id == assertion_id)
             )
+            identities = list(
+                await session.scalars(
+                    select(
+                        TemporalEvidenceRow.payload["temporal"]["identity"].label("state_identity")
+                    )
+                    .where(TemporalEvidenceRow.assertion_id == assertion_id)
+                    .distinct()
+                    .order_by("state_identity")
+                    .limit(33)
+                )
+            )
         if not row:
             raise NotFoundError("assertion was not found")
         view = _view(row)
+        view.temporal_identities = [
+            StateIdentity.model_validate(value) for value in identities[:32]
+        ]
+        view.temporal_identities_truncated = len(identities) > 32
         await self._account(
             [view], purpose=purpose, event_id=event_id, principal=principal, operation="fetch"
         )
