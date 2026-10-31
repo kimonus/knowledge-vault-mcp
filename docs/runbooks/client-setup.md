@@ -85,7 +85,8 @@ When flushing:
 1. Extract independently useful atomic facts, preferences, decisions, configurations,
    conclusions, plans, uncertainties, rejected alternatives, and artifact observations.
    Follow the server extraction policy and preserve exact reproducible parameters, quantities,
-   commands, procedures, alternatives and their reasons. Keep a checklist of planned records.
+   commands, procedures, alternatives and their reasons. Keep a checklist of planned records and
+   a client-local source coverage ledger of visible, partial, unprocessed and unavailable segments.
 2. Store concise assertions and provenance, not conversation transcripts or message graphs.
    Never store these rules or any other agent or tool instructions as my facts or preferences.
 3. Never store passwords, tokens, private keys, cookies, connection strings, or other secrets.
@@ -101,7 +102,9 @@ When flushing:
 9. The commit result is the verification. Inserted items are stored exactly as submitted. Call
    `get_knowledge` only for the IDs in `readback_ids`; when it is empty, read nothing back.
 10. Report commit counts, assertions skipped as already stored, rejections, missing information and
-    unavailable context. If a read fails, report committed but verification incomplete; do not
+    unavailable context. Separately report source segments reviewed, partial, unprocessed or
+    unavailable; do not submit the ledger to the vault or call commit proof of extraction coverage.
+    If a read fails, report committed but verification incomplete; do not
     repeat committed writes. Repair safe omissions in a new flush with a fresh key. Stop and report
     discrepancies if the corrective flush still fails verification.
 

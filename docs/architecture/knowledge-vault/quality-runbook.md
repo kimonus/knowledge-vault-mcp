@@ -47,7 +47,12 @@ store outside Git/CI, adjudicate before running the system, and publish only agg
 To score such a client run, create an operator-local JSON list with one entry per case. Each entry
 has `case_id`, two `reviewers` with distinct `reviewer_id` values, and an `adjudicated` review.
 A review may supply `matched_gold_keys` (keys of claims actually extracted),
-`unsupported_claims`, `answer_correct`, `grounded`, `citations_correct`, and `abstained`.
+`unsupported_claims`, `answer_correct`, `grounded`, `citations_correct`, `abstained`, and
+`source_outcome`. The latter is one of `reviewed`, `partial`, `unprocessed`, or `unavailable` for
+the case's source pack, judged from the original source and the client's coverage report. Source
+processing coverage is `reviewed / (reviewed + partial + unprocessed)`; unavailable source packs
+are counted separately. It measures whether accessible material was reviewed, **not** whether
+every useful claim was extracted. Claim coverage remains a separate metric.
 Missing fields remain unmeasured. Annotators must read the original source and client output,
 without viewing the backend benchmark result or each other's initial labels. Run:
 
