@@ -179,12 +179,8 @@ jobs:
             -e POSTGRES_PASSWORD=inspector-db-password \
             -e POSTGRES_DB=knowledge_vault \
             pgvector/pgvector:0.8.1-pg17-trixie@sha256:137f044b0efe3d57f39b972b9b53641b1f2045b99d879e298bbf514a25787dcf
-          for attempt in $(seq 1 60); do
-            docker exec inspector-postgres pg_isready -U knowledge_vault && exit 0
-            echo "Waiting for PostgreSQL (${attempt}/60)"
-            sleep 1
-          done
-          exit 1
+          sh scripts/ci/wait_for_postgres_database.sh \
+            inspector-postgres knowledge_vault knowledge_vault
       - name: Start authenticated MCP server
         run: |
           export KNOWLEDGE_VAULT_ENVIRONMENT=development
