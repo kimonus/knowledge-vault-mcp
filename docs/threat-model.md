@@ -1,5 +1,12 @@
 # Threat model
 
+Temporal source metadata is untrusted, secret-checked input. Deterministic chronology and exact
+property identity do not verify a caller's classification. Conflicts/uncertainty remain explicit;
+transaction order and semantic similarity never establish authority. Source references are
+bounded and never fetched. Read/write scopes and shared rate limits cover temporal tools. Evidence
+cascades on confirmed assertion deletion; no source values enter metric labels/logs. See
+[temporal semantics](temporal-knowledge.md), including lookup and legacy writer limits.
+
 ## Assets and boundaries
 
 Primary assets are assertion content, provenance, bearer tokens, the token pepper, database and
