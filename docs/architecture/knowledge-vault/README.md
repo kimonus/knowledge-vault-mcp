@@ -13,6 +13,8 @@ Review date: 2026-10-31. Baseline: `497ad3c` (`ops/homelab-v0.5.0`). This is a p
    measured change and its limits.
    The [M3 client source-coverage checkpoint](source-coverage-checkpoint.md) records the
    non-schema first step and the evidence still needed.
+   Use the [synthetic client evaluation protocol](client-evaluation-protocol.md) to collect
+   repeated assistant runs without showing the client gold labels.
 4. [Target architecture](target-architecture.md) — incremental design and alternatives.
 5. [Dependency-aware roadmap](roadmap.md) — order, effort, and measurable outcomes.
 6. [Work packages](work-packages.md) — ownership map and reusable first-task brief.

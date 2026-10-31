@@ -44,8 +44,11 @@ backend test can certify them. Do not report the synthetic baseline as end-to-en
 private extension, keep original source packs and reviewer labels in an encrypted operator-local
 store outside Git/CI, adjudicate before running the system, and publish only aggregate counts.
 
-To score such a client run, create an operator-local JSON list with one entry per case. Each entry
-has `case_id`, two `reviewers` with distinct `reviewer_id` values, and an `adjudicated` review.
+To score such a client run, create an operator-local JSON list with one entry per case/run. Each entry
+has `case_id`, optional `run_id`, two `reviewers` with distinct `reviewer_id` values, and an
+`adjudicated` review. Different `run_id` values allow repeated samples of one case; duplicate
+case/run pairs are rejected. See the [client evaluation protocol](client-evaluation-protocol.md)
+for blinded input packets and fresh-vault isolation.
 A review may supply `matched_gold_keys` (keys of claims actually extracted),
 `unsupported_claims`, `answer_correct`, `grounded`, `citations_correct`, `abstained`, and
 `source_outcome`. The latter is one of `reviewed`, `partial`, `unprocessed`, or `unavailable` for
@@ -61,7 +64,7 @@ uv run python scripts/quality_score_judgments.py /operator-local/judgments.json 
   --report /tmp/kv-quality-judgments.json
 ```
 
-The scorer validates gold keys, rejects repeated cases, reports agreement and split-level metrics,
+The scorer validates gold keys, rejects repeated case/run pairs, reports agreement and split-level metrics,
 and emits no source, assertion or answer text. It cannot verify that reviewers were truly
 independent; the operator must preserve that review process.
 
