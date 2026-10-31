@@ -40,6 +40,20 @@ git tag -s vX.Y.Z -m "Knowledge Vault vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
+When signing from SSH, set GPG's terminal in the same interactive shell before creating the tag:
+
+```bash
+export GPG_TTY="$(tty)"
+gpg-connect-agent updatestartuptty /bye
+```
+
+If `git tag -s` reports `gpg: signing failed: Inappropriate ioctl for device`, pinentry could not
+use the terminal. Confirm that `tty` prints a terminal such as `/dev/pts/0` (not `not a tty`), run
+the two commands above, and retry `git tag -s`. A failed signing attempt does not create the tag;
+the draft message in `.git/TAG_EDITMSG` is not a tag. Verify the signature with
+`git tag -v vX.Y.Z` before pushing. Run these commands in your interactive terminal, not through
+a non-interactive agent command runner.
+
 `git tag -s` signs with the key named by this repository's `user.signingkey`. Use a key made for
 releases whose identity matches the commit identity, and register its public half with the
 hosting account so the tag shows as verified. Release 0.1.0 was tagged without a signature,
