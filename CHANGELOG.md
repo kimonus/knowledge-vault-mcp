@@ -5,6 +5,11 @@ stable release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Release checksums use artifact filenames, so downloaded assets can be verified directly with
+  `sha256sum -c SHA256SUMS` outside the CI runner.
+
 ## [0.6.0] - 2026-10-31
 
 ### Fixed

@@ -208,11 +208,12 @@ jobs:
             -o "cyclonedx-json=${artifact_dir}/knowledge-vault-${release_version}.sbom.cdx.json"
           "$RUNNER_TEMP/bin/syft" "registry:${BACKUP_IMAGE}@${{ steps.backup-build.outputs.digest }}" \
             -o "cyclonedx-json=${artifact_dir}/knowledge-vault-backup-${release_version}.sbom.cdx.json"
+          cd "${artifact_dir}"
           sha256sum \
-            "${artifact_dir}/knowledge-vault-${release_version}.tgz" \
-            "${artifact_dir}/knowledge-vault-${release_version}.sbom.cdx.json" \
-            "${artifact_dir}/knowledge-vault-backup-${release_version}.sbom.cdx.json" \
-            > "${artifact_dir}/SHA256SUMS"
+            "knowledge-vault-${release_version}.tgz" \
+            "knowledge-vault-${release_version}.sbom.cdx.json" \
+            "knowledge-vault-backup-${release_version}.sbom.cdx.json" \
+            > SHA256SUMS
       - name: Create GitHub release
         if: github.event_name == 'push'
         env:

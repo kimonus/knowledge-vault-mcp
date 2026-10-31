@@ -106,6 +106,11 @@ Confirm the SBOM/provenance attestations in GHCR, install the packaged chart int
 namespace by digest, run an authenticated MCP tools/list and search/fetch smoke test, and repeat the
 backup/restore exercise before promoting the release to the homelab.
 
+Download the chart, both SBOMs, and `SHA256SUMS` into one directory, then run
+`sha256sum -c SHA256SUMS` there. Releases through v0.6.0 recorded CI runner paths in that file;
+for those historical releases, compare each published hash with the downloaded file of the same
+basename instead.
+
 ## Rollback
 
 Roll back application and backup images to the previous verified digests. Database rollback is a
