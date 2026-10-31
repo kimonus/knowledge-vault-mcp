@@ -18,6 +18,21 @@ including user-shared information, external findings, conclusions, decisions, co
 rejected options, procedures, configurations, plans, uncertainties, open questions, and useful
 artifact observations.
 
+Before extracting, keep a **source coverage ledger in client context**. Give each currently
+available source segment a short local reference such as S1: a relevant conversation passage,
+document section, attachment, or tool result. Group adjacent trivial chatter as one reviewed
+segment; split a long or partially visible source where coverage differs. For each segment, note
+whether it was fully available, partly available, or unavailable, and map planned assertion keys
+to the segments that support them. Mark a fully reviewed segment with no durable knowledge as
+reviewed with zero assertions. Do not mistake a source you cannot see for one you reviewed.
+
+Before beginning the flush, reconcile the ledger against the available source material: every
+visible segment must be reviewed, partially reviewed with the missing part identified, or marked
+unprocessed with a reason. Keep this ledger local to the client. Do not submit it, local S-labels,
+conversation graphs, or raw passages to the vault. Use actual source identifiers in typed
+provenance only when supplied by the source; do not invent a message ID or timestamp. The ledger
+checks processing effort, not whether extraction captured every useful claim.
+
 For every assertion:
 
 - Preserve its epistemic character with the most accurate `kind`, `origin`, `status`, `confidence`,
@@ -113,6 +128,8 @@ rejected and unpreserved artifacts separately from assertion counts.
 Keep a checklist of the planned assertions in client context for later verification. If none are
 useful, report that without beginning a flush. If extraction exceeds the server's batch limit, use
 multiple complete flushes with separate keys; do not truncate or overdeclare one batch.
+Keep the assertion checklist linked to the local source coverage ledger through reconciliation,
+batching and commit, including assertions skipped as already stored.
 
 ## Reconcile with the vault
 
@@ -179,6 +196,15 @@ per subject instead.
    possible conflicts, rejected, and embedding pending. Report assertions skipped as already
    stored, records read back, rejections, omissions and context limits separately. Rejected items mean partial preservation;
    never describe them as fully saved.
+
+Finish with a concise source coverage summary: counts of reviewed, partially reviewed,
+unprocessed, and unavailable segments in the currently visible context; the number of planned
+assertions linked to them; and any important unresolved local references or missing source
+material. Distinguish already-stored assertions from rejected or unsubmitted ones. If a segment
+was only partly imported or an attachment could not be read, say what remains unknown without
+claiming that its knowledge was saved. This report is client-side accounting, not a server receipt
+or a guarantee of complete semantic extraction. Do not quote private source text just to explain
+coverage.
 
 A successful commit proves persistence, not lossless extraction of unseen or compacted conversation. If
 context may have been compacted, say that only currently available context was flushed. If begin,

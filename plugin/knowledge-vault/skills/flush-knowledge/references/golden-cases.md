@@ -85,6 +85,24 @@ Extract all assertions first, calculate exact `M`, then split into bounded parts
 one part or declare totals before completing extraction. If older context is unavailable because of
 compaction, flush what is available and disclose the limitation.
 
+## Source coverage and partial material
+
+The visible context contains a user correction, an attachment whose first section was read but
+whose remainder was not available, and several conversational acknowledgments. Keep local source
+references S1 for the correction, S2 for the accessible attachment section, S3 for its unavailable
+remainder, and S4 for grouped acknowledgments. S1 is reviewed and supports two planned claims; S2
+is partially reviewed and supports one; S3 is unavailable; S4 is reviewed with zero durable claims.
+Submit only the useful claims, after the usual candidate check. Do not submit S1–S4, the ledger,
+raw passages or invented message IDs as assertions or provenance. Report two reviewed segments,
+one partial, one unavailable, three planned claims and the unresolved attachment remainder. A
+successful commit does not make S3 processed or prove that S2's extraction was exhaustive.
+
+If a source was visible but the client failed to inspect it, mark it **unprocessed** rather than
+reviewed. If no durable claim was found after inspection, mark it reviewed with zero claims, not
+unprocessed. If the chat was compacted, count only currently visible segments and explicitly say
+that earlier context could not be audited. On a retry of the same logical flush, reuse its key and
+payload; do not create a second source receipt from the local ledger.
+
 ## Failure
 
 If any declared part never succeeds, do not call commit. State: the flush is incomplete and the chat

@@ -18,6 +18,8 @@ stable release.
   container and its log are removed.
 ### Added
 
+- Client-local source coverage accounting in flush guidance and independently judged source
+  processing metrics. No transcript, ledger or source receipt is stored by the server.
 - Content-free fixed-label search candidate histograms for strict text, conjunctive question
   fallback, vectors, and overlap.
 - A source-first synthetic quality harness with 63 scenario packs, disposable PostgreSQL

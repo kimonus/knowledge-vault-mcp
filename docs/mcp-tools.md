@@ -149,10 +149,16 @@ The server never merges or supersedes by similarity.
 
 A client that flushes repeatedly therefore reconciles first:
 
+Before reconciliation, the client keeps a local source coverage ledger for currently available
+conversation passages, document sections, attachments and tool results. It links planned
+assertions to source segments and distinguishes reviewed, partial, unprocessed and unavailable
+material. This ledger is **not** submitted to the vault. The final client report gives coverage
+counts separately from server commit counts; neither proves complete semantic extraction.
+
 - Call `check_knowledge_candidates` with the planned assertion texts (see
   [Candidate check](#candidate-check)). One call covers up to 50 of them. `search_knowledge` is
-  for looking further into one subject: full-text matching requires every query word, so use a
-  short keyword query; one search per assertion, or paging through the vault, is not needed.
+  for looking further into one subject: use a short keyword query for focused reconciliation;
+  one search per assertion, or paging through the vault, is not needed.
 - Already stored with the same meaning: do not submit. To record that a fact was observed again,
   or to add a source or topic, submit the stored `content` unchanged.
 - Adds detail to a stored assertion that remains true: submit only the added detail as its own

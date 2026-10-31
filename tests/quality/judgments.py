@@ -4,8 +4,8 @@ This module accepts explicit human judgments. It never asks the vault to label i
 outputs, and it never stores raw conversations or answers in its aggregate report.
 """
 
-from collections import defaultdict
-from typing import Any
+from collections import Counter, defaultdict
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -16,6 +16,7 @@ class Review(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reviewer_id: str = Field(min_length=1, max_length=80)
+    source_outcome: Literal["reviewed", "partial", "unprocessed", "unavailable"] | None = None
     matched_gold_keys: list[str] | None = None
     unsupported_claims: int | None = Field(default=None, ge=0)
     answer_correct: bool | None = None
@@ -48,6 +49,8 @@ def score_judgments(cases: tuple[Case, ...], raw: list[dict[str, Any]]) -> dict[
     citations_correct: list[float] = []
     abstention_correct: list[float] = []
     agreement: list[float] = []
+    source_agreement: list[float] = []
+    source_outcomes: Counter[str] = Counter()
     by_split: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     for raw_item in raw:
         item = CaseJudgment.model_validate(raw_item)
@@ -80,7 +83,15 @@ def score_judgments(cases: tuple[Case, ...], raw: list[dict[str, Any]]) -> dict[
                     and first.answer_correct == second.answer_correct
                 )
             )
+        if first.source_outcome is not None and second.source_outcome is not None:
+            source_agreement.append(float(first.source_outcome == second.source_outcome))
         final = item.adjudicated
+        if final.source_outcome is not None:
+            source_outcomes[final.source_outcome] += 1
+            if final.source_outcome != "unavailable":
+                by_split[case.split]["source_processing_coverage"].append(
+                    float(final.source_outcome == "reviewed")
+                )
         if final.matched_gold_keys is not None and expected:
             coverage = len(set(final.matched_gold_keys)) / len(expected)
             extraction_coverage.append(coverage)
@@ -104,11 +115,26 @@ def score_judgments(cases: tuple[Case, ...], raw: list[dict[str, Any]]) -> dict[
     def average(values: list[float]) -> float | None:
         return sum(values) / len(values) if values else None
 
+    source_processing_cases = sum(
+        source_outcomes[outcome] for outcome in ("reviewed", "partial", "unprocessed")
+    )
     return {
         "schema_version": 1,
         "judged_cases": len(seen),
         "coverage_cases": len(extraction_coverage),
         "extraction_claim_coverage": average(extraction_coverage),
+        "source_outcomes": {
+            outcome: source_outcomes[outcome]
+            for outcome in ("reviewed", "partial", "unprocessed", "unavailable")
+        },
+        "source_processing_cases": source_processing_cases,
+        "source_processing_coverage": (
+            source_outcomes["reviewed"] / source_processing_cases
+            if source_processing_cases
+            else None
+        ),
+        "source_agreement_cases": len(source_agreement),
+        "source_agreement": average(source_agreement),
         "unsupported_claims_total": sum(unsupported),
         "answer_cases": len(answer_correct),
         "answer_correct": average(answer_correct),

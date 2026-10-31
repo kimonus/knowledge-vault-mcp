@@ -1,4 +1,5 @@
 import hashlib
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -79,9 +80,22 @@ def test_policy_bounds_and_readback_rules_cannot_be_replaced_by_operator_text() 
     assert "is empty, do not read anything back" in instructions
     assert "similar wording\n  alone never selects a target" in instructions
     assert "get_knowledge for every" not in instructions
+    assert "source coverage ledger" in instructions
+    assert "Do not submit the\n  ledger" in instructions
+    assert "reviewed/partial/unprocessed/unavailable segment counts" in instructions
     assert "Operator extraction policy version: v2" in instructions
     assert hashlib.sha256(policy.encode()).hexdigest() in instructions
     assert instructions.endswith(policy + "\n")
+
+
+def test_flush_skill_keeps_source_coverage_client_local() -> None:
+    skill = (
+        Path(__file__).resolve().parents[2]
+        / "plugin/knowledge-vault/skills/flush-knowledge/SKILL.md"
+    ).read_text(encoding="utf-8")
+    assert "source coverage ledger in client context" in skill
+    assert "Do not submit it, local S-labels" in skill
+    assert "A successful commit proves persistence" in skill
 
 
 def test_policy_at_max_length_can_contain_tabs_newlines_and_unicode() -> None:

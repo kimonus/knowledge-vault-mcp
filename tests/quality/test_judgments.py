@@ -77,3 +77,45 @@ def test_no_record_judgment_does_not_divide_by_zero():
     assert result["coverage_cases"] == 0
     assert result["unsupported_claims_total"] == 1
     assert result["abstention_correct"] == 1.0
+
+
+def test_source_processing_is_scored_separately_from_claim_extraction():
+    selected = [
+        next(case for case in cases() if case.id == case_id)
+        for case_id in ("decision-0", "preference-0", "no-record-0")
+    ]
+    outcomes = ("reviewed", "partial", "unavailable")
+    judgments = [
+        {
+            "case_id": case.id,
+            "reviewers": [
+                {"reviewer_id": "one", "source_outcome": outcome},
+                {"reviewer_id": "two", "source_outcome": outcome},
+            ],
+            "adjudicated": {"reviewer_id": "adjudicator", "source_outcome": outcome},
+        }
+        for case, outcome in zip(selected, outcomes, strict=True)
+    ]
+    result = score_judgments(tuple(selected), judgments)
+    assert result["source_outcomes"] == {
+        "reviewed": 1,
+        "partial": 1,
+        "unprocessed": 0,
+        "unavailable": 1,
+    }
+    assert result["source_processing_cases"] == 2
+    assert result["source_processing_coverage"] == 0.5
+    assert result["source_agreement"] == 1.0
+    assert result["extraction_claim_coverage"] is None
+    assert result["by_split"]["dev"]["source_processing_coverage"] == 0.5
+
+
+def test_invalid_source_outcome_is_rejected():
+    case = cases()[0]
+    raw = {
+        "case_id": case.id,
+        "reviewers": [{"reviewer_id": "one"}, {"reviewer_id": "two"}],
+        "adjudicated": {"reviewer_id": "adjudicator", "source_outcome": "invented"},
+    }
+    with pytest.raises(ValueError, match="source_outcome"):
+        score_judgments((case,), [raw])
