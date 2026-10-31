@@ -40,6 +40,57 @@ For every assertion:
 - Never submit credentials, passwords, access tokens, private keys, cookies, or secret values. A
   non-secret reference such as "credential is stored in Kubernetes Secret X" is allowed.
 
+## Context, evidence and maintenance metadata
+
+When supported by the connected server, use `evidence_state` to distinguish unknown, reported,
+inferred and verified claims; legacy numeric confidence is not proof. Populate observation/source
+dates only when known. Use `temporal_role` for historical observations versus ongoing state and
+`review_after` for changing information that should be rechecked. Never infer verification,
+completion, freshness or missing dates from access counters or record creation time.
+
+Name a procedure's appliance/project/context in its text. If several records share a named
+context, create it explicitly and use its UUID. For necessary procedure parts, preserve complete
+prerequisites and add ordered `part_of` links after committing the records. Do not leave steps
+such as “use 190 C” without their procedure and conditions. Use typed provenance for non-web
+evidence with opaque conversation/file/observation references; never upload transcripts.
+
+Use `purpose=maintenance` on focused search/get calls made for reconciliation, audits or readback.
+Use `update_knowledge_metadata` with the fetched revision and a new idempotency key to repair
+metadata; preview meaningful repairs with `dry_run`. Changed claim meaning still requires explicit
+supersession. A plan's completion or question's resolution requires actual evidence; a `resolves`
+link points from the question to its answer. Candidate duplicates never authorize automatic merge
+or deletion. Report actual use only when knowledge contributed to the task, not because it was
+returned by search. Older servers may lack these features; preserve the established flush contract.
+
+## Temporal evidence
+
+When the server advertises `resolve_knowledge_state`, preserve stateful observations with
+`temporal`: exact `identity` (`subject`, `property`, `scope`, `state_type`), `value`, `mode` and a
+stable opaque `evidence_key` from the original source reference, reused on reimport. Reuse reviewed
+identifiers; do not merge ambiguous subjects or scopes by similarity. Leave ambiguous identity
+unstructured rather than guessing an ontology.
+
+Separate original `observed_at` from explicit real-world `valid_from`/`valid_to`. Preserve known
+precision (`instant`, `day`, `month`, `year`, `unknown`) and `observation_basis`; a conversation date
+is lower precision than a message timestamp. Never fabricate effective dates or use import time.
+Typed provenance may retain conversation/message identifiers, timestamp basis/confidence and
+source references, never transcripts or message bodies.
+
+Use `snapshot` for observed state, `change` for a confirmed implemented transition, `historical`
+for recollection, `proposal`/`hypothesis` for unconfirmed alternatives, and `correction` with
+`corrects_key` only when the conversation explicitly corrects evidence read in this session.
+Temporal items never use `supersedes_id`. Source observations and changes are preserved separately;
+metadata edits to a legacy assertion do not rewrite its immutable temporal evidence.
+
+An exact candidate text match cannot discard new observation dates, applicability, provenance or
+scope: submit that new evidence, reusing the stored assertion wording when appropriate. Reimports
+use the identical evidence key and payload; a changed extraction needs a new key and an explicit
+correction when appropriate. Commit `evidence_outcome=inserted/replayed` verifies source evidence
+persistence independently of legacy assertion enrichment. Do not add readbacks outside the normal
+`readback_ids` protocol. For current/history questions, discover `temporal_identities` with focused
+get and call the resolver; legacy status and search scores do not establish current truth. Report
+unresolved conflicts or insufficient chronology, never select a competing value yourself.
+
 ## Artifacts
 
 When a text file produced or examined in the conversation is itself part of the knowledge—a CSV
@@ -85,8 +136,8 @@ the vault before beginning.
    - **Adds detail** to a stored assertion that remains true: submit only the added detail as its
      own self-contained assertion. If the addition is not meaningful by itself—other wording,
      emphasis, an incidental circumstance—treat the entry as already stored.
-   - **Replaces** a stored assertion that the conversation shows to be outdated or wrong: submit
-     the new statement with `supersedes_id` set to that assertion's ID.
+   - **Replaces** unstructured legacy knowledge: submit with `supersedes_id` set to the read
+     assertion's ID. Stateful changes/corrections follow the temporal rules above.
    - **Unclear**: submit it without `supersedes_id` and say so in the report.
 
 Use `supersedes_id` only for an assertion you read in this session and that the conversation

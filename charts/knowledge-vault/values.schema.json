@@ -78,6 +78,9 @@
         "embeddingsEnabled": {
           "type": "boolean"
         },
+        "usageTrackingEnabled": {
+          "type": "boolean"
+        },
         "embeddingModel": {
           "type": "string",
           "minLength": 1

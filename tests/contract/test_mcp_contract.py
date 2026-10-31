@@ -37,6 +37,18 @@ async def test_tool_discovery_contract(settings) -> None:
         "correct_knowledge",
         "forget_knowledge",
         "get_knowledge_statistics",
+        "update_knowledge_metadata",
+        "create_knowledge_context",
+        "get_knowledge_context",
+        "link_knowledge",
+        "get_related_knowledge",
+        "add_knowledge_topic_alias",
+        "list_knowledge_topic_aliases",
+        "review_knowledge",
+        "find_knowledge_curation_candidates",
+        "report_knowledge_usage",
+        "resolve_knowledge_state",
+        "get_knowledge_temporal_diagnostics",
     }
     assert set(tools) == expected
     assert tools["search"].input_schema["required"] == ["query"]

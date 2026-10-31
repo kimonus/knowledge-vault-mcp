@@ -1,5 +1,11 @@
 # MCP client setup
 
+After upgrading to temporal evidence, refresh MCP tool schemas and the flush skill. Use
+`resolve_knowledge_state` for current/historical state questions; semantic search discovers
+assertions and get exposes temporal identities. Preserve source keys and original dates on
+reimport. See [temporal client examples](../temporal-knowledge.md). Old clients retain unstructured
+knowledge operations; structured corrections require `temporal.corrects_key`.
+
 This guide uses the maintained Cloudflare + LAN/WireGuard reference profile. It is one secure
 connectivity architecture, not an MCP requirement. With another authenticated transport, substitute
 its endpoints and authorization flow while retaining server-side scopes, TLS, origin validation,
@@ -185,3 +191,9 @@ support until OpenAI documents it for this mode and it has been tested.
 - [Codex `AGENTS.md`](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
 - [VS Code MCP configuration](https://code.visualstudio.com/docs/agents/reference/mcp-configuration)
 - [Copilot CLI MCP configuration](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers)
+# 0.5.0 client refresh
+
+After upgrading, reconnect MCP clients and update the installed flush skill so they discover
+maintenance tools and fields. Use purpose=maintenance for audits, reconciliation and readback.
+Existing compatibility search/fetch remain usable but default to normal access accounting.
+See [maintenance examples](../knowledge-maintenance.md) for evidence, context, repair and actual use.

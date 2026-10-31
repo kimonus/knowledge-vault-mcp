@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -7,7 +8,7 @@ from uuid import UUID
 
 from pydantic import ValidationError
 from sqlalchemy import CursorResult, delete, func, or_, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -35,6 +36,7 @@ from knowledge_vault.persistence.tables import (
     FlushBatchRow,
     FlushPartRow,
     SourceRow,
+    TemporalEvidenceRow,
 )
 from knowledge_vault.services.conflicts import looks_contradictory, polarity_key
 from knowledge_vault.services.errors import (
@@ -92,6 +94,8 @@ class IngestionService:
         idempotency_key: str,
         declared_parts: int,
         declared_items: int,
+        *,
+        receipt_payload: dict[str, Any] | None = None,
     ) -> FlushBatchRow:
         if not idempotency_key or len(idempotency_key) > 200:
             raise InvalidRequestError("idempotency_key must contain 1 through 200 characters")
@@ -104,6 +108,17 @@ class IngestionService:
                 f"declared_items must be between 1 and {self._settings.max_batch_items}"
             )
         key_hash = _idempotency_hash(principal_id, idempotency_key)
+        # Validate one-call correction replays even after staging is purged, without retaining
+        # a reversible content hash. The pepper stays outside PostgreSQL.
+        request_digest = (
+            hmac.new(
+                self._settings.token_pepper.encode(),
+                _canonical_hash(receipt_payload).encode(),
+                hashlib.sha256,
+            ).hexdigest()
+            if receipt_payload is not None
+            else None
+        )
         for _ in range(2):
             try:
                 async with self._sessions.begin() as session:
@@ -117,15 +132,17 @@ class IngestionService:
                         if (
                             existing.declared_parts != declared_parts
                             or existing.declared_items != declared_items
+                            or existing.request_digest != request_digest
                         ):
                             raise ConflictError(
-                                "idempotency key was already used with different totals"
+                                "idempotency key was already used with different totals or request"
                             )
                         existing.replayed = True
                         return existing
                     batch = FlushBatchRow(
                         principal_id=principal_id,
                         idempotency_hash=key_hash,
+                        request_digest=request_digest,
                         declared_parts=declared_parts,
                         declared_items=declared_items,
                         expires_at=datetime.now(UTC)
@@ -228,6 +245,11 @@ class IngestionService:
                     # Any other violation is deterministic; retrying cannot help.
                     raise
                 continue
+            except DBAPIError as error:
+                if getattr(error.orig, "sqlstate", None) not in {"40P01", "40001"}:
+                    raise
+                # Deadlock/serialization aborts roll back the entire batch, including evidence.
+                continue
             if result is None:
                 raise ConflictError("flush batch has expired")
             if fresh:
@@ -277,6 +299,24 @@ class IngestionService:
             conflict_ids: list[UUID] = []
             rejected_items: list[RejectedItem] = []
             ordered_parts = sorted(batch.parts, key=lambda part: part.part_number)
+            # Take every stable-key lock before touching assertion rows, in one global order.
+            # Different keys need no property lock: the projection reads a single MVCC snapshot.
+            from knowledge_vault.services.maintenance import maintenance_lock
+
+            lock_keys = {
+                "temporal:" + raw["temporal"]["evidence_key"]
+                for part in ordered_parts
+                for raw in part.payload
+                if "_rejected" not in raw and raw.get("temporal")
+            }
+            lock_keys.update(
+                "content:" + AssertionInput.model_validate(raw).stable_hash
+                for part in ordered_parts
+                for raw in part.payload
+                if "_rejected" not in raw
+            )
+            for key in sorted(lock_keys):
+                await maintenance_lock(session, key)
             global_index = 0
             for part in ordered_parts:
                 for raw in part.payload:
@@ -288,7 +328,47 @@ class IngestionService:
                         global_index += 1
                         continue
                     item = AssertionInput.model_validate(raw)
-                    applied = await self._apply_item(session, item)
+                    from knowledge_vault.services.maintenance import validate_metadata_refs
+
+                    try:
+                        await validate_metadata_refs(session, item)
+                        if item.workflow_state == "resolved":
+                            raise InvalidRequestError(
+                                "insert a question before explicitly linking its resolution"
+                            )
+                        prior_evidence = None
+                        if item.temporal:
+                            prior_evidence = await session.get(
+                                TemporalEvidenceRow, item.temporal.evidence_key
+                            )
+                            if prior_evidence and prior_evidence.payload_hash != _canonical_hash(
+                                item.model_dump(mode="json")
+                            ):
+                                raise InvalidRequestError(
+                                    "evidence_key already identifies a different immutable payload"
+                                )
+                    except InvalidRequestError as error:
+                        rejected_items.append(
+                            RejectedItem(index=global_index, code=error.code, message=str(error))
+                        )
+                        counts.rejected += 1
+                        global_index += 1
+                        continue
+                    if prior_evidence:
+                        applied = _Applied(prior_evidence.assertion_id, "confirmed_existing", [])
+                    else:
+                        applied = await self._apply_item(session, item)
+                        if item.temporal:
+                            session.add(
+                                TemporalEvidenceRow(
+                                    evidence_key=item.temporal.evidence_key,
+                                    assertion_id=applied.assertion_id,
+                                    identity_hash=item.temporal.identity.digest,
+                                    payload_hash=_canonical_hash(item.model_dump(mode="json")),
+                                    payload=item.model_dump(mode="json"),
+                                )
+                            )
+                            await session.flush()
                     assertion_ids.append(applied.assertion_id)
                     items.append(
                         CommitItem(
@@ -298,6 +378,12 @@ class IngestionService:
                             superseded_id=applied.superseded_id,
                             conflict_ids=applied.conflict_ids,
                             ignored_fields=applied.ignored_fields,
+                            evidence_key=item.temporal.evidence_key if item.temporal else None,
+                            evidence_outcome=(
+                                ("replayed" if prior_evidence else "inserted")
+                                if item.temporal
+                                else None
+                            ),
                         )
                     )
                     setattr(counts, applied.outcome, getattr(counts, applied.outcome) + 1)
@@ -338,6 +424,9 @@ class IngestionService:
         await session.execute(delete(FlushPartRow).where(FlushPartRow.batch_id == batch.id))
 
     async def _apply_item(self, session: AsyncSession, item: AssertionInput) -> _Applied:
+        from knowledge_vault.services.maintenance import validate_metadata_refs
+
+        await validate_metadata_refs(session, item)
         existing = await session.scalar(
             select(AssertionRow)
             .options(selectinload(AssertionRow.sources))
@@ -345,6 +434,15 @@ class IngestionService:
             .with_for_update()
         )
         if existing:
+            if (
+                item.temporal
+                and existing.status == AssertionStatus.SUPERSEDED
+                and item.status != AssertionStatus.SUPERSEDED
+            ):
+                raise ConflictError(
+                    "legacy claim is superseded; review its correction history "
+                    "before temporal enrichment"
+                )
             changed = False
             if item.supersedes_id:
                 # An explicit correction back to already-known wording: retire the named
@@ -384,6 +482,18 @@ class IngestionService:
             origin=item.origin,
             status=item.status,
             confidence=item.confidence,
+            **item.model_dump(
+                include={
+                    "evidence_state",
+                    "temporal_role",
+                    "workflow_state",
+                    "last_verified_at",
+                    "review_after",
+                    "context_id",
+                    "facet",
+                }
+            ),
+            provenance=[p.model_dump(mode="json") for p in item.provenance],
             topics=item.topics,
             valid_from=item.valid_from,
             valid_to=item.valid_to,
@@ -410,7 +520,7 @@ class IngestionService:
         await self._link_artifacts(session, row.id, item.artifact_ids)
         if self._settings.embeddings_enabled:
             session.add(EmbeddingJobRow(assertion_id=row.id, model=self._settings.embedding_model))
-        conflicts = await self._record_conflicts(session, row)
+        conflicts = [] if item.temporal else await self._record_conflicts(session, row)
         return _Applied(row.id, "inserted", conflicts, item.supersedes_id)
 
     @staticmethod
@@ -430,6 +540,25 @@ class IngestionService:
             ("observed_at", existing.observed_at, item.observed_at),
             ("sensitivity", existing.sensitivity, item.sensitivity),
         ]
+        for name in (
+            "evidence_state",
+            "temporal_role",
+            "workflow_state",
+            "last_verified_at",
+            "review_after",
+            "context_id",
+            "facet",
+        ):
+            if name in item.model_fields_set:
+                pairs.append((name, getattr(existing, name), getattr(item, name)))
+        if "provenance" in item.model_fields_set:
+            pairs.append(
+                (
+                    "provenance",
+                    existing.provenance,
+                    [p.model_dump(mode="json") for p in item.provenance],
+                )
+            )
         return [name for name, stored, submitted in pairs if stored != submitted]
 
     @staticmethod
@@ -479,6 +608,14 @@ class IngestionService:
         old = await session.get(AssertionRow, assertion_id, with_for_update=True)
         if not old:
             raise NotFoundError(f"superseded assertion {assertion_id} was not found")
+        if await session.scalar(
+            select(TemporalEvidenceRow.evidence_key)
+            .where(TemporalEvidenceRow.assertion_id == assertion_id)
+            .limit(1)
+        ):
+            raise ConflictError(
+                "structured evidence requires temporal.corrects_key, not supersedes_id"
+            )
         if old.status == AssertionStatus.SUPERSEDED:
             raise ConflictError(f"assertion {old.id} is already superseded")
         old.status = AssertionStatus.SUPERSEDED

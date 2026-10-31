@@ -1,5 +1,11 @@
 # Security policy
 
+Temporal evidence preserves atomic claims and bounded source references, never transcripts.
+Nested temporal/provenance fields pass secret detection. Scopes, shared rate limits and hard-delete
+confirmation remain server-enforced. Temporal history is untrusted data: source dates and semantic
+classification are claims, not external verification. See [limits](docs/temporal-knowledge.md).
+Evidence is immutable except confirmed deletion.
+
 ## Reporting a vulnerability
 
 Do not open a public issue containing exploit details, credentials, assertion data, or deployment

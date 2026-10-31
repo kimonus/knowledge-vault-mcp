@@ -12,8 +12,16 @@ from knowledge_vault.domain.enums import (
     EmbeddingState,
     Sensitivity,
 )
+from knowledge_vault.domain.maintenance import (
+    EvidenceState,
+    KnowledgeMetadata,
+    TemporalRole,
+    UsageView,
+    WorkflowState,
+)
 from knowledge_vault.domain.normalization import content_hash, normalize_content, normalize_topic
 from knowledge_vault.domain.secrets import detect_secret
+from knowledge_vault.domain.temporal import StateIdentity, TemporalInput
 
 
 def _topic(value: str) -> str:
@@ -91,7 +99,7 @@ class ArtifactBeginInput(BaseModel):
         return self
 
 
-class AssertionInput(BaseModel):
+class AssertionInput(KnowledgeMetadata):
     model_config = ConfigDict(extra="forbid")
 
     content: Annotated[SafeText, Field(min_length=1, max_length=16_000)]
@@ -108,9 +116,28 @@ class AssertionInput(BaseModel):
     supersedes_id: UUID | None = None
     # IDs returned by commit_knowledge_artifact; the assertion describes those artifacts.
     artifact_ids: list[UUID] = Field(default_factory=list, max_length=8)
+    temporal: TemporalInput | None = None
 
     @model_validator(mode="after")
     def validate_semantics(self) -> "AssertionInput":
+        if self.temporal:
+            if any(
+                value and not 2 <= value.year <= 9998
+                for value in (self.valid_from, self.valid_to, self.observed_at)
+            ):
+                raise ValueError("temporal dates must have years from 2 through 9998")
+            if self.supersedes_id:
+                raise ValueError("temporal corrections use corrects_key, never supersedes_id")
+            if self.temporal.mode in {"snapshot", "change", "correction", "historical"}:
+                expected = {
+                    "configuration": {AssertionKind.CONFIGURATION},
+                    "preference": {AssertionKind.PREFERENCE},
+                    "fact": {AssertionKind.USER_FACT, AssertionKind.EXTERNAL_FACT},
+                }
+                if self.kind not in expected[self.temporal.identity.state_type]:
+                    raise ValueError("state evidence kind must match identity.state_type")
+                if self.temporal_role == "historical" and self.temporal.mode != "historical":
+                    raise ValueError("historical recollection must use temporal.mode=historical")
         for value in (self.content, *self.topics):
             secret = detect_secret(value)
             if secret:
@@ -126,6 +153,17 @@ class AssertionInput(BaseModel):
         self.artifact_ids = list(dict.fromkeys(self.artifact_ids))
         if self.status is AssertionStatus.SUPERSEDED and self.supersedes_id:
             raise ValueError("a new correction cannot itself be submitted as superseded")
+        if self.evidence_state == "verified" and (
+            not self.last_verified_at
+            or not (self.sources or any(p.kind != "unknown" for p in self.provenance))
+        ):
+            raise ValueError("verified evidence needs a verification date and provenance")
+        states = {
+            AssertionKind.PLAN: {"proposed", "active", "completed", "cancelled"},
+            AssertionKind.OPEN_QUESTION: {"unresolved", "resolved"},
+        }
+        if self.workflow_state and self.workflow_state not in states.get(self.kind, set()):
+            raise ValueError("workflow state does not apply to this assertion kind")
         return self
 
     @property
@@ -154,7 +192,7 @@ class ArtifactRef(BaseModel):
     description: str | None = None
 
 
-class AssertionView(BaseModel):
+class AssertionView(KnowledgeMetadata):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -176,6 +214,11 @@ class AssertionView(BaseModel):
     embedding_state: EmbeddingState
     sources: list[SourceView] = Field(default_factory=list)
     artifacts: list[ArtifactRef] = Field(default_factory=list)
+    revision: int = 1
+    usage: UsageView = Field(default_factory=UsageView)
+    # Populated by get_knowledge; search remains a lightweight evidence discovery operation.
+    temporal_identities: list[StateIdentity] = Field(default_factory=list)
+    temporal_identities_truncated: bool = False
 
 
 class RejectedItem(BaseModel):
@@ -205,6 +248,8 @@ class CommitItem(BaseModel):
     conflict_ids: list[UUID] = Field(default_factory=list)
     # Submitted fields that differ from the existing record and were not applied to it.
     ignored_fields: list[str] = Field(default_factory=list)
+    evidence_key: str | None = None
+    evidence_outcome: Literal["inserted", "replayed"] | None = None
 
 
 class CommitResult(BaseModel):
@@ -234,6 +279,12 @@ class SearchFilters(BaseModel):
     valid_at: Timestamp | None = None
     created_after: Timestamp | None = None
     created_before: Timestamp | None = None
+    context_id: UUID | None = None
+    facet: str | None = Field(default=None, max_length=80)
+    evidence_states: list[EvidenceState] = Field(default_factory=list, max_length=4)
+    temporal_roles: list[TemporalRole] = Field(default_factory=list, max_length=3)
+    workflow_states: list[WorkflowState] = Field(default_factory=list, max_length=6)
+    review_due: bool = False
 
 
 class SearchHit(BaseModel):

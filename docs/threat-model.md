@@ -1,5 +1,12 @@
 # Threat model
 
+Temporal source metadata is untrusted, secret-checked input. Deterministic chronology and exact
+property identity do not verify a caller's classification. Conflicts/uncertainty remain explicit;
+transaction order and semantic similarity never establish authority. Source references are
+bounded and never fetched. Read/write scopes and shared rate limits cover temporal tools. Evidence
+cascades on confirmed assertion deletion; no source values enter metric labels/logs. See
+[temporal semantics](temporal-knowledge.md), including lookup and legacy writer limits.
+
 ## Assets and boundaries
 
 Primary assets are assertion content, provenance, bearer tokens, the token pepper, database and
@@ -45,3 +52,13 @@ assertions, secret rejection in every text field, hard-deletion cascades, and ch
 assertion text nor exception messages reach the logs. The backup smoke test runs the job with a
 read-only root filesystem and asserts that retention prunes. See
 [SECURITY.md](../SECURITY.md) for reporting and [reviews](reviews/) for independent reviews.
+# Maintenance metadata and access accounting (0.5.0)
+
+Every new metadata/context/link/alias/use write requires write scope; hard deletion still requires
+admin and preview/confirmation. Revision checks and transaction locks prevent silent lost updates
+and relationship cycles. References are bounded, secret-checked untrusted data, never fetched or
+executed. Non-web provenance is a locator, not a transcript. Audit retains field names/hashes with
+expiry and assertion-deletion cascades, not prior private values. Usage records contain aggregates,
+not query text or a permanent click stream; counters cannot establish truth, raise confidence or
+drive deletion. Read-only retrieval tools may maintain incidental operational aggregates. They
+cannot change claim meaning, evidence or verification. Explicit actual-use reports require write.

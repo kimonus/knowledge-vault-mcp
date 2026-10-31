@@ -6,6 +6,7 @@ from typing import Any
 from pgvector.sqlalchemy import VECTOR
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -69,6 +70,31 @@ class AssertionRow(Base):
         Index("ix_assertions_current", "status", "created_at"),
         Index("ix_assertions_kind_origin", "kind", "origin"),
         Index("ix_assertions_embedding_state", "embedding_state"),
+        Index("ix_assertion_review", "review_after", "id"),
+        Index("ix_assertion_context_facet", "context_id", "facet"),
+        CheckConstraint("revision >= 1", name="ck_maintenance_revision"),
+        CheckConstraint(
+            "evidence_state IN ('unknown','reported','inferred','verified')",
+            name="ck_maintenance_evidence",
+        ),
+        CheckConstraint(
+            "temporal_role IN ('unspecified','ongoing','historical')",
+            name="ck_maintenance_temporal",
+        ),
+        CheckConstraint(
+            "workflow_state IS NULL OR (kind = 'plan' AND workflow_state IN "
+            "('proposed','active','completed','cancelled')) OR (kind = 'open_question' "
+            "AND workflow_state IN ('unresolved','resolved'))",
+            name="ck_maintenance_workflow",
+        ),
+        CheckConstraint(
+            "evidence_state <> 'verified' OR last_verified_at IS NOT NULL",
+            name="ck_maintenance_verified",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(provenance) = 'array' AND jsonb_array_length(provenance) <= 16",
+            name="ck_maintenance_provenance",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -91,6 +117,18 @@ class AssertionRow(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     confirmation_count: Mapped[int] = mapped_column(Integer, default=1)
+    revision: Mapped[int] = mapped_column(Integer, server_default="1")
+    evidence_state: Mapped[str] = mapped_column(String(20), server_default="unknown")
+    temporal_role: Mapped[str] = mapped_column(String(20), server_default="unspecified")
+    workflow_state: Mapped[str | None] = mapped_column(String(20))
+    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    review_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    context_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("knowledge_contexts.id", ondelete="RESTRICT", name="fk_assertion_context"),
+    )
+    facet: Mapped[str | None] = mapped_column(String(80))
+    provenance: Mapped[list[dict[str, Any]]] = mapped_column(json_type(), server_default="[]")
     sensitivity: Mapped[str] = mapped_column(String(20), default="normal")
     supersedes_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("assertions.id", ondelete="RESTRICT")
@@ -109,6 +147,40 @@ class AssertionRow(Base):
     artifacts: Mapped[list["ArtifactRow"]] = relationship(
         secondary="assertion_artifacts", viewonly=True, lazy="selectin"
     )
+
+
+class TemporalEvidenceRow(Base):
+    __tablename__ = "temporal_evidence"
+    __table_args__ = (
+        CheckConstraint("length(evidence_key) BETWEEN 1 AND 200", name="ck_temporal_key"),
+        CheckConstraint("length(identity_hash) = 64", name="ck_temporal_identity"),
+        CheckConstraint("length(payload_hash) = 64", name="ck_temporal_payload_hash"),
+        CheckConstraint("jsonb_typeof(payload) = 'object'", name="ck_temporal_payload"),
+        Index("ix_temporal_identity_recorded", "identity_hash", "recorded_at", "evidence_key"),
+        Index("ix_temporal_assertion", "assertion_id"),
+    )
+    evidence_key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    assertion_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assertions.id", ondelete="CASCADE")
+    )
+    identity_hash: Mapped[str] = mapped_column(String(64))
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict[str, Any]] = mapped_column(json_type())
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class TemporalRetirementRow(Base):
+    """A retained claim stays invalid after forgetting its correcting assertion's content."""
+
+    __tablename__ = "temporal_retirements"
+    evidence_key: Mapped[str] = mapped_column(
+        String(200),
+        ForeignKey("temporal_evidence.evidence_key", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    retired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class SourceRow(Base):
@@ -132,6 +204,9 @@ class FlushBatchRow(Base):
         UniqueConstraint("principal_id", "idempotency_hash", name="uq_batch_idempotency"),
         CheckConstraint("declared_parts > 0", name="ck_batch_declared_parts"),
         CheckConstraint("declared_items > 0", name="ck_batch_declared_items"),
+        CheckConstraint(
+            "request_digest IS NULL OR length(request_digest) = 64", name="ck_batch_request_digest"
+        ),
         CheckConstraint(_one_of("state", BatchState), name="ck_batch_state"),
         Index("ix_flush_batches_expiry", "state", "expires_at"),
     )
@@ -139,6 +214,7 @@ class FlushBatchRow(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     principal_id: Mapped[str] = mapped_column(String(128))
     idempotency_hash: Mapped[str] = mapped_column(String(64))
+    request_digest: Mapped[str | None] = mapped_column(String(64))
     declared_parts: Mapped[int] = mapped_column(Integer)
     declared_items: Mapped[int] = mapped_column(Integer)
     state: Mapped[str] = mapped_column(String(20), default="open")
@@ -338,3 +414,77 @@ class AssertionArtifactRow(Base):
         UUID(as_uuid=True), ForeignKey("artifacts.id", ondelete="CASCADE"), primary_key=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class KnowledgeContextRow(Base):
+    __tablename__ = "knowledge_contexts"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    aliases: Mapped[list[str]] = mapped_column(ARRAY(String(200)))
+
+
+class AssertionLinkRow(Base):
+    __tablename__ = "assertion_links"
+    __table_args__ = (
+        CheckConstraint("source_id <> target_id", name="ck_link_endpoints"),
+        CheckConstraint(
+            "kind IN ('part_of','depends_on','supports','equivalent_to','resolves')",
+            name="ck_link_kind",
+        ),
+        CheckConstraint(
+            "position IS NULL OR (kind = 'part_of' AND position >= 0 AND position <= 9999)",
+            name="ck_link_position",
+        ),
+        Index("uq_link_position", "target_id", "position", unique=True),
+        Index("ix_link_target", "target_id"),
+    )
+    source_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assertions.id", ondelete="CASCADE"), primary_key=True
+    )
+    target_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assertions.id", ondelete="CASCADE"), primary_key=True
+    )
+    kind: Mapped[str] = mapped_column(String(20), primary_key=True)
+    position: Mapped[int | None] = mapped_column(Integer)
+
+
+class TopicAliasRow(Base):
+    __tablename__ = "topic_aliases"
+    alias: Mapped[str] = mapped_column(String(80), primary_key=True)
+    canonical: Mapped[str] = mapped_column(String(80))
+
+
+class AssertionUsageRow(Base):
+    __tablename__ = "assertion_usage"
+    __table_args__ = (
+        CheckConstraint(
+            "retrieval_count >= 0 AND explicit_fetch_count >= 0 AND use_count >= 0 "
+            "AND explicit_fetch_count <= retrieval_count",
+            name="ck_usage_counts",
+        ),
+    )
+    assertion_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assertions.id", ondelete="CASCADE"), primary_key=True
+    )
+    retrieval_count: Mapped[int] = mapped_column(BigInteger, server_default="0")
+    explicit_fetch_count: Mapped[int] = mapped_column(BigInteger, server_default="0")
+    use_count: Mapped[int] = mapped_column(BigInteger, server_default="0")
+    last_retrieved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_explicit_fetch_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MaintenanceEventRow(Base):
+    """Bounded retry receipts and metadata audit; never old/new assertion values."""
+
+    __tablename__ = "maintenance_events"
+    __table_args__ = (Index("ix_maintenance_expiry", "expires_at"),)
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    assertion_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assertions.id", ondelete="CASCADE"), primary_key=True
+    )
+    operation: Mapped[str] = mapped_column(String(30))
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    revision: Mapped[int | None] = mapped_column(Integer)
+    fields: Mapped[list[str]] = mapped_column(ARRAY(String(80)))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

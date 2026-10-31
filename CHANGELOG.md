@@ -13,6 +13,51 @@ stable release.
 - A failed watchdog run keeps the end of its log in the Pod status
   (`terminationMessagePolicy: FallbackToLogsOnError`), so its cause stays readable after the
   container and its log are removed.
+### Added
+
+- Immutable temporal source evidence, exact subject/property/scope identities and deterministic
+  current/historical resolution independent of conversation import order. Explicit conflicts,
+  uncertainty, timestamp precision, corrections, provenance, receipt-time filtering and history.
+- Idempotent source reimports, temporal metadata diagnostics, authenticated MCP/HTTP resolution,
+  and additive per-item evidence receipts. Generic text/vector search keeps its existing contract.
+- Exact sequential/concurrent retries for one-call corrections, guarded by keyed request digests
+  after staging purge. Old correction receipts can be retrieved with commit by their batch ID.
+
+### Changed
+
+- **Operator action required:** restore-test a backup before migration 0006, run the Helm migration
+  job and refresh client schemas/flush skill. Legacy records remain unchanged and unclassified;
+  gradually enrich reviewed evidence. Use corrects_key to correct structured evidence rather than
+  legacy supersedes_id. Roll back application images on the expanded schema; schema downgrade
+  discards temporal evidence. See docs/temporal-knowledge.md for conservative resolution limits.
+
+## [0.5.0] - 2026-10-29
+
+### Security
+
+- Require msgpack 1.2.3 or later for CVE-2026-114613, found by the release dependency audit.
+
+### Added
+
+- Independent evidence, temporal and workflow metadata, verification/review dates, named contexts,
+  facet keys and non-web provenance. Existing assertions retain unknown evidence and unchanged text.
+- Previewable, revision-checked and idempotent metadata correction, including lowering confidence,
+  repairing dates and updating existing URL source metadata without changing a claim's meaning.
+- Ordered procedure parts, prerequisites, supporting/equivalent assertions and explicit question
+  resolution; bounded related-record inspection, topic aliases and advisory curation/review queues.
+- Separate aggregate retrieval/fetch/use counters. Maintenance reads and candidate checks are
+  excluded; actual use requires an explicit writer report. No popularity-driven ranking/deletion.
+
+### Changed
+
+- **Operator action required:** restore-test a backup before migration 0005; upgrade with the Helm
+  migration job, then reconnect clients/update the flush skill. New metadata is additive and
+  unknown values are not invented. Prefer application rollback on the expanded schema; downgrading
+  0005 discards its metadata, links and counters.
+- Retrieval can maintain incidental usage telemetry; disable with config.usageTrackingEnabled.
+  Failed accounting does not fail retrieval and is flagged in usage.available and a metric.
+- Confirmed forgetting cascades new assertion metadata/audit/usage/links, removes contexts left
+  unreferenced by the deleted records, and reopens questions whose last retained answer was deleted.
 
 ## [0.4.2] - 2026-10-26
 

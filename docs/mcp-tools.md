@@ -1,5 +1,54 @@
 # MCP tool reference
 
+## Temporal state (additive)
+
+`append_knowledge` accepts optional `temporal` identity/value/mode/source-key metadata; commit
+items add `evidence_key` and `evidence_outcome` (`inserted`, `replayed`). Legacy fields/defaults
+remain. Provenance optionally adds conversation/message references and timestamp precision,
+basis and confidence. No conversation or message bodies are stored.
+
+`resolve_knowledge_state(request)` requires read scope. Request: exact `identity` (`subject`,
+`property`, `scope`, `state_type`), optional `as_of` and `known_at`, `history_limit` (1–100,
+default 20) and `history_after` stable key. Shared response: outcome, values, supporting/competing
+keys, reasons, resolver version, evidence total and source-bearing paginated history. Only
+`resolved` is a supported answer. Every page resolves the complete property. HTTP equivalent:
+`POST /api/v1/state/resolve` with the request body directly.
+
+`get_knowledge_temporal_diagnostics()` requires read scope and returns fully/partially classified,
+unresolved assertion counts and evidence total. HTTP: `GET /api/v1/state/diagnostics`.
+Classification measures metadata coverage. `get_knowledge` advertises `temporal_identities` (up to
+32, with a truncation flag); search/fetch keeps its discovery contract. Generic `status=current`
+and `valid_at` filters do not establish temporal authority.
+
+`correct_knowledge` accepts a temporal correction with `corrects_key` or legacy `supersedes_id`.
+Sequential/concurrent identical retries return the original receipt; changed payload/key reuse
+is refused. A pre-upgrade receipt without a request digest can be replayed by its batch ID through
+`commit_knowledge_flush`, not by resubmitting a one-call correction.
+Legacy supersession of structured evidence is refused to prevent silent divergence. Metadata
+maintenance cannot edit immutable evidence. See [policy and examples](temporal-knowledge.md).
+
+## Knowledge maintenance (0.5.0)
+
+See [knowledge maintenance](knowledge-maintenance.md) for fields, examples and retry semantics.
+Focused search/get accept purpose and event_id. Compatibility search/fetch keep existing shapes.
+
+| MCP tool | HTTP route | Scope |
+|---|---|---|
+| update_knowledge_metadata(request) | POST /api/v1/metadata | write |
+| create_knowledge_context(context) | POST /api/v1/contexts | write |
+| get_knowledge_context(context_id) | GET /api/v1/contexts/{id} | read |
+| link_knowledge(link) | POST /api/v1/links | write |
+| get_related_knowledge(assertion_id, limit) | GET /api/v1/assertions/{id}/related | read |
+| add_knowledge_topic_alias(alias) | POST /api/v1/topic-aliases | write |
+| list_knowledge_topic_aliases() | GET /api/v1/topic-aliases | read |
+| review_knowledge(limit, after, context_id) | GET /api/v1/review | read |
+| find_knowledge_curation_candidates(context_id, topic, limit) | GET /api/v1/curation-candidates | read |
+| report_knowledge_usage(report) | POST /api/v1/usage | write |
+
+New text/reference fields remain untrusted data. Review/related/curation limits are 1-100.
+Candidates are advisory and never authorize merging/deletion. Normal retrieval can maintain
+incidental aggregate telemetry but cannot edit claims or evidence; actual-use reports require write.
+
 Connect to `/mcp` with `Authorization: Bearer <token>`. Scopes are `knowledge:read`,
 `knowledge:write`, and `knowledge:admin`; admin also satisfies the other scope checks.
 

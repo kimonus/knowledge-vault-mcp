@@ -5,16 +5,108 @@ the other, and so that the HTTP OpenAPI document and the MCP output schemas desc
 thing.
 """
 
+from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from knowledge_vault.domain.maintenance import ContextInput, LinkInput
 from knowledge_vault.domain.models import (
+    AssertionInput,
     AssertionView,
     CandidateCheckPage,
     RejectedItem,
     SearchPage,
 )
+from knowledge_vault.domain.temporal import StateIdentity
+
+
+class TemporalEvidenceView(BaseModel):
+    evidence_key: str
+    assertion_id: UUID
+    recorded_at: datetime
+    assertion: AssertionInput
+    disposition: Literal["supporting", "competing", "historical", "excluded", "corrected"]
+    ordering_at: datetime | None = None
+    ordering_basis: Literal["effective", "observed", "unknown"] = "unknown"
+
+
+class StateResolutionResponse(BaseModel):
+    identity: StateIdentity
+    as_of: datetime | None
+    known_at: datetime | None
+    resolver_version: str = "1"
+    outcome: Literal["resolved", "ambiguous", "conflict", "unknown"]
+    values: list[str]
+    supporting_keys: list[str]
+    competing_keys: list[str]
+    reasons: list[str]
+    evidence_total: int
+    history: list[TemporalEvidenceView]
+    next_history_after: str | None = None
+    untrusted_data: Literal[True] = True
+
+
+class TemporalDiagnosticsResponse(BaseModel):
+    fully_classified: int
+    partially_classified: int
+    unresolved: int
+    evidence_total: int
+
+
+class MutationResponse(BaseModel):
+    assertion_id: UUID
+    revision: int
+    changed_fields: list[str]
+    replayed: bool = False
+    dry_run: bool = False
+
+
+class LinkView(LinkInput):
+    pass
+
+
+class RelatedResponse(BaseModel):
+    links: list[LinkView]
+    truncated: bool
+    untrusted_data: Literal[True] = True
+
+
+class ContextResponse(ContextInput):
+    untrusted_data: Literal[True] = True
+
+
+class AliasResponse(BaseModel):
+    aliases: dict[str, str]
+    untrusted_data: Literal[True] = True
+
+
+class UsageReportResponse(BaseModel):
+    recorded: int
+
+
+class ReviewItem(BaseModel):
+    assertion_id: UUID
+    revision: int
+    reasons: list[str]
+
+
+class ReviewResponse(BaseModel):
+    items: list[ReviewItem]
+    next_after: UUID | None = None
+
+
+class CandidatePair(BaseModel):
+    left_id: UUID
+    right_id: UUID
+    reason: Literal["similar_text", "competing_state"]
+
+
+class CurationResponse(BaseModel):
+    candidates: list[CandidatePair]
+    inspected: int
+    untrusted_data: Literal[True] = True
 
 
 class BeginFlushResponse(BaseModel):
@@ -120,6 +212,12 @@ class ForgetPreviewResponse(BaseModel):
     superseded_predecessor_ids: list[str]
     # Artifacts described by no other assertion; confirmation deletes them too.
     artifact_count: int = 0
+    relationship_count: int = 0
+    usage_record_count: int = 0
+    temporal_evidence_count: int = 0
+    temporal_retirement_count: int = 0
+    orphaned_context_count: int = 0
+    reopened_question_ids: list[str] = []
     confirmation_token: str
     expires_in_seconds: int
     warning: str
@@ -146,3 +244,5 @@ class StatisticsResponse(BaseModel):
     unresolved_conflicts: int
     artifacts_total: int = 0
     operations: OperationsStatus
+    usage_totals: dict[str, int] = Field(default_factory=dict)
+    maintenance_totals: dict[str, int] = Field(default_factory=dict)

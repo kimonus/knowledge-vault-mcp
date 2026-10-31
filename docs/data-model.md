@@ -1,5 +1,28 @@
 # Data model
 
+`flush_batches.request_digest` is an optional keyed request HMAC for one-call correction retries.
+It is null for generic flushes and old receipts. It permits exact payload checks after staging
+purge without keeping content or a reversible content hash; the key stays outside PostgreSQL.
+
+Migration 0006 adds immutable `temporal_evidence`: stable source key, assertion FK (cascade delete),
+exact identity hash, canonical payload hash, validated assertion payload and receipt timestamp.
+An update-refusal trigger prevents rewriting evidence. Indexes cover identity/receipt/key and
+assertion lookup. Multiple observations can reference the same deduplicated text while retaining
+independent dates/provenance. Current state is a deterministic read-time projection over evidence,
+not a mutation of assertion status. See [temporal semantics](temporal-knowledge.md) and
+[decision 0007](decisions/0007-temporal-evidence.md). Existing assertions remain unchanged.
+`temporal_retirements` records only a retained evidence key and time, so deleting its correction
+does not reactivate an invalidated claim. It retains no deleted content or hash and cascades
+when that retained evidence is forgotten. The deletion preview includes both temporal counts.
+
+0.5.0 adds evidence/temporal/workflow metadata, provenance, context/facet and a logical revision
+to assertions. See [maintenance semantics](knowledge-maintenance.md) and
+[decision 0006](decisions/0006-knowledge-maintenance.md). Migration 0005 is additive for old clients;
+its downgrade discards new metadata. New relations are knowledge_contexts, assertion_links,
+topic_aliases, assertion_usage and expiring maintenance_events. Assertion deletion cascades links,
+usage and maintenance receipts. Logical revision has a database trigger covering old writers as
+well; embeddings/access accounting do not bump it. No legacy evidence/date is inferred.
+
 `assertions` is the authoritative record. Content is normalized, length-bounded, typed, and linked
 to zero or more topics and source rows. Lifecycle state distinguishes current, superseded, and
 other non-current assertions without overwriting history. A correction points explicitly to the

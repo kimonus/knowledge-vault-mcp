@@ -1,5 +1,11 @@
 # Monitoring without a monitoring stack
 
+Temporal resolution exposes `knowledge_vault_temporal_resolutions_total` with fixed outcomes
+resolved/ambiguous/conflict/unknown/overflow. These count lookups, not unique conflicting properties.
+Inspect reasons through authenticated resolution and use temporal diagnostics for metadata
+coverage. Overflow returns no partial winner. No asynchronous projection or new duty needs a
+watchdog heartbeat. See [temporal limits](../temporal-knowledge.md).
+
 Knowledge Vault exposes Prometheus metrics, but a single-node personal deployment often has no
 Prometheus or Alertmanager. The watchdog covers the failures that matter there: it makes them
 visible in the cluster and can notify you.
@@ -87,3 +93,9 @@ adjust it for an in-cluster or plain-HTTP target.
   unmounted drive: the Pod then fails to start with a missing-directory event.
 - `embedding_jobs_dead`: fix the cause (see [troubleshooting.md](troubleshooting.md)), then
   requeue with `knowledge-vault-reembed`.
+# Usage telemetry (0.5.0)
+
+knowledge_vault_usage_events_total{outcome="failed"} counts optional accounting failures. Reads
+continue with usage.available=false; those zero counters are not authoritative. Inspect database
+lock pressure before retrying. Disable normal accounting via config.usageTrackingEnabled if needed.
+Worker maintenance purges expired retry/audit records before recording its existing heartbeat.
