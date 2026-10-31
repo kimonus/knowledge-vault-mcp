@@ -18,6 +18,9 @@ stable release.
   container and its log are removed.
 ### Added
 
+- A source-first synthetic quality harness with 63 scenario packs, disposable PostgreSQL
+  retrieval/temporal scoring, 200 distractor support, and optional two-reviewer extraction and
+  answer judgment aggregation. It does not read production knowledge or download models.
 - Immutable temporal source evidence, exact subject/property/scope identities and deterministic
   current/historical resolution independent of conversation import order. Explicit conflicts,
   uncertainty, timestamp precision, corrections, provenance, receipt-time filtering and history.

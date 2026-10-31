@@ -7,6 +7,8 @@ Review date: 2026-10-31. Baseline: `497ad3c` (`ops/homelab-v0.5.0`). This is a p
 1. [Executive assessment](assessment.md) — evidence, strengths, risks, and uncertainty.
 2. [End-to-end flow](flow.md) — ownership, failure and recovery by lifecycle stage.
 3. [Quality benchmark](benchmark.md) — independent ground truth and decision gates.
+   [Run the synthetic baseline](quality-runbook.md) and inspect its
+   [first measured result](baseline-2026-10-31.md).
 4. [Target architecture](target-architecture.md) — incremental design and alternatives.
 5. [Dependency-aware roadmap](roadmap.md) — order, effort, and measurable outcomes.
 6. [Work packages](work-packages.md) — ownership map and reusable first-task brief.
