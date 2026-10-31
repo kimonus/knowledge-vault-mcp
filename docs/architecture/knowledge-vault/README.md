@@ -9,6 +9,8 @@ Review date: 2026-10-31. Baseline: `497ad3c` (`ops/homelab-v0.5.0`). This is a p
 3. [Quality benchmark](benchmark.md) — independent ground truth and decision gates.
    [Run the synthetic baseline](quality-runbook.md) and inspect its
    [first measured result](baseline-2026-10-31.md).
+   The [M2 paired retrieval experiment](retrieval-experiment-2026-10-31.md) records the next
+   measured change and its limits.
 4. [Target architecture](target-architecture.md) — incremental design and alternatives.
 5. [Dependency-aware roadmap](roadmap.md) — order, effort, and measurable outcomes.
 6. [Work packages](work-packages.md) — ownership map and reusable first-task brief.

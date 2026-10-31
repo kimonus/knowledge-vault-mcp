@@ -320,7 +320,10 @@ The HTTP equivalents are `POST /api/v1/artifacts`, `PUT /api/v1/artifacts/{id}/c
 - `search_knowledge(query, filters?, limit?, cursor?)`: hybrid search with lifecycle, kind, topic,
   origin, sensitivity, confidence, and validity filters. The cursor is signed and bound to the
   query and filters; it is stable while the corpus is unchanged, and concurrent writes can shift
-  ranks between pages.
+  ranks between pages. Plain questions with no strict text match get a second, conjunctive
+  subject-term text query. Explicit quoted, Boolean, exclusion and keyword queries retain strict
+  behavior. This improves candidate discovery but does not establish current truth or relevance;
+  use `resolve_knowledge_state` for classified current or historical state.
 - `check_knowledge_candidates(candidates, limit?, min_similarity?)`: the closest stored assertions
   for each planned assertion text; see [Candidate check](#candidate-check).
 - `get_knowledge(assertion_id)`: retrieve one assertion with its provenance `sources` and the

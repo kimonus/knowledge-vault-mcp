@@ -6,6 +6,11 @@ Inspect reasons through authenticated resolution and use temporal diagnostics fo
 coverage. Overflow returns no partial winner. No asynchronous projection or new duty needs a
 watchdog heartbeat. See [temporal limits](../temporal-knowledge.md).
 
+Search exports `knowledge_vault_search_candidate_count{source}` histograms for `strict`,
+`question`, `vector`, and `overlap` candidates. These fixed labels contain no query or assertion
+text. A high `question` count means plain questions needed the conjunctive fallback; it does not
+measure relevance. Compare with the redacted quality benchmark before changing ranking.
+
 Knowledge Vault exposes Prometheus metrics, but a single-node personal deployment often has no
 Prometheus or Alertmanager. The watchdog covers the failures that matter there: it makes them
 visible in the cluster and can notify you.

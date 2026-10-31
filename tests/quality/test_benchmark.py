@@ -17,6 +17,9 @@ pytestmark = pytest.mark.integration
 
 def _selected_cases():
     corpus = cases()
+    split = os.environ.get("KNOWLEDGE_VAULT_QUALITY_SPLIT", "all")
+    if split in {"dev", "held_out"}:
+        corpus = tuple(case for case in corpus if case.split == split)
     if os.environ.get("KNOWLEDGE_VAULT_QUALITY_FULL") == "1":
         return corpus
     selected = {}

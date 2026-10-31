@@ -19,6 +19,12 @@ ARTIFACT_OUTCOMES = Counter(
 SEARCH_LATENCY = Histogram(
     "knowledge_vault_search_duration_seconds", "Knowledge search latency", ("mode",)
 )
+SEARCH_CANDIDATES = Histogram(
+    "knowledge_vault_search_candidate_count",
+    "Search candidates by fixed retrieval stage; no query or assertion labels",
+    ("source",),
+    buckets=(0, 1, 2, 5, 10, 20, 50, 100, 250, float("inf")),
+)
 EMBEDDING_QUEUE = Gauge(
     "knowledge_vault_embedding_queue_depth", "Embedding jobs by state", ("state",)
 )
