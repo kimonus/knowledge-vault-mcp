@@ -119,3 +119,39 @@ def test_invalid_source_outcome_is_rejected():
     }
     with pytest.raises(ValueError, match="source_outcome"):
         score_judgments((case,), [raw])
+
+
+def test_repeated_client_runs_are_scored_separately():
+    case = next(case for case in cases() if case.id == "decision-0")
+    records = [
+        {
+            "case_id": case.id,
+            "run_id": run_id,
+            "reviewers": [
+                {"reviewer_id": "one", "answer_correct": answer_correct},
+                {"reviewer_id": "two", "answer_correct": answer_correct},
+            ],
+            "adjudicated": {"reviewer_id": "adjudicator", "answer_correct": answer_correct},
+        }
+        for run_id, answer_correct in (("r01", True), ("r02", False))
+    ]
+    result = score_judgments((case,), records)
+    assert result["judged_cases"] == 1
+    assert result["judged_runs"] == 2
+    assert result["runs_per_case_min"] == result["runs_per_case_max"] == 2
+    assert result["balanced_runs"] is True
+    assert result["answer_correct"] == 0.5
+    with pytest.raises(ValueError, match="repeated case/run ID"):
+        score_judgments((case,), [records[0], records[0]])
+
+
+def test_invalid_run_id_is_rejected():
+    case = cases()[0]
+    record = {
+        "case_id": case.id,
+        "run_id": "bad/escape",
+        "reviewers": [{"reviewer_id": "one"}, {"reviewer_id": "two"}],
+        "adjudicated": {"reviewer_id": "adjudicator"},
+    }
+    with pytest.raises(ValueError, match="run_id"):
+        score_judgments((case,), [record])

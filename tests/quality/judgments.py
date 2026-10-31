@@ -29,6 +29,7 @@ class CaseJudgment(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     case_id: str
+    run_id: str = Field(default="default", min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
     reviewers: list[Review] = Field(min_length=2, max_length=2)
     adjudicated: Review
 
@@ -41,7 +42,8 @@ class CaseJudgment(BaseModel):
 
 def score_judgments(cases: tuple[Case, ...], raw: list[dict[str, Any]]) -> dict[str, Any]:
     by_id = {case.id: case for case in cases}
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
+    runs_per_case: Counter[str] = Counter()
     extraction_coverage: list[float] = []
     unsupported: list[int] = []
     answer_correct: list[float] = []
@@ -54,9 +56,10 @@ def score_judgments(cases: tuple[Case, ...], raw: list[dict[str, Any]]) -> dict[
     by_split: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     for raw_item in raw:
         item = CaseJudgment.model_validate(raw_item)
-        if item.case_id not in by_id or item.case_id in seen:
-            raise ValueError("unknown or repeated case ID")
-        seen.add(item.case_id)
+        if item.case_id not in by_id or (item.case_id, item.run_id) in seen:
+            raise ValueError("unknown or repeated case/run ID")
+        seen.add((item.case_id, item.run_id))
+        runs_per_case[item.case_id] += 1
         case = by_id[item.case_id]
         expected = {claim.key for claim in case.claims}
         for review in [*item.reviewers, item.adjudicated]:
@@ -120,7 +123,11 @@ def score_judgments(cases: tuple[Case, ...], raw: list[dict[str, Any]]) -> dict[
     )
     return {
         "schema_version": 1,
-        "judged_cases": len(seen),
+        "judged_cases": len(runs_per_case),
+        "judged_runs": len(seen),
+        "runs_per_case_min": min(runs_per_case.values(), default=0),
+        "runs_per_case_max": max(runs_per_case.values(), default=0),
+        "balanced_runs": len(set(runs_per_case.values())) <= 1,
         "coverage_cases": len(extraction_coverage),
         "extraction_claim_coverage": average(extraction_coverage),
         "source_outcomes": {
