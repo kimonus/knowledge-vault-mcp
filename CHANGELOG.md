@@ -5,6 +5,14 @@ stable release.
 
 ## [Unreleased]
 
+### Fixed
+
+- The watchdog CronJob skips a run more than two minutes late (`startingDeadlineSeconds: 120`).
+  After a node restart the run missed during the downtime started seconds after the cluster,
+  before DNS and Services were ready, and failed without checking anything.
+- A failed watchdog run keeps the end of its log in the Pod status
+  (`terminationMessagePolicy: FallbackToLogsOnError`), so its cause stays readable after the
+  container and its log are removed.
 ### Added
 
 - Immutable temporal source evidence, exact subject/property/scope identities and deterministic
