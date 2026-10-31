@@ -1,6 +1,6 @@
 # Database migration and rollback
 
-## Temporal evidence / migration 0006
+## 0.6.0 temporal evidence / migration 0006
 
 0006 creates an empty evidence table, checks, indexes and an immutability trigger; it never updates
 legacy assertions or invents chronology. Restore-test a backup, rehearse disposable upgrade and

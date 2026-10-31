@@ -5,6 +5,8 @@ stable release.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-31
+
 ### Fixed
 
 - CI waits until the configured PostgreSQL database accepts a real query before running backup,
