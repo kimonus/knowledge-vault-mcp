@@ -7,6 +7,9 @@ metadata:
 spec:
   schedule: {{ .Values.watchdog.schedule | quote }}
   concurrencyPolicy: Forbid
+  # Skip a run missed while the cluster was down: started as the node boots, it fails before DNS
+  # and Services are ready. The next scheduled run checks instead.
+  startingDeadlineSeconds: 120
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 3
   jobTemplate:
@@ -28,6 +31,8 @@ spec:
               image: {{ include "knowledge-vault.image" .Values.image }}
               imagePullPolicy: {{ .Values.image.pullPolicy }}
               command: ["knowledge-vault-watchdog"]
+              # Keep the end of the log in the Pod status: a failed Job outlives its container's log.
+              terminationMessagePolicy: FallbackToLogsOnError
               envFrom:
                 - configMapRef: {name: {{ include "knowledge-vault.fullname" . }}}
               env:
