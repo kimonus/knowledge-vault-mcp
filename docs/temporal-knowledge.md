@@ -20,6 +20,9 @@ The payload must be verified, have `last_verified_at`, a source URL, `observed_a
 precision and `temporal.observation_basis=source`. A globally stable evidence key makes exact
 retries safe; changed payloads or associations fail. This operation only inserts into the existing
 `temporal_evidence` table. It does not confirm, enrich, reactivate or otherwise edit legacy rows.
+An identical retry returns the stored receipt even if the legacy row's metadata changed later;
+new attachments recheck the target and successor under row locks. A concurrent row edit can
+return a retryable conflict instead of accepting a stale review.
 
 For a superseded legacy assertion, historical eligibility additionally requires
 `temporal.legacy_supersession_reason=historical_transition`, `mode=historical`, known precision

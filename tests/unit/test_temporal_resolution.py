@@ -113,7 +113,10 @@ def test_superseded_historical_requires_reviewed_source_and_transition_reason():
         "valid_from": "2025-01-01T00:00:00Z",
         "valid_to": "2026-01-01T00:00:00Z",
     }
-    temporal = {"observation_basis": "source"}
+    temporal = {
+        "observation_basis": "source",
+        "transition_assertion_id": uuid5(NAMESPACE_URL, "reviewed-successor"),
+    }
     point = datetime(2025, 6, 1, tzinfo=UTC)
     for reason in ("unknown", "factual_correction"):
         false_history = item(
@@ -128,6 +131,15 @@ def test_superseded_historical_requires_reviewed_source_and_transition_reason():
         **{**base, "evidence_state": "reported"},
     )
     assert resolve([unverified], as_of=point).outcome == "unknown"
+    missing_successor = item(
+        mode="historical",
+        temporal={
+            "observation_basis": "source",
+            "legacy_supersession_reason": "historical_transition",
+        },
+        **base,
+    )
+    assert resolve([missing_successor], as_of=point).outcome == "unknown"
     reviewed = item(
         mode="historical",
         temporal={**temporal, "legacy_supersession_reason": "historical_transition"},

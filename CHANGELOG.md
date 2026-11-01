@@ -12,6 +12,8 @@ stable release.
 - Bounded historical resolution for a superseded legacy assertion only when reviewed evidence
   identifies an implemented transition and its explicit successor. Unknown and correction cases
   remain excluded; no existing evidence is automatically reclassified.
+- Review follow-up: attachment and flush share evidence-key locks; new attachments protect the
+  target and successor against concurrent edits, while exact retries retain their original receipt.
 
 - Immutable temporal source evidence, exact subject/property/scope identities and deterministic
   current/historical resolution independent of conversation import order. Explicit conflicts,

@@ -6,12 +6,15 @@ from uuid import uuid4
 
 import httpx2
 import pytest
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 
 from knowledge_vault.api.app import create_app
+from knowledge_vault.domain.maintenance import MetadataUpdate
 from knowledge_vault.domain.models import ReviewedTemporalAttachment
 from knowledge_vault.domain.temporal import ResolutionRequest
+from knowledge_vault.persistence.tables import AssertionRow, TemporalEvidenceRow
 from knowledge_vault.services.errors import ConflictError, InvalidRequestError
+from knowledge_vault.services.maintenance import maintenance_lock
 
 pytestmark = pytest.mark.integration
 
@@ -286,6 +289,7 @@ async def test_attachment_mcp_http_admin_contract(
 
 async def test_synthetic_twenty_assertion_pilot(integration_container):
     c = integration_container
+    # Twenty legacy rows are seeded; only six receive independently reviewed evidence.
     old_text = "Pilot Router X was installed."
     new_text = "Pilot Router B is installed."
     old = await ingest(c, old_text)
@@ -401,3 +405,185 @@ async def test_synthetic_twenty_assertion_pilot(integration_container):
     assert (await resolve(c, "pilot-conflict")).outcome == "conflict"
     assert (await resolve(c, "pilot-proposal")).outcome == "unknown"
     assert (await resolve(c, "pilot", as_of=datetime(2024, 1, 1, tzinfo=UTC))).outcome == "unknown"
+
+
+async def stage_evidence(container, payload):
+    batch = await container.ingestion.begin("test-user", str(uuid4()), 1, 1)
+    accepted, rejected, _ = await container.ingestion.append("test-user", batch.id, 1, [payload])
+    assert accepted == 1 and not rejected
+    return batch.id
+
+
+async def race_flush_and_attachment(container, request, *, changed_payload):
+    payload = request.evidence.model_dump(mode="json")
+    if changed_payload:
+        payload["confidence"] = 0.5
+    batch_id = await stage_evidence(container, payload)
+    started = [asyncio.Event(), asyncio.Event()]
+
+    async def attach():
+        started[0].set()
+        return await container.temporal.attach_reviewed(request)
+
+    async def flush():
+        started[1].set()
+        return await container.ingestion.commit("test-user", batch_id)
+
+    async with container.database.sessions.begin() as blocker:
+        await maintenance_lock(blocker, f"temporal:{request.evidence.temporal.evidence_key}")
+        tasks = [asyncio.create_task(attach()), asyncio.create_task(flush())]
+        await asyncio.gather(*(event.wait() for event in started))
+        # Both operations have started while the shared key remains locked.
+        await asyncio.sleep(0)
+    results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), 10)
+    async with container.database.sessions() as session:
+        count = await session.scalar(
+            select(func.count())
+            .select_from(TemporalEvidenceRow)
+            .where(TemporalEvidenceRow.evidence_key == request.evidence.temporal.evidence_key)
+        )
+    assert count == 1
+    return results
+
+
+async def test_flush_and_admin_attachment_share_key_lock(integration_container):
+    c = integration_container
+    for changed_payload in (False, True):
+        label = str(changed_payload).lower()
+        target = await ingest(c, f"Race target {changed_payload}.")
+        target_hash = (await fingerprint(c, target))[0]["content_hash"]
+        request = attachment(
+            target,
+            target_hash,
+            f"Race target {changed_payload}.",
+            "current",
+            f"race-{label}",
+            key=f"race:{label}",
+            value="Router X",
+            mode="snapshot",
+        )
+        attached, flushed = await race_flush_and_attachment(
+            c, request, changed_payload=changed_payload
+        )
+        if changed_payload:
+            assert isinstance(attached, ConflictError) or flushed.counts.rejected == 1
+            assert not isinstance(flushed, Exception)
+        else:
+            assert not isinstance(attached, Exception)
+            assert not isinstance(flushed, Exception)
+            assert attached.replayed != (flushed.items[0].evidence_outcome == "replayed")
+
+
+async def test_attachment_races_metadata_update_and_replays_after_change(integration_container):
+    c = integration_container
+    target = await ingest(c, "Metadata race target.")
+    before = await fingerprint(c, target)
+    request = attachment(
+        target,
+        before[0]["content_hash"],
+        "Metadata race target.",
+        "current",
+        "metadata-race",
+        key="metadata-race:key",
+        value="Router X",
+        mode="snapshot",
+    )
+    started = asyncio.Event()
+
+    async def attach():
+        started.set()
+        return await c.temporal.attach_reviewed(request)
+
+    async with c.database.sessions.begin() as blocker:
+        await maintenance_lock(blocker, "temporal:metadata-race:key")
+        task = asyncio.create_task(attach())
+        await started.wait()
+        await c.maintenance.update(
+            "test-user",
+            MetadataUpdate(
+                assertion_id=target,
+                expected_revision=before[0]["revision"],
+                idempotency_key="metadata-race-update",
+                changes={"status": "uncertain"},
+            ),
+        )
+    with pytest.raises(ConflictError, match="does not match target"):
+        await asyncio.wait_for(task, 10)
+
+    replay_target = await ingest(c, "Replay target.")
+    replay_before = await fingerprint(c, replay_target)
+    replay_request = attachment(
+        replay_target,
+        replay_before[0]["content_hash"],
+        "Replay target.",
+        "current",
+        "metadata-replay",
+        key="metadata-replay:key",
+        value="Router Y",
+        mode="snapshot",
+    )
+    assert not (await c.temporal.attach_reviewed(replay_request)).replayed
+    await c.maintenance.update(
+        "test-user",
+        MetadataUpdate(
+            assertion_id=replay_target,
+            expected_revision=replay_before[0]["revision"],
+            idempotency_key="metadata-replay-update",
+            changes={"status": "uncertain"},
+        ),
+    )
+    changed = await fingerprint(c, replay_target)
+    assert (await c.temporal.attach_reviewed(replay_request)).replayed
+    assert await fingerprint(c, replay_target) == changed
+
+
+async def test_attachment_races_supersession_and_locks_both_rows(integration_container):
+    c = integration_container
+    target = await ingest(c, "Supersession race target.")
+    target_hash = (await fingerprint(c, target))[0]["content_hash"]
+    current_request = attachment(
+        target,
+        target_hash,
+        "Supersession race target.",
+        "current",
+        "supersession-race",
+        key="supersession-race:key",
+        value="Router X",
+        mode="snapshot",
+    )
+    started = asyncio.Event()
+
+    async def attach():
+        started.set()
+        return await c.temporal.attach_reviewed(current_request)
+
+    async with c.database.sessions.begin() as blocker:
+        await maintenance_lock(blocker, "temporal:supersession-race:key")
+        task = asyncio.create_task(attach())
+        await started.wait()
+        successor = await ingest(c, "Supersession race successor.", supersedes_id=str(target))
+    with pytest.raises(ConflictError, match="does not match target"):
+        await asyncio.wait_for(task, 10)
+
+    historical = attachment(
+        target,
+        target_hash,
+        "Supersession race target.",
+        "superseded",
+        "supersession-race",
+        key="supersession-race:historical",
+        value="Router X",
+        mode="historical",
+        valid_from="2025-01-01T00:00:00Z",
+        valid_to="2026-01-01T00:00:00Z",
+        transition_assertion_id=successor,
+        reason="historical_transition",
+    )
+    for locked_id in (target, successor):
+        async with c.database.sessions.begin() as blocker:
+            await blocker.execute(
+                select(AssertionRow.id).where(AssertionRow.id == locked_id).with_for_update()
+            )
+            with pytest.raises(ConflictError, match="being modified"):
+                await c.temporal.attach_reviewed(historical)
+    assert not (await c.temporal.attach_reviewed(historical)).replayed
