@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-vault"
-version = "0.5.0"
+version = "0.6.0"
 description = "Private single-user personal knowledge MCP server"
 readme = "README.md"
 requires-python = ">=3.12,<3.15"
@@ -53,7 +53,7 @@ knowledge-vault-reembed = "knowledge_vault.worker.main:run_reembed"
 knowledge-vault-watchdog = "knowledge_vault.watchdog:run_watchdog"
 
 [build-system]
-requires = ["uv_build>=0.12,<0.13"]
+requires = ["uv_build>=0.12,<0.14"]
 build-backend = "uv_build"
 
 [tool.uv]

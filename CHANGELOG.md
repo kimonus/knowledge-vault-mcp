@@ -17,6 +17,44 @@ stable release.
 - Reviewed attachment validates context and artifact provenance references on first insert;
   identical retries remain valid after referenced metadata changes.
 
+### Changed
+
+- **Operator action required for legacy enrichment:** inspect source material and the target's
+  content hash and successor link; use the admin attachment endpoint only for reviewed facts.
+  Existing flush clients continue unchanged. No new migration is required beyond temporal schema
+  revision 0006. Application rollback retains attached evidence in the additive table.
+
+### Fixed
+
+- Release checksums use artifact filenames, so downloaded assets can be verified directly with
+  `sha256sum -c SHA256SUMS` outside the CI runner.
+
+## [0.6.0] - 2026-10-31
+
+### Fixed
+
+- CI waits until the configured PostgreSQL database accepts a real query before running backup,
+  restore, migration, or Inspector checks; server-level readiness no longer races database
+  creation during container initialization.
+- The watchdog CronJob skips a run more than two minutes late (`startingDeadlineSeconds: 120`).
+  After a node restart the run missed during the downtime started seconds after the cluster,
+  before DNS and Services were ready, and failed without checking anything.
+- A failed watchdog run keeps the end of its log in the Pod status
+  (`terminationMessagePolicy: FallbackToLogsOnError`), so its cause stays readable after the
+  container and its log are removed.
+
+### Added
+
+- Blinded synthetic client evaluation packets and repeated-run judgment scoring, with no client
+  connection or private source export. Evaluation runs require a fresh disposable vault and
+  independent reviewers.
+- Client-local source coverage accounting in flush guidance and independently judged source
+  processing metrics. No transcript, ledger or source receipt is stored by the server.
+- Content-free fixed-label search candidate histograms for strict text, conjunctive question
+  fallback, vectors, and overlap.
+- A source-first synthetic quality harness with 63 scenario packs, disposable PostgreSQL
+  retrieval/temporal scoring, 200 distractor support, and optional two-reviewer extraction and
+  answer judgment aggregation. It does not read production knowledge or download models.
 - Immutable temporal source evidence, exact subject/property/scope identities and deterministic
   current/historical resolution independent of conversation import order. Explicit conflicts,
   uncertainty, timestamp precision, corrections, provenance, receipt-time filtering and history.
@@ -27,11 +65,9 @@ stable release.
 
 ### Changed
 
-- **Operator action required for legacy enrichment:** inspect source material and the target's
-  content hash and successor link; use the admin attachment endpoint only for reviewed facts.
-  Existing flush clients continue unchanged. No new migration is required beyond temporal schema
-  revision 0006. Application rollback retains attached evidence in the additive table.
-
+- Plain questions with no strict text hit receive a bounded conjunctive subject-term fallback;
+  exact syntax and successful strict searches keep their existing behavior. No schema or MCP
+  response change. Search ranking and cursors can shift after rollout; restart pagination.
 - **Operator action required:** restore-test a backup before migration 0006, run the Helm migration
   job and refresh client schemas/flush skill. Legacy records remain unchanged and unclassified;
   gradually enrich reviewed evidence. Use corrects_key to correct structured evidence rather than

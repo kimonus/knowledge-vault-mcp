@@ -40,6 +40,20 @@ git tag -s vX.Y.Z -m "Knowledge Vault vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
+When signing from SSH, set GPG's terminal in the same interactive shell before creating the tag:
+
+```bash
+export GPG_TTY="$(tty)"
+gpg-connect-agent updatestartuptty /bye
+```
+
+If `git tag -s` reports `gpg: signing failed: Inappropriate ioctl for device`, pinentry could not
+use the terminal. Confirm that `tty` prints a terminal such as `/dev/pts/0` (not `not a tty`), run
+the two commands above, and retry `git tag -s`. A failed signing attempt does not create the tag;
+the draft message in `.git/TAG_EDITMSG` is not a tag. Verify the signature with
+`git tag -v vX.Y.Z` before pushing. Run these commands in your interactive terminal, not through
+a non-interactive agent command runner.
+
 `git tag -s` signs with the key named by this repository's `user.signingkey`. Use a key made for
 releases whose identity matches the commit identity, and register its public half with the
 hosting account so the tag shows as verified. Release 0.1.0 was tagged without a signature,
@@ -91,6 +105,11 @@ attestations, so `gh attestation verify` does not find them.
 Confirm the SBOM/provenance attestations in GHCR, install the packaged chart into a disposable
 namespace by digest, run an authenticated MCP tools/list and search/fetch smoke test, and repeat the
 backup/restore exercise before promoting the release to the homelab.
+
+Download the chart, both SBOMs, and `SHA256SUMS` into one directory, then run
+`sha256sum -c SHA256SUMS` there. Releases through v0.6.0 recorded CI runner paths in that file;
+for those historical releases, compare each published hash with the downloaded file of the same
+basename instead.
 
 ## Rollback
 

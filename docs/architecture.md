@@ -72,5 +72,8 @@ replay. An incomplete batch can be aborted without touching committed assertions
 Search independently obtains full-text and optional vector candidates, combines them using
 weighted reciprocal-rank fusion (0.55 text / 0.45 vector), applies authorization-safe filters, and
 uses a signed cursor. Until an embedding is ready, text search remains available.
+When a plain question has no strict full-text match, a bounded conjunctive subject-term query
+supplies text candidates through the same filters and fusion path. See
+[decision 0008](decisions/0008-conjunctive-question-search.md).
 
 See the ADRs in [decisions](decisions/) for the durable choices behind this design.

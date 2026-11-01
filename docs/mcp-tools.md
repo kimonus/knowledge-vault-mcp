@@ -161,10 +161,16 @@ The server never merges or supersedes by similarity.
 
 A client that flushes repeatedly therefore reconciles first:
 
+Before reconciliation, the client keeps a local source coverage ledger for currently available
+conversation passages, document sections, attachments and tool results. It links planned
+assertions to source segments and distinguishes reviewed, partial, unprocessed and unavailable
+material. This ledger is **not** submitted to the vault. The final client report gives coverage
+counts separately from server commit counts; neither proves complete semantic extraction.
+
 - Call `check_knowledge_candidates` with the planned assertion texts (see
   [Candidate check](#candidate-check)). One call covers up to 50 of them. `search_knowledge` is
-  for looking further into one subject: full-text matching requires every query word, so use a
-  short keyword query; one search per assertion, or paging through the vault, is not needed.
+  for looking further into one subject: use a short keyword query for focused reconciliation;
+  one search per assertion, or paging through the vault, is not needed.
 - Already stored with the same meaning: do not submit. To record that a fact was observed again,
   or to add a source or topic, submit the stored `content` unchanged.
 - Adds detail to a stored assertion that remains true: submit only the added detail as its own
@@ -332,7 +338,10 @@ The HTTP equivalents are `POST /api/v1/artifacts`, `PUT /api/v1/artifacts/{id}/c
 - `search_knowledge(query, filters?, limit?, cursor?)`: hybrid search with lifecycle, kind, topic,
   origin, sensitivity, confidence, and validity filters. The cursor is signed and bound to the
   query and filters; it is stable while the corpus is unchanged, and concurrent writes can shift
-  ranks between pages.
+  ranks between pages. Plain questions with no strict text match get a second, conjunctive
+  subject-term text query. Explicit quoted, Boolean, exclusion and keyword queries retain strict
+  behavior. This improves candidate discovery but does not establish current truth or relevance;
+  use `resolve_knowledge_state` for classified current or historical state.
 - `check_knowledge_candidates(candidates, limit?, min_similarity?)`: the closest stored assertions
   for each planned assertion text; see [Candidate check](#candidate-check).
 - `get_knowledge(assertion_id)`: retrieve one assertion with its provenance `sources` and the
