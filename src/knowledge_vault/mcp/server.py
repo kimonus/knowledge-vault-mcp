@@ -15,7 +15,12 @@ from knowledge_vault.auth.mcp import MCPTokenVerifier
 from knowledge_vault.auth.tokens import Scope
 from knowledge_vault.container import Container
 from knowledge_vault.domain.maintenance import Purpose
-from knowledge_vault.domain.models import AssertionInput, CommitResult, SearchFilters
+from knowledge_vault.domain.models import (
+    AssertionInput,
+    CommitResult,
+    ReviewedTemporalAttachment,
+    SearchFilters,
+)
 from knowledge_vault.domain.responses import (
     AbortResponse,
     AppendArtifactResponse,
@@ -32,6 +37,7 @@ from knowledge_vault.domain.responses import (
     SearchResponse,
     StateResolutionResponse,
     StatisticsResponse,
+    TemporalAttachmentResponse,
     TemporalDiagnosticsResponse,
 )
 from knowledge_vault.domain.temporal import ResolutionRequest
@@ -241,6 +247,22 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
     async def resolve_knowledge_state(request: ResolutionRequest) -> StateResolutionResponse:
         principal(Scope.READ)
         return await container.temporal.resolve(request)
+
+    @tool(
+        description=(
+            "Attach independently reviewed, source-backed temporal evidence to an existing "
+            "assertion UUID without editing it. Admin only. Requires the target content hash, "
+            "a stable evidence key, verified source and observation date. Superseded historical "
+            "claims require bounded validity and an explicit successor assertion. Identical "
+            "retries replay; changed evidence keys conflict. Never use for ordinary flushes."
+        ),
+        annotations=WRITE_IDEMPOTENT,
+    )
+    async def attach_reviewed_temporal_evidence(
+        request: ReviewedTemporalAttachment,
+    ) -> TemporalAttachmentResponse:
+        principal(Scope.ADMIN)
+        return await container.temporal.attach_reviewed(request)
 
     @tool(
         description=(

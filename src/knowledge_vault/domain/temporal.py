@@ -5,6 +5,7 @@ import hashlib
 import json
 from datetime import datetime
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import Field, model_validator
 
@@ -38,6 +39,10 @@ class TemporalInput(SafeModel):
     valid_from_precision: Precision = "instant"
     valid_to_precision: Precision = "instant"
     observation_basis: Literal["message", "conversation", "source", "unknown"] = "unknown"
+    legacy_supersession_reason: Literal[
+        "unknown", "historical_transition", "factual_correction"
+    ] = "unknown"
+    transition_assertion_id: UUID | None = None
 
     @model_validator(mode="after")
     def correction_shape(self) -> "TemporalInput":

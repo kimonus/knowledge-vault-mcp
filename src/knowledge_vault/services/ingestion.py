@@ -338,6 +338,13 @@ class IngestionService:
                             )
                         prior_evidence = None
                         if item.temporal:
+                            if (
+                                item.temporal.legacy_supersession_reason != "unknown"
+                                or item.temporal.transition_assertion_id is not None
+                            ):
+                                raise InvalidRequestError(
+                                    "legacy supersession review requires admin attachment"
+                                )
                             prior_evidence = await session.get(
                                 TemporalEvidenceRow, item.temporal.evidence_key
                             )

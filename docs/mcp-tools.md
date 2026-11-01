@@ -2,6 +2,18 @@
 
 ## Temporal state (additive)
 
+`attach_reviewed_temporal_evidence(request)` requires admin scope. HTTP equivalent:
+`POST /api/v1/state/evidence/attach`. The request contains `assertion_id`,
+`expected_content_hash` (the target's existing SHA-256 content hash) and a complete validated
+`evidence` assertion payload. Its content, kind, origin and status must match the target; the
+payload needs verified source-backed observation, a stable `temporal.evidence_key` and a review
+date. For a superseded target, use `temporal.mode=historical`,
+`legacy_supersession_reason=historical_transition`, bounded `valid_from`/`valid_to`, and
+`transition_assertion_id` naming a legacy successor whose `supersedes_id` points to the target.
+Identical retries return `replayed=true`; changed key reuse conflicts. This is an operator review
+operation, never part of ordinary flush. The target assertion row, sources and embeddings are not
+updated.
+
 `append_knowledge` accepts optional `temporal` identity/value/mode/source-key metadata; commit
 items add `evidence_key` and `evidence_outcome` (`inserted`, `replayed`). Legacy fields/defaults
 remain. Provenance optionally adds conversation/message references and timestamp precision,

@@ -55,6 +55,12 @@ class TemporalDiagnosticsResponse(BaseModel):
     evidence_total: int
 
 
+class TemporalAttachmentResponse(BaseModel):
+    assertion_id: UUID
+    evidence_key: str
+    replayed: bool
+
+
 class MutationResponse(BaseModel):
     assertion_id: UUID
     revision: int

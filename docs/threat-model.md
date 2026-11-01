@@ -6,6 +6,10 @@ transaction order and semantic similarity never establish authority. Source refe
 bounded and never fetched. Read/write scopes and shared rate limits cover temporal tools. Evidence
 cascades on confirmed assertion deletion; no source values enter metric labels/logs. See
 [temporal semantics](temporal-knowledge.md), including lookup and legacy writer limits.
+Reviewed attachment uses the stronger admin scope because changing historical eligibility can
+change answers without changing a legacy assertion. Target equality, content hash and a legacy
+successor link are checked in one transaction. Source relevance and real-world meaning still
+require human review; neither a URL nor a legacy supersession alone proves them.
 
 ## Assets and boundaries
 

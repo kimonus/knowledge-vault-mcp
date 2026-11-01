@@ -104,6 +104,39 @@ def test_effective_dates_and_provenance_are_distinct():
     assert result.history[0].assertion.provenance[0].message_ids == ["message-7"]
 
 
+def test_superseded_historical_requires_reviewed_source_and_transition_reason():
+    base = {
+        "status": "superseded",
+        "evidence_state": "verified",
+        "last_verified_at": "2026-03-01T00:00:00Z",
+        "sources": [{"url": "https://example.org/router-record"}],
+        "valid_from": "2025-01-01T00:00:00Z",
+        "valid_to": "2026-01-01T00:00:00Z",
+    }
+    temporal = {"observation_basis": "source"}
+    point = datetime(2025, 6, 1, tzinfo=UTC)
+    for reason in ("unknown", "factual_correction"):
+        false_history = item(
+            mode="historical",
+            temporal={**temporal, "legacy_supersession_reason": reason},
+            **base,
+        )
+        assert resolve([false_history], as_of=point).outcome == "unknown"
+    unverified = item(
+        mode="historical",
+        temporal={**temporal, "legacy_supersession_reason": "historical_transition"},
+        **{**base, "evidence_state": "reported"},
+    )
+    assert resolve([unverified], as_of=point).outcome == "unknown"
+    reviewed = item(
+        mode="historical",
+        temporal={**temporal, "legacy_supersession_reason": "historical_transition"},
+        **base,
+    )
+    assert resolve([reviewed], as_of=point).values == ["router-x"]
+    assert resolve([reviewed]).outcome == "unknown"
+
+
 @pytest.mark.parametrize("missing", [None, "2026-01-01T00:00:00Z"])
 def test_no_arbitrary_winner(missing):
     claims = [item(observed=missing), item("b", "mikrotik", missing)]

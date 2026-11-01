@@ -7,6 +7,12 @@ stable release.
 
 ### Added
 
+- Admin-only, idempotent attachment of reviewed source-backed temporal evidence to an existing
+  assertion UUID without changing its row, source rows, embeddings or supersession links.
+- Bounded historical resolution for a superseded legacy assertion only when reviewed evidence
+  identifies an implemented transition and its explicit successor. Unknown and correction cases
+  remain excluded; no existing evidence is automatically reclassified.
+
 - Immutable temporal source evidence, exact subject/property/scope identities and deterministic
   current/historical resolution independent of conversation import order. Explicit conflicts,
   uncertainty, timestamp precision, corrections, provenance, receipt-time filtering and history.
@@ -16,6 +22,11 @@ stable release.
   after staging purge. Old correction receipts can be retrieved with commit by their batch ID.
 
 ### Changed
+
+- **Operator action required for legacy enrichment:** inspect source material and the target's
+  content hash and successor link; use the admin attachment endpoint only for reviewed facts.
+  Existing flush clients continue unchanged. No new migration is required beyond temporal schema
+  revision 0006. Application rollback retains attached evidence in the additive table.
 
 - **Operator action required:** restore-test a backup before migration 0006, run the Helm migration
   job and refresh client schemas/flush skill. Legacy records remain unchanged and unclassified;

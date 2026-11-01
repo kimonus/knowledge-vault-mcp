@@ -48,6 +48,7 @@ async def test_tool_discovery_contract(settings) -> None:
         "find_knowledge_curation_candidates",
         "report_knowledge_usage",
         "resolve_knowledge_state",
+        "attach_reviewed_temporal_evidence",
         "get_knowledge_temporal_diagnostics",
     }
     assert set(tools) == expected
