@@ -14,6 +14,8 @@ stable release.
   remain excluded; no existing evidence is automatically reclassified.
 - Review follow-up: attachment and flush share evidence-key locks; new attachments protect the
   target and successor against concurrent edits, while exact retries retain their original receipt.
+- Reviewed attachment validates context and artifact provenance references on first insert;
+  identical retries remain valid after referenced metadata changes.
 
 - Immutable temporal source evidence, exact subject/property/scope identities and deterministic
   current/historical resolution independent of conversation import order. Explicit conflicts,

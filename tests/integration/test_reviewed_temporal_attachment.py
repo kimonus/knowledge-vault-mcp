@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import func, select, text
 
 from knowledge_vault.api.app import create_app
-from knowledge_vault.domain.maintenance import MetadataUpdate
+from knowledge_vault.domain.maintenance import ContextInput, MetadataUpdate
 from knowledge_vault.domain.models import ReviewedTemporalAttachment
 from knowledge_vault.domain.temporal import ResolutionRequest
 from knowledge_vault.persistence.tables import AssertionRow, TemporalEvidenceRow
@@ -587,3 +587,48 @@ async def test_attachment_races_supersession_and_locks_both_rows(integration_con
             with pytest.raises(ConflictError, match="being modified"):
                 await c.temporal.attach_reviewed(historical)
     assert not (await c.temporal.attach_reviewed(historical)).replayed
+
+
+async def test_new_attachment_validates_metadata_refs_but_replay_uses_stored_payload(
+    integration_container,
+):
+    c = integration_container
+    target = await ingest(c, "Metadata reference target.")
+    before = await fingerprint(c, target)
+    request = attachment(
+        target,
+        before[0]["content_hash"],
+        "Metadata reference target.",
+        "current",
+        "metadata-refs",
+        key="metadata-refs:key",
+        value="Router X",
+        mode="snapshot",
+    )
+    invalid_context = request.model_dump(mode="json")
+    invalid_context["evidence"]["context_id"] = str(uuid4())
+    with pytest.raises(InvalidRequestError, match="context_id was not found"):
+        await c.temporal.attach_reviewed(ReviewedTemporalAttachment.model_validate(invalid_context))
+
+    invalid_artifact = request.model_dump(mode="json")
+    invalid_artifact["evidence"]["provenance"] = [{"kind": "artifact", "locator": str(uuid4())}]
+    with pytest.raises(InvalidRequestError, match="artifact provenance"):
+        await c.temporal.attach_reviewed(
+            ReviewedTemporalAttachment.model_validate(invalid_artifact)
+        )
+    async with c.database.sessions() as session:
+        assert await session.scalar(select(func.count()).select_from(TemporalEvidenceRow)) == 0
+    assert await fingerprint(c, target) == before
+
+    context_id = uuid4()
+    await c.maintenance.context(ContextInput(id=context_id, name="Synthetic attachment context"))
+    valid = request.model_dump(mode="json")
+    valid["evidence"]["context_id"] = str(context_id)
+    accepted = ReviewedTemporalAttachment.model_validate(valid)
+    assert not (await c.temporal.attach_reviewed(accepted)).replayed
+    async with c.database.sessions.begin() as session:
+        await session.execute(
+            text("DELETE FROM knowledge_contexts WHERE id=:id"), {"id": context_id}
+        )
+    assert (await c.temporal.attach_reviewed(accepted)).replayed
+    assert await fingerprint(c, target) == before

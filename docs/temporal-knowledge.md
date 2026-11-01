@@ -23,6 +23,9 @@ retries safe; changed payloads or associations fail. This operation only inserts
 An identical retry returns the stored receipt even if the legacy row's metadata changed later;
 new attachments recheck the target and successor under row locks. A concurrent row edit can
 return a retryable conflict instead of accepting a stale review.
+New attachments also validate context references and artifact provenance against the same rules
+as normal ingestion. An identical replay uses the already accepted immutable payload even if a
+referenced context is later removed.
 
 For a superseded legacy assertion, historical eligibility additionally requires
 `temporal.legacy_supersession_reason=historical_transition`, `mode=historical`, known precision

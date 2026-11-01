@@ -319,7 +319,7 @@ class TemporalService:
         self, request: ReviewedTemporalAttachment
     ) -> TemporalAttachmentResponse:
         """Insert immutable evidence for a reviewed UUID; never touch the assertion row."""
-        from knowledge_vault.services.maintenance import maintenance_lock
+        from knowledge_vault.services.maintenance import maintenance_lock, validate_metadata_refs
 
         item = request.evidence
         temporal = item.temporal
@@ -379,6 +379,7 @@ class TemporalService:
                 target = locked[request.assertion_id]
                 successor = locked.get(temporal.transition_assertion_id)
                 self._validate_new_attachment(request, target, successor)
+                await validate_metadata_refs(session, item)
                 session.add(
                     TemporalEvidenceRow(
                         evidence_key=temporal.evidence_key,
