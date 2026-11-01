@@ -31,7 +31,7 @@ from knowledge_vault.api.schemas import (
 from knowledge_vault.auth.tokens import Principal, Scope
 from knowledge_vault.container import Container
 from knowledge_vault.domain.maintenance import Purpose
-from knowledge_vault.domain.models import CommitResult, ProblemDetail
+from knowledge_vault.domain.models import CommitResult, ProblemDetail, ReviewedTemporalAttachment
 from knowledge_vault.domain.responses import (
     AbortResponse,
     AppendArtifactResponse,
@@ -48,6 +48,7 @@ from knowledge_vault.domain.responses import (
     SearchResponse,
     StateResolutionResponse,
     StatisticsResponse,
+    TemporalAttachmentResponse,
     TemporalDiagnosticsResponse,
 )
 from knowledge_vault.domain.temporal import ResolutionRequest
@@ -314,6 +315,14 @@ def create_app(container: Container) -> FastAPI:
     ) -> StateResolutionResponse:
         del principal
         return await container.temporal.resolve(body)
+
+    @app.post("/api/v1/state/evidence/attach")
+    async def attach_reviewed_temporal_evidence(
+        body: ReviewedTemporalAttachment,
+        principal: Principal = Depends(require_scope(Scope.ADMIN)),
+    ) -> TemporalAttachmentResponse:
+        del principal
+        return await container.temporal.attach_reviewed(body)
 
     @app.get("/api/v1/state/diagnostics")
     async def temporal_diagnostics(

@@ -5,6 +5,25 @@ stable release.
 
 ## [Unreleased]
 
+### Added
+
+- Admin-only, idempotent attachment of reviewed source-backed temporal evidence to an existing
+  assertion UUID without changing its row, source rows, embeddings or supersession links.
+- Bounded historical resolution for a superseded legacy assertion only when reviewed evidence
+  identifies an implemented transition and its explicit successor. Unknown and correction cases
+  remain excluded; no existing evidence is automatically reclassified.
+- Review follow-up: attachment and flush share evidence-key locks; new attachments protect the
+  target and successor against concurrent edits, while exact retries retain their original receipt.
+- Reviewed attachment validates context and artifact provenance references on first insert;
+  identical retries remain valid after referenced metadata changes.
+
+### Changed
+
+- **Operator action required for legacy enrichment:** inspect source material and the target's
+  content hash and successor link; use the admin attachment endpoint only for reviewed facts.
+  Existing flush clients continue unchanged. No new migration is required beyond temporal schema
+  revision 0006. Application rollback retains attached evidence in the additive table.
+
 ### Fixed
 
 - Release checksums use artifact filenames, so downloaded assets can be verified directly with
@@ -23,6 +42,7 @@ stable release.
 - A failed watchdog run keeps the end of its log in the Pod status
   (`terminationMessagePolicy: FallbackToLogsOnError`), so its cause stays readable after the
   container and its log are removed.
+
 ### Added
 
 - Blinded synthetic client evaluation packets and repeated-run judgment scoring, with no client

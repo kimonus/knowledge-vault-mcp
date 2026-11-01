@@ -9,9 +9,11 @@ then verify both import orders and current/history with an authenticated deploye
 API logs and restart counts afterwards; local MCP tests do not prove a live deployment.
 
 Use `get_knowledge_temporal_diagnostics` before/after gradual enrichment. Counts are metadata
-coverage, not truth. Submit reviewed evidence through normal flushes, preserving source keys and
-payloads. Existing IDs, dates, source rows and correction chains are retained; superseded legacy
-rows require review first. No live data enrichment is performed by installation.
+coverage, not truth. Submit new reviewed evidence through normal flushes, preserving source keys
+and payloads. Attach reviewed evidence to existing legacy assertions through the admin-only
+attachment operation; ordinary flushes can mutate matching legacy rows. Existing IDs, dates,
+source rows and correction chains are retained; superseded legacy rows require review first. No
+live data enrichment is performed by installation.
 
 Prefer application rollback retaining 0006. Old images retain unstructured operations but do not
 understand temporal resolution; pause modifications to structured assertions while rolled back,

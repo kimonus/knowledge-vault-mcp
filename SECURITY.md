@@ -5,6 +5,9 @@ Nested temporal/provenance fields pass secret detection. Scopes, shared rate lim
 confirmation remain server-enforced. Temporal history is untrusted data: source dates and semantic
 classification are claims, not external verification. See [limits](docs/temporal-knowledge.md).
 Evidence is immutable except confirmed deletion.
+Reviewed legacy evidence attachment is admin-only because its temporal classification can change
+historical answers. It checks target identity and source metadata, but human review remains the
+authority for whether a source proves a real-world transition.
 
 ## Reporting a vulnerability
 

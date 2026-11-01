@@ -1,16 +1,20 @@
 """Deterministic, conservative projections over immutable evidence, never insertion order."""
 
+import hashlib
+import json
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import exists, func, select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from knowledge_vault.domain.models import AssertionInput
+from knowledge_vault.domain.models import AssertionInput, ReviewedTemporalAttachment
 from knowledge_vault.domain.responses import (
     StateResolutionResponse,
+    TemporalAttachmentResponse,
     TemporalDiagnosticsResponse,
     TemporalEvidenceView,
 )
@@ -21,7 +25,7 @@ from knowledge_vault.persistence.tables import (
     TemporalEvidenceRow,
     TemporalRetirementRow,
 )
-from knowledge_vault.services.errors import InvalidRequestError
+from knowledge_vault.services.errors import ConflictError, InvalidRequestError, NotFoundError
 
 MAX_RESOLUTION_EVIDENCE = 1000
 
@@ -80,6 +84,19 @@ def _state(evidence: Evidence) -> _State:
     temporal = _qualification(item)
     effective = window(item.valid_from, temporal.valid_from_precision)
     observed = window(item.observed_at, temporal.observed_precision)
+    reviewed_history = (
+        item.status == "superseded"
+        and temporal.legacy_supersession_reason == "historical_transition"
+        and temporal.transition_assertion_id is not None
+        and temporal.mode == "historical"
+        and item.valid_from is not None
+        and item.valid_to is not None
+        and effective is not None
+        and window(item.valid_to, temporal.valid_to_precision) is not None
+        and item.evidence_state == "verified"
+        and bool(item.sources)
+        and temporal.observation_basis == "source"
+    )
     return _State(
         evidence=evidence,
         value=temporal.value,
@@ -89,7 +106,7 @@ def _state(evidence: Evidence) -> _State:
         end=window(item.valid_to, temporal.valid_to_precision),
         reliable=(
             item.evidence_state in {"reported", "verified"}
-            and item.status == "current"
+            and (item.status == "current" or reviewed_history)
             and item.confidence > 0
             and item.origin in {"user", "joint", "external_source", "artifact"}
         ),
@@ -180,7 +197,7 @@ def resolve_evidence(
     ] = {}
     for key, state in states.items():
         item = state.evidence.assertion
-        if key in corrected or item.status == "superseded":
+        if key in corrected or (item.status == "superseded" and not state.reliable):
             dispositions[key] = "corrected"
             continue
         if state.mode in {"proposal", "hypothesis", "correction"}:
@@ -297,6 +314,139 @@ def resolve_evidence(
 class TemporalService:
     def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
         self._sessions = sessions
+
+    async def attach_reviewed(
+        self, request: ReviewedTemporalAttachment
+    ) -> TemporalAttachmentResponse:
+        """Insert immutable evidence for a reviewed UUID; never touch the assertion row."""
+        from knowledge_vault.services.maintenance import maintenance_lock, validate_metadata_refs
+
+        item = request.evidence
+        temporal = item.temporal
+        if temporal is None:
+            raise InvalidRequestError("structured temporal evidence is required")
+        if item.evidence_state != "verified" or not item.last_verified_at:
+            raise InvalidRequestError("reviewed evidence must be verified and dated")
+        if not item.sources or temporal.observation_basis != "source":
+            raise InvalidRequestError(
+                "reviewed evidence requires a source URL and source observation basis"
+            )
+        if item.observed_at is None or temporal.observed_precision == "unknown":
+            raise InvalidRequestError("reviewed evidence requires a dated source observation")
+        if item.artifact_ids or item.supersedes_id or temporal.corrects_key:
+            raise InvalidRequestError("attachment cannot alter artifacts or corrections")
+        payload = item.model_dump(mode="json")
+        payload_hash = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
+        ).hexdigest()
+        if request.expected_content_hash != item.stable_hash:
+            raise ConflictError("reviewed evidence content hash does not match target hash")
+        try:
+            async with self._sessions.begin() as session:
+                # Match flush's global order: content lock, then evidence-key lock,
+                # then assertion rows. NOWAIT row locks prevent cycles with writers.
+                for key in sorted(
+                    (
+                        f"content:{request.expected_content_hash}",
+                        f"temporal:{temporal.evidence_key}",
+                    )
+                ):
+                    await maintenance_lock(session, key)
+                prior = await session.get(TemporalEvidenceRow, temporal.evidence_key)
+                if prior:
+                    if (
+                        prior.assertion_id != request.assertion_id
+                        or prior.payload_hash != payload_hash
+                    ):
+                        raise ConflictError(
+                            "evidence_key already identifies a different target or payload"
+                        )
+                    return TemporalAttachmentResponse(
+                        assertion_id=request.assertion_id,
+                        evidence_key=temporal.evidence_key,
+                        replayed=True,
+                    )
+                ids = {request.assertion_id}
+                if temporal.transition_assertion_id:
+                    ids.add(temporal.transition_assertion_id)
+                locked = {}
+                for assertion_id in sorted(ids):
+                    locked[assertion_id] = await session.scalar(
+                        select(AssertionRow)
+                        .where(AssertionRow.id == assertion_id)
+                        .with_for_update(read=True, nowait=True, of=AssertionRow)
+                    )
+                target = locked[request.assertion_id]
+                successor = locked.get(temporal.transition_assertion_id)
+                self._validate_new_attachment(request, target, successor)
+                await validate_metadata_refs(session, item)
+                session.add(
+                    TemporalEvidenceRow(
+                        evidence_key=temporal.evidence_key,
+                        assertion_id=request.assertion_id,
+                        identity_hash=temporal.identity.digest,
+                        payload_hash=payload_hash,
+                        payload=payload,
+                    )
+                )
+        except DBAPIError as error:
+            if getattr(error.orig, "sqlstate", None) == "55P03":
+                raise ConflictError(
+                    "target or successor is being modified; retry attachment"
+                ) from None
+            raise
+        return TemporalAttachmentResponse(
+            assertion_id=request.assertion_id, evidence_key=temporal.evidence_key, replayed=False
+        )
+
+    @staticmethod
+    def _validate_new_attachment(
+        request: ReviewedTemporalAttachment,
+        target: AssertionRow | None,
+        successor: AssertionRow | None,
+    ) -> None:
+        item = request.evidence
+        temporal = item.temporal
+        if temporal is None:
+            raise InvalidRequestError("structured temporal evidence is required")
+        if target is None:
+            raise NotFoundError("target assertion was not found")
+        if target.content_hash != request.expected_content_hash:
+            raise ConflictError("target assertion content hash changed")
+        if (item.content, item.kind, item.origin, item.status) != (
+            target.content,
+            target.kind,
+            target.origin,
+            target.status,
+        ):
+            raise ConflictError(
+                "reviewed evidence does not match target content, kind, origin and status"
+            )
+        identity_kinds = {
+            "configuration": {"configuration"},
+            "preference": {"preference"},
+            "fact": {"user_fact", "external_fact"},
+        }
+        if item.kind not in identity_kinds[temporal.identity.state_type]:
+            raise InvalidRequestError("identity type does not match target kind")
+        if target.status == "superseded":
+            if temporal.legacy_supersession_reason != "historical_transition":
+                raise InvalidRequestError(
+                    "superseded history requires a reviewed historical transition"
+                )
+            if temporal.mode != "historical" or not item.valid_from or not item.valid_to:
+                raise InvalidRequestError(
+                    "historical transition requires a bounded validity interval"
+                )
+            if (
+                temporal.valid_from_precision == "unknown"
+                or temporal.valid_to_precision == "unknown"
+            ):
+                raise InvalidRequestError("historical transition requires known bound precision")
+            if successor is None or successor.supersedes_id != target.id:
+                raise ConflictError("transition assertion must explicitly supersede target")
+        elif temporal.transition_assertion_id or temporal.legacy_supersession_reason != "unknown":
+            raise InvalidRequestError("transition review applies only to superseded assertions")
 
     async def resolve(self, request: ResolutionRequest) -> StateResolutionResponse:
         retired = exists().where(

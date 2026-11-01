@@ -10,6 +10,38 @@ than resubmitting the correction. Generic begin/append/commit contracts remain u
 The vault preserves source evidence separately from its answer to a state question. See the
 [audit and architecture decision](decisions/0007-temporal-evidence.md).
 
+## Review legacy history without changing the assertion
+
+Use `attach_reviewed_temporal_evidence` or `POST /api/v1/state/evidence/attach` with a separate
+admin credential after reviewing a target UUID, its current content hash, the primary source and
+the successor link. The request contains the target UUID and expected content hash plus a complete
+`AssertionInput` evidence payload. Its content, kind, origin and status must equal the target's.
+The payload must be verified, have `last_verified_at`, a source URL, `observed_at`, known observation
+precision and `temporal.observation_basis=source`. A globally stable evidence key makes exact
+retries safe; changed payloads or associations fail. This operation only inserts into the existing
+`temporal_evidence` table. It does not confirm, enrich, reactivate or otherwise edit legacy rows.
+An identical retry returns the stored receipt even if the legacy row's metadata changed later;
+new attachments recheck the target and successor under row locks. A concurrent row edit can
+return a retryable conflict instead of accepting a stale review.
+New attachments also validate context references and artifact provenance against the same rules
+as normal ingestion. An identical replay uses the already accepted immutable payload even if a
+referenced context is later removed.
+
+For a superseded legacy assertion, historical eligibility additionally requires
+`temporal.legacy_supersession_reason=historical_transition`, `mode=historical`, known precision
+`valid_from` and `valid_to`, and `temporal.transition_assertion_id` referencing a successor whose
+`supersedes_id` is the target UUID. A factual correction or an unknown supersession reason must
+not be labelled as a transition. Such records remain excluded until independent review establishes
+historical truth; an unknown transition date is not a validity interval. A source URL and review
+date record the review claim, but the service cannot prove that a source actually supports the
+assertion. The operator must inspect it. Proposals and hypotheses do not establish completed
+state. Ordinary flush rejects legacy supersession review fields.
+
+This endpoint needs admin scope because labelling a superseded claim as historically true changes
+answers even though the source assertion is untouched. Ordinary write clients, including the
+Cloudflare hosted identity, cannot invoke it. Identity subject, property, scope and value remain
+reviewer assertions; the server checks type and target equality but cannot infer their meaning.
+
 ## Submit evidence
 
 The established begin/append/commit sequence accepts an optional `temporal` field:
