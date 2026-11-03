@@ -7,6 +7,9 @@ stable release.
 
 ### Added
 
+- Isolated M1 client evaluation lab runbook and bounded, network-disabled PostgreSQL/MCP harness
+  for synthetic infrastructure checks. Genuine evaluation still requires an independent offline
+  embedding cache, a separately configured assistant client, and independent reviewers.
 - Admin-only, idempotent attachment of reviewed source-backed temporal evidence to an existing
   assertion UUID without changing its row, source rows, embeddings or supersession links.
 - Bounded historical resolution for a superseded legacy assertion only when reviewed evidence
