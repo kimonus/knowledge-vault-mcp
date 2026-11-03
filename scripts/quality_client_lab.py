@@ -16,6 +16,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -92,7 +93,7 @@ def refuse_inherited_configuration(environ: dict[str, str]) -> None:
         raise RuntimeError("unsafe inherited configuration: " + ", ".join(forbidden))
 
 
-def docker(*args: str) -> str:
+def docker(*args: str, timeout: float = 30) -> str:
     # Pin the local socket; never follow a caller's Docker context or remote daemon.
     result = subprocess.run(  # noqa: S603  # Fixed executable, harness-generated arguments.
         ["/usr/bin/docker", "-H", "unix:///var/run/docker.sock", *args],
@@ -100,6 +101,7 @@ def docker(*args: str) -> str:
         capture_output=True,
         text=True,
         env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+        timeout=timeout,
     )
     return (result.stdout + (result.stderr if args[0] == "logs" else "")).strip()
 
@@ -203,10 +205,52 @@ def cleanup_owned(owner: str, socket_dir: Path, output: Path | None) -> None:
         raise output_error
 
 
-def start_watcher(owner: str, socket_dir: Path, output: Path | None) -> int:
+def postgres_run_args(owner: str, socket_dir: Path, password: str) -> tuple[str, ...]:
+    return (
+        "run",
+        "-d",
+        "--name",
+        f"kv-client-lab-db-{owner}",
+        "--label",
+        f"kv.client-lab.owner={owner}",
+        "--network",
+        "none",
+        "--mount",
+        f"type=bind,source={socket_dir},target=/var/run/postgresql",
+        "--memory",
+        "768m",
+        "--cpus",
+        "1",
+        "--pids-limit",
+        "128",
+        "--cap-drop",
+        "ALL",
+        "--user",
+        f"{os.getuid()}:{os.getgid()}",
+        "--security-opt",
+        "no-new-privileges",
+        "--tmpfs",
+        f"/var/lib/postgresql/data:rw,nosuid,noexec,size=512m,uid={os.getuid()},gid={os.getgid()}",
+        "--env",
+        "POSTGRES_USER=lab",
+        "--env",
+        f"POSTGRES_PASSWORD={password}",
+        "--env",
+        "POSTGRES_DB=lab",
+        IMAGE,
+        "postgres",
+        "-c",
+        "listen_addresses=",
+    )
+
+
+def start_watcher(
+    owner: str, socket_dir: Path, output: Path | None, password: str
+) -> tuple[int, subprocess.Popen[bytes]]:
     lock_path = socket_dir / ".parent-lock"
     descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
     fcntl.flock(descriptor, fcntl.LOCK_EX)
+    password_path = socket_dir / ".db-password"
     args = [
         sys.executable,
         str(Path(__file__).resolve()),
@@ -219,8 +263,11 @@ def start_watcher(owner: str, socket_dir: Path, output: Path | None) -> int:
     if output is not None:
         args.extend(("--output", str(output)))
     try:
+        password_fd = os.open(password_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(password_fd, "w", encoding="ascii") as handle:
+            handle.write(password)
         with (socket_dir / ".watcher-error").open("w", encoding="utf-8") as log:
-            subprocess.Popen(  # noqa: S603  # Fixed Python executable and generated paths.
+            watcher = subprocess.Popen(  # noqa: S603  # Fixed Python executable and generated paths.
                 args,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
@@ -231,7 +278,28 @@ def start_watcher(owner: str, socket_dir: Path, output: Path | None) -> int:
     except BaseException:
         os.close(descriptor)
         raise
-    return descriptor
+    return descriptor, watcher
+
+
+def wait_for_launch(
+    watcher: subprocess.Popen[bytes],
+    socket_dir: Path,
+    stop_requested: Callable[[], bool] | None,
+) -> None:
+    status_path = socket_dir / ".launch-status"
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline:
+        check_interruption(stop_requested)
+        if status_path.exists():
+            if status_path.read_text(encoding="ascii") == "started":
+                return
+            raise RuntimeError("disposable Docker startup failed; cleanup outcome is being checked")
+        if watcher.poll() is not None:
+            raise RuntimeError(
+                "Docker launcher exited before reporting startup; cleanup is incomplete"
+            )
+        time.sleep(0.05)
+    raise RuntimeError("Docker launch outcome is unknown after 90 seconds; cleanup is incomplete")
 
 
 def watch_parent(owner: str, socket_dir: Path, output: Path | None) -> None:
@@ -240,22 +308,54 @@ def watch_parent(owner: str, socket_dir: Path, output: Path | None) -> None:
     marker = socket_dir / ".kv-client-lab-owner"
     if not marker.is_file() or marker.read_text(encoding="ascii") != owner:
         raise RuntimeError("watcher refused an unowned socket directory")
+    descriptor = os.open(socket_dir / ".parent-lock", os.O_RDONLY | os.O_NOFOLLOW)
+    password_path = socket_dir / ".db-password"
+    launch_complete = False
     try:
-        descriptor = os.open(socket_dir / ".parent-lock", os.O_RDONLY | os.O_NOFOLLOW)
-    except FileNotFoundError:
-        # Normal parent cleanup may finish before this process opens the lock.
-        return
-    try:
-        # The parent holds this lock until its cleanup finishes. Kernel release also covers
-        # SIGKILL and wrappers that terminate the Python process without delivering a signal.
+        try:
+            password = password_path.read_text(encoding="ascii")
+            password_path.unlink()
+            # The detached watcher owns this CLI. Parent death cannot end it or race cleanup
+            # against a container that the daemon is still creating.
+            docker(*postgres_run_args(owner, socket_dir, password), timeout=75)
+            launch_complete = True
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, UnicodeError):
+            pass
+        status_error: OSError | None = None
+        try:
+            status_path = socket_dir / ".launch-status"
+            temporary_status = socket_dir / ".launch-status.tmp"
+            temporary_status.write_text(
+                "started" if launch_complete else "failed", encoding="ascii"
+            )
+            temporary_status.replace(status_path)
+        except OSError as exc:
+            status_error = exc
+        # Kernel release also covers SIGKILL and a wrapper that terminates Python directly.
         fcntl.flock(descriptor, fcntl.LOCK_EX)
+        try:
+            cleanup_owned(owner, socket_dir, output)
+        except (
+            RuntimeError,
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+            OSError,
+        ) as exc:
+            if output is not None and output.exists() and owned_output(output, owner):
+                (output / ".cleanup-status").write_text(f"incomplete: {type(exc).__name__}\n")
+            raise RuntimeError("owner-checked Docker cleanup did not complete") from exc
+        if not launch_complete or status_error is not None:
+            if output is not None and output.exists() and owned_output(output, owner):
+                (output / ".cleanup-status").write_text(
+                    "incomplete: Docker launch or status outcome uncertain\n"
+                )
+            raise RuntimeError(
+                "Docker launch did not complete successfully; recheck owned resources"
+            )
+        if output is not None and output.exists() and owned_output(output, owner):
+            (output / ".cleanup-status").write_text("complete\n")
     finally:
         os.close(descriptor)
-    # A Docker run already in flight when the parent died can finish just after lock release.
-    import time
-
-    time.sleep(1)
-    cleanup_owned(owner, socket_dir, output)
 
 
 @contextlib.contextmanager
@@ -269,48 +369,13 @@ def disposable_postgres(
     socket_dir.chmod(0o700)
     url = f"postgresql+psycopg://lab:{quote(password)}@/lab?host={quote(str(socket_dir), safe='/')}"
     lock_descriptor: int | None = None
+    watcher: subprocess.Popen[bytes] | None = None
     try:
         (socket_dir / ".kv-client-lab-owner").write_text(owner, encoding="ascii")
         if output is not None:
             prepare_output(output, owner, socket_dir)
-        lock_descriptor = start_watcher(owner, socket_dir, output)
-        check_interruption(stop_requested)
-        docker(
-            "run",
-            "-d",
-            "--name",
-            container,
-            "--label",
-            f"kv.client-lab.owner={owner}",
-            "--network",
-            "none",
-            "--mount",
-            f"type=bind,source={socket_dir},target=/var/run/postgresql",
-            "--memory",
-            "768m",
-            "--cpus",
-            "1",
-            "--pids-limit",
-            "128",
-            "--cap-drop",
-            "ALL",
-            "--user",
-            f"{os.getuid()}:{os.getgid()}",
-            "--security-opt",
-            "no-new-privileges",
-            "--tmpfs",
-            f"/var/lib/postgresql/data:rw,nosuid,noexec,size=512m,uid={os.getuid()},gid={os.getgid()}",
-            "--env",
-            "POSTGRES_USER=lab",
-            "--env",
-            f"POSTGRES_PASSWORD={password}",
-            "--env",
-            "POSTGRES_DB=lab",
-            IMAGE,
-            "postgres",
-            "-c",
-            "listen_addresses=",
-        )
+        lock_descriptor, watcher = start_watcher(owner, socket_dir, output, password)
+        wait_for_launch(watcher, socket_dir, stop_requested)
         check_interruption(stop_requested)
         for _ in range(60):
             check_interruption(stop_requested)
@@ -356,11 +421,18 @@ def disposable_postgres(
         yield url, owner, container, socket_dir
     finally:
         ACTIVE_URLS.discard(url)
-        try:
+        if lock_descriptor is None or watcher is None:
             cleanup_owned(owner, socket_dir, output)
-        finally:
-            if lock_descriptor is not None:
-                os.close(lock_descriptor)
+        else:
+            os.close(lock_descriptor)
+            try:
+                result = watcher.wait(timeout=120)
+            except subprocess.TimeoutExpired as exc:
+                raise RuntimeError(
+                    "Docker watcher cleanup timed out; outcome is incomplete"
+                ) from exc
+            if result != 0:
+                raise RuntimeError("Docker watcher reported incomplete cleanup; inspect run status")
 
 
 def migrate(url: str) -> None:
@@ -453,7 +525,7 @@ def write_operator_files(output: Path, token: str, manifest: dict[str, object]) 
     return token_path
 
 
-def cleanup_interrupted(output: Path) -> None:
+def cleanup_interrupted(output: Path, *, confirmed_settled: bool = False) -> None:
     manifest = json.loads((output / "environment.json").read_text())
     owner = manifest.get("lab_owner")
     socket_raw = manifest.get("db_socket_dir")
@@ -470,7 +542,27 @@ def cleanup_interrupted(output: Path) -> None:
         f"kv-client-lab-{owner}-"
     ):
         raise RuntimeError("invalid lab socket directory in manifest")
-    cleanup_owned(owner, socket_dir, output)
+    if not socket_dir.exists():
+        cleanup_owned(owner, socket_dir, output)
+        return
+    launch_status = socket_dir / ".launch-status"
+    if (
+        not launch_status.exists() or launch_status.read_text(encoding="ascii") != "started"
+    ) and not confirmed_settled:
+        raise RuntimeError(
+            "Docker launch outcome is unresolved; wait for watcher or confirm daemon settled"
+        )
+    descriptor = os.open(socket_dir / ".parent-lock", os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError("lab parent or watcher is active; cleanup is not yet safe") from exc
+        cleanup_owned(owner, socket_dir, output)
+        if owned_output(output, owner):
+            (output / ".cleanup-status").write_text("complete by manual recovery\n")
+    finally:
+        os.close(descriptor)
 
 
 class LocalServer(uvicorn.Server):
@@ -651,6 +743,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--owner")
     parser.add_argument("--socket-dir", type=Path)
+    parser.add_argument("--confirm-daemon-settled", action="store_true")
     args = parser.parse_args()
     os.chdir(ROOT)
     if args.mode == "preflight":
@@ -659,7 +752,7 @@ def main() -> None:
         refuse_inherited_configuration(dict(os.environ))
         if args.output is None:
             parser.error("cleanup requires --output")
-        cleanup_interrupted(args.output)
+        cleanup_interrupted(args.output, confirmed_settled=args.confirm_daemon_settled)
     elif args.mode == "watch":
         if args.owner is None or args.socket_dir is None:
             parser.error("internal watcher requires --owner and --socket-dir")

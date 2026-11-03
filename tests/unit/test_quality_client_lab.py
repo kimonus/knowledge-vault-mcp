@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 import signal
+import tempfile
 import threading
 from pathlib import Path
 from unittest.mock import patch
@@ -46,13 +47,11 @@ def test_cleanup_only_owned_resources() -> None:
 
     def fake_docker(*args: str) -> str:
         calls.append(args)
-        if args[:2] == ("run", "-d"):
-            raise RuntimeError("interrupted startup")
         return ""
 
     with (
         patch.object(lab, "docker", fake_docker),
-        patch.object(lab.subprocess, "Popen"),
+        patch.object(lab, "start_watcher", side_effect=RuntimeError("interrupted startup")),
         pytest.raises(RuntimeError, match="interrupted startup"),
         lab.disposable_postgres(),
     ):
@@ -61,17 +60,11 @@ def test_cleanup_only_owned_resources() -> None:
 
 
 @pytest.mark.parametrize("cancelled", [False, True])
-def test_disposable_postgres_removes_owned_resources_on_exit(cancelled: bool) -> None:
-    calls: list[tuple[str, ...]] = []
+def test_disposable_postgres_waits_for_launcher_cleanup(cancelled: bool) -> None:
     socket_dir: Path | None = None
+    waited = False
 
     def fake_docker(*args: str) -> str:
-        nonlocal socket_dir
-        calls.append(args)
-        if args[:2] == ("run", "-d"):
-            mount = args[args.index("--mount") + 1]
-            socket_dir = Path(mount.split(",")[1].removeprefix("source="))
-            return "synthetic-container-id"
         if args[0] == "inspect" and "{{.HostConfig.NetworkMode}}" in args:
             return "none"
         if args[0] == "inspect" and "{{json .Mounts}}" in args:
@@ -81,11 +74,29 @@ def test_disposable_postgres_removes_owned_resources_on_exit(cancelled: bool) ->
     class Ready:
         returncode = 0
 
+    class FakeWatcher:
+        def __init__(self, owner: str, socket: Path) -> None:
+            self.owner = owner
+            self.socket = socket
+
+        def wait(self, *, timeout: float) -> int:
+            nonlocal waited
+            assert timeout == 120
+            waited = True
+            lab.cleanup_owned(self.owner, self.socket, None)
+            return 0
+
+    def fake_start(owner: str, socket: Path, _output: Path | None, _password: str):
+        nonlocal socket_dir
+        socket_dir = socket
+        descriptor = os.open(socket / ".parent-lock", os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
+        return descriptor, FakeWatcher(owner, socket)
+
     with (
         patch.object(lab, "docker", fake_docker),
-        patch.object(lab, "owned_resource", return_value=True),
         patch.object(lab.subprocess, "run", return_value=Ready()),
-        patch.object(lab.subprocess, "Popen"),
+        patch.object(lab, "start_watcher", side_effect=fake_start),
+        patch.object(lab, "wait_for_launch"),
     ):
         if cancelled:
             with pytest.raises(asyncio.CancelledError), lab.disposable_postgres() as (url, *_rest):
@@ -95,52 +106,137 @@ def test_disposable_postgres_removes_owned_resources_on_exit(cancelled: bool) ->
             with lab.disposable_postgres() as (url, *_rest):
                 assert url in lab.ACTIVE_URLS
     assert socket_dir is not None and not socket_dir.exists()
-    assert any(call[:3] == ("rm", "-f", "-v") for call in calls)
+    assert waited
 
 
-def test_startup_signal_cleans_owned_container() -> None:
-    calls: list[tuple[str, ...]] = []
+def test_startup_signal_waits_for_launcher_cleanup() -> None:
     started = False
+    waited = False
 
-    def fake_docker(*args: str) -> str:
+    def fake_start(owner: str, socket: Path, _output: Path | None, _password: str):
         nonlocal started
-        calls.append(args)
-        if args[:2] == ("run", "-d"):
-            started = True
-        return ""
+        descriptor = os.open(socket / ".parent-lock", os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
+
+        class FakeWatcher:
+            def wait(self, *, timeout: float) -> int:
+                nonlocal waited
+                waited = True
+                lab.cleanup_owned(owner, socket, None)
+                return 0
+
+        return descriptor, FakeWatcher()
+
+    def mark_started(*_args: object) -> None:
+        nonlocal started
+        started = True
 
     with (
-        patch.object(lab, "docker", fake_docker),
-        patch.object(lab, "owned_resource", return_value=True),
-        patch.object(lab.subprocess, "Popen"),
+        patch.object(lab, "docker", return_value=""),
+        patch.object(lab, "start_watcher", side_effect=fake_start),
+        patch.object(lab, "wait_for_launch", side_effect=mark_started),
         pytest.raises(lab.LabInterrupted),
         lab.disposable_postgres(lambda: started),
     ):
         pass
-    assert any(call[:3] == ("rm", "-f", "-v") for call in calls)
+    assert waited
 
 
-def test_watcher_waits_for_parent_lock(tmp_path: Path) -> None:
+@pytest.mark.parametrize("phase", ["before", "during", "after"])
+def test_launcher_completes_before_cleanup_even_when_parent_exits(
+    tmp_path: Path, phase: str
+) -> None:
     owner = "f" * 32
     (tmp_path / ".kv-client-lab-owner").write_text(owner)
+    (tmp_path / ".db-password").write_text("synthetic")
     descriptor = os.open(tmp_path / ".parent-lock", os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
     fcntl.flock(descriptor, fcntl.LOCK_EX)
+    launch_entered = threading.Event()
+    allow_creation = threading.Event()
+    created = threading.Event()
     cleaned = threading.Event()
 
     def mark_cleaned(_owner: str, _socket: Path, _output: Path | None) -> None:
+        assert created.is_set()
         cleaned.set()
+
+    def delayed_docker(*args: str, timeout: float = 30) -> str:
+        assert args[:2] == ("run", "-d") and timeout == 75
+        launch_entered.set()
+        assert allow_creation.wait(3)
+        created.set()
+        return "synthetic-container-id"
 
     with (
         patch.object(lab, "cleanup_owned", side_effect=mark_cleaned),
-        patch("time.sleep", return_value=None),
+        patch.object(lab, "docker", side_effect=delayed_docker),
     ):
+        if phase == "before":
+            os.close(descriptor)
         watcher = threading.Thread(target=lab.watch_parent, args=(owner, tmp_path, None))
         watcher.start()
-        assert not cleaned.wait(0.05)
-        os.close(descriptor)
-        watcher.join(timeout=2)
+        assert launch_entered.wait(2)
+        if phase == "during":
+            os.close(descriptor)
+            # The old sleep(1) would have checked for the container by now.
+            assert not cleaned.wait(1.1)
+        allow_creation.set()
+        assert created.wait(2)
+        if phase == "after":
+            os.close(descriptor)
+        watcher.join(timeout=3)
     assert not watcher.is_alive()
     assert cleaned.is_set()
+    assert (tmp_path / ".launch-status").read_text() == "started"
+
+
+def test_failed_launcher_reports_incomplete_cleanup(tmp_path: Path) -> None:
+    owner = "a" * 32
+    (tmp_path / ".kv-client-lab-owner").write_text(owner)
+    (tmp_path / ".db-password").write_text("synthetic")
+    (tmp_path / ".parent-lock").touch()
+    with (
+        patch.object(lab, "docker", side_effect=OSError("synthetic Docker failure")),
+        patch.object(lab, "cleanup_owned"),
+        pytest.raises(RuntimeError, match="did not complete successfully"),
+    ):
+        lab.watch_parent(owner, tmp_path, None)
+    assert (tmp_path / ".launch-status").read_text() == "failed"
+
+
+def test_manual_cleanup_waits_for_launch_and_parent_lock(tmp_path: Path) -> None:
+    owner = "2" * 32
+    socket_dir = Path(tempfile.mkdtemp(prefix=f"kv-client-lab-{owner}-", dir="/tmp"))
+    (socket_dir / ".kv-client-lab-owner").write_text(owner)
+    descriptor = os.open(socket_dir / ".parent-lock", os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
+    output = tmp_path / "run"
+    lab.prepare_output(output, owner, socket_dir)
+    (output / "lab-token").write_text("synthetic")
+    with patch.object(lab, "docker", return_value=""):
+        with pytest.raises(RuntimeError, match="launch outcome is unresolved"):
+            lab.cleanup_interrupted(output)
+        (socket_dir / ".launch-status").write_text("started")
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        with pytest.raises(RuntimeError, match="lab parent or watcher is active"):
+            lab.cleanup_interrupted(output)
+        os.close(descriptor)
+        lab.cleanup_interrupted(output)
+        lab.cleanup_interrupted(output)
+    assert not socket_dir.exists()
+    assert not (output / "lab-token").exists()
+
+
+def test_manual_recovery_of_uncertain_launch_requires_explicit_confirmation(tmp_path: Path) -> None:
+    owner = "3" * 32
+    socket_dir = Path(tempfile.mkdtemp(prefix=f"kv-client-lab-{owner}-", dir="/tmp"))
+    (socket_dir / ".kv-client-lab-owner").write_text(owner)
+    (socket_dir / ".parent-lock").touch()
+    output = tmp_path / "run"
+    lab.prepare_output(output, owner, socket_dir)
+    with patch.object(lab, "docker", return_value=""):
+        with pytest.raises(RuntimeError, match="launch outcome is unresolved"):
+            lab.cleanup_interrupted(output)
+        lab.cleanup_interrupted(output, confirmed_settled=True)
+    assert not socket_dir.exists()
 
 
 def test_generated_credentials_have_no_admin_scope_or_secret_in_settings_repr() -> None:
