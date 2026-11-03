@@ -10,7 +10,19 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .client_packets import build_client_packets
 from .corpus import Case
+
+ResponseExpectation = Literal["definitive", "abstention", "unresolved"]
+
+
+def response_expectation(case: Case) -> ResponseExpectation:
+    """A conflict or unknown state needs an explanation, not a guessed value."""
+    if case.state is not None and case.state.outcome in {"conflict", "ambiguous", "unknown"}:
+        return "unresolved"
+    if case.requires_abstention:
+        return "abstention"
+    return "definitive"
 
 
 class Review(BaseModel):
@@ -23,6 +35,7 @@ class Review(BaseModel):
     extracted_claims_count: int | None = Field(default=None, ge=0)
     retrieved_gold_keys: list[str] | None = None
     temporal_correct: bool | None = None
+    unresolved_handling_correct: bool | None = None
     answer_correct: bool | None = None
     grounded: bool | None = None
     citations_correct: bool | None = None
@@ -72,9 +85,70 @@ class Metric:
         }
 
 
-def score_judgments(cases: tuple[Case, ...], raw: list[dict[str, Any]]) -> dict[str, Any]:
+def _validated_packet_manifest(
+    cases: tuple[Case, ...], packet_manifest: dict[str, Any]
+) -> tuple[set[tuple[str, str]], list[tuple[str, str]], str]:
+    """Accept only an unmodified generated packet set; never echo packet source text."""
+    try:
+        split = packet_manifest["split"]
+        case_count = packet_manifest["case_count"]
+        run_count = packet_manifest["run_count"]
+        if (
+            not isinstance(split, str)
+            or not isinstance(case_count, int)
+            or not isinstance(run_count, int)
+            or case_count < 1
+            or run_count < 1
+            or run_count % case_count
+        ):
+            raise ValueError("invalid packet manifest totals")
+        generated = build_client_packets(cases, split=split, repetitions=run_count // case_count)
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("invalid generated packet manifest") from None
+    if packet_manifest != generated:
+        raise ValueError("packet manifest differs from the generated corpus packets")
+    ordered = [(packet["case_id"], packet["run_id"]) for packet in generated["packets"]]
+    return set(ordered), ordered, split
+
+
+def score_judgments(
+    cases: tuple[Case, ...],
+    raw: list[dict[str, Any]],
+    *,
+    packet_manifest: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     by_id = {case.id: case for case in cases}
-    seen: set[tuple[str, str]] = set()
+    observed: set[tuple[str, str]] = set()
+    parsed: list[CaseJudgment] = []
+    for raw_item in raw:
+        item = CaseJudgment.model_validate(raw_item)
+        pair = (item.case_id, item.run_id)
+        if pair in observed:
+            raise ValueError("repeated case/run ID")
+        if item.case_id not in by_id and packet_manifest is None:
+            raise ValueError("unknown case/run ID")
+        observed.add(pair)
+        parsed.append(item)
+    if packet_manifest is None:
+        expected_pairs: set[tuple[str, str]] | None = None
+        ordered_pairs: list[tuple[str, str]] = []
+        manifest_split: str | None = None
+        scored = parsed
+    else:
+        expected_pairs, ordered_pairs, manifest_split = _validated_packet_manifest(
+            cases, packet_manifest
+        )
+        # Extra executions are visible in completeness, but cannot bias planned metrics.
+        scored = [item for item in parsed if (item.case_id, item.run_id) in expected_pairs]
+    missing_pairs = expected_pairs - observed if expected_pairs is not None else set()
+    unexpected_pairs = observed - expected_pairs if expected_pairs is not None else set()
+    run_status = (
+        "unchecked"
+        if expected_pairs is None
+        else "partial"
+        if missing_pairs or unexpected_pairs
+        else "complete"
+    )
     runs_per_case: Counter[str] = Counter()
     metrics: dict[str, Metric] = defaultdict(Metric)
     split_metrics: dict[str, dict[str, Metric]] = defaultdict(lambda: defaultdict(Metric))
@@ -99,11 +173,7 @@ def score_judgments(cases: tuple[Case, ...], raw: list[dict[str, Any]]) -> dict[
         legacy[name].append(value)
         legacy_by_split[split][name].append(value)
 
-    for raw_item in raw:
-        item = CaseJudgment.model_validate(raw_item)
-        if item.case_id not in by_id or (item.case_id, item.run_id) in seen:
-            raise ValueError("unknown or repeated case/run ID")
-        seen.add((item.case_id, item.run_id))
+    for item in scored:
         runs_per_case[item.case_id] += 1
         case = by_id[item.case_id]
         expected = {claim.key for claim in case.claims}
@@ -132,7 +202,15 @@ def score_judgments(cases: tuple[Case, ...], raw: list[dict[str, Any]]) -> dict[
                     raise ValueError("retrieved key is not relevant to this case")
             if review.temporal_correct is not None and case.state is None:
                 raise ValueError("temporal label requires a state case")
-            if not case.requires_abstention and review.abstained and review.answer_correct:
+            if review.unresolved_handling_correct is not None and (
+                response_expectation(case) != "unresolved"
+            ):
+                raise ValueError("unresolved handling label requires an unresolved state case")
+            if (
+                response_expectation(case) == "definitive"
+                and review.abstained
+                and review.answer_correct
+            ):
                 raise ValueError("an answerable case cannot be correct and abstained")
 
         first, second = item.reviewers
@@ -207,7 +285,8 @@ def score_judgments(cases: tuple[Case, ...], raw: list[dict[str, Any]]) -> dict[
             record(split, name, int(label) if label is not None else None)
             if label is not None:
                 old_record(split, name, float(label))
-        if not case.requires_abstention:
+        expectation = response_expectation(case)
+        if expectation == "definitive":
             record(
                 split,
                 "answerable_answer_correct",
@@ -218,7 +297,7 @@ def score_judgments(cases: tuple[Case, ...], raw: list[dict[str, Any]]) -> dict[
                 "incorrect_abstention",
                 int(final.abstained) if final.abstained is not None else None,
             )
-        else:
+        elif expectation == "abstention":
             record(
                 split,
                 "correct_abstention",
@@ -226,6 +305,14 @@ def score_judgments(cases: tuple[Case, ...], raw: list[dict[str, Any]]) -> dict[
             )
             if final.abstained is not None:
                 old_record(split, "abstention_correct", float(final.abstained))
+        else:
+            record(
+                split,
+                "unresolved_handling_correct",
+                int(final.unresolved_handling_correct)
+                if final.unresolved_handling_correct is not None
+                else None,
+            )
 
     def average(values: list[float]) -> float | None:
         return sum(values) / len(values) if values else None
@@ -245,6 +332,7 @@ def score_judgments(cases: tuple[Case, ...], raw: list[dict[str, Any]]) -> dict[
         "citations_correct",
         "correct_abstention",
         "incorrect_abstention",
+        "unresolved_handling_correct",
     )
     for name in metric_names:
         metrics[name]
@@ -252,11 +340,26 @@ def score_judgments(cases: tuple[Case, ...], raw: list[dict[str, Any]]) -> dict[
         for name in metric_names:
             split_metrics[split][name]
         unsupported_by_split[split]
+    missing_metric_labels = sum(metric.missing_labels for metric in metrics.values())
 
     return {
         "schema_version": 2,
+        "run_completeness": {
+            "status": run_status,
+            "manifest_split": manifest_split,
+            "expected_runs": len(expected_pairs) if expected_pairs is not None else None,
+            "observed_runs": len(observed),
+            "missing_runs": len(missing_pairs) if expected_pairs is not None else None,
+            "unexpected_runs": len(unexpected_pairs) if expected_pairs is not None else None,
+            # Indices identify missing packets locally without putting source or IDs in a report.
+            "missing_packet_indices": [
+                index for index, pair in enumerate(ordered_pairs) if pair in missing_pairs
+            ],
+        },
+        "study_complete": run_status == "complete" and missing_metric_labels == 0,
+        "missing_metric_labels_total": missing_metric_labels,
         "judged_cases": len(runs_per_case),
-        "judged_runs": len(seen),
+        "judged_runs": len(scored),
         "runs_per_case_min": min(runs_per_case.values(), default=0),
         "runs_per_case_max": max(runs_per_case.values(), default=0),
         "balanced_runs": len(set(runs_per_case.values())) <= 1,

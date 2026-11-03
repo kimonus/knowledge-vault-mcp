@@ -76,11 +76,18 @@ For each `case_id` and `run_id`, the optional judgment fields are:
 | `extracted_claims_count` | All emitted assertion items, including rejected ones; needed for unsupported-claim rate. If no items were emitted, enter zero rather than omitting the label. |
 | `retrieved_gold_keys` | Relevant gold keys among the client's retrieved top-ten context; `[]` means observed miss. This does not replace the gold-seeded backend retrieval score. |
 | `temporal_correct` | Whether observed state resolution matches the adjudicated outcome and values; use only for state cases. |
+| `unresolved_handling_correct` | For a `conflict`, `ambiguous`, or `unknown` state, whether the client accurately explains why no definitive value is established. A conflict explanation must identify competing evidence; a generic unsupported refusal is false. Use only for unresolved state cases. |
 | `answer_correct`, `grounded`, `citations_correct` | Judge final answer, evidential grounding and citations separately against the source truth. Null is unjudged, never false. |
-| `abstained` | Whether the client declined the requested answer. True is correct when the card requires abstention; true is an error on an answerable case. |
+| `abstained` | Whether the client declined to give a definitive value. True is correct on an evidence-insufficient abstention card and an error on a definitive-value card. For an unresolved state, score the explanation with `unresolved_handling_correct`, grounding and citations instead of the abstention-rate metrics. |
 
-An answerable case cannot have both `abstained=true` and `answer_correct=true`. A required-
-abstention case can have `answer_correct=true` for a correctly qualified refusal. Record
+Response expectation has three classes: **definitive value** for a resolved state or an answerable
+ordinary question; **abstention** for a card explicitly requiring it; and **unresolved explanation**
+for a temporal `conflict`, `ambiguous`, or `unknown` outcome. The conflict cards `conflict-3` through
+`conflict-5` are in the third class even though their old `requires_abstention` flag is false.
+The scorer derives this from the existing truth card, so the corpus and baseline digest are
+unchanged. A definitive-value case cannot have both `abstained=true` and `answer_correct=true`.
+An abstention card or a well-grounded conflict explanation can have `answer_correct=true` while
+declining to choose a value. A generic refusal on a conflict is not a correct explanation. Record
 retrieval, temporal, answer and citation judgments separately even when one upstream stage fails.
 Keep the first-pass cards and adjudication decisions in operator-local storage.
 
@@ -89,12 +96,25 @@ Keep the first-pass cards and adjudication decisions in operator-local storage.
 ```bash
 uv run python scripts/quality_score_judgments.py \
   /operator-local/kv-client-judgments.json \
+  --packets /operator-local/kv-client-dev-packets.json \
   --report /operator-local/kv-client-judgments-summary.json
 ```
 
 Each list entry has one `case_id`, optional `run_id` (old single-run cards default to `default`),
 two distinct `reviewers`, and an `adjudicated` review. The scorer rejects duplicate case/run pairs
-and invalid gold keys. It reports unique cases, run balance, reviewer agreement and redacted
+and invalid gold keys. Pass the **exact generated blinded packet JSON** with `--packets` for
+expected-run validation. It checks its corpus digest, split, counts and complete packet contents
+against the current truth-card corpus, then compares `(case_id, run_id)` pairs. A changed or stale
+manifest is rejected without echoing source text. Extra judgment runs appear in completeness but
+are excluded from planned-run quality metrics; duplicate pairs are rejected. The report gives
+expected, observed, missing and unexpected run counts and zero-based missing packet indices, which
+let the operator locate gaps in the private packet file without publishing IDs or source text.
+`run_completeness.status` is `complete`, `partial`, or `unchecked`; the last applies to old
+judgment files scored without `--packets`. `study_complete` is true only when a manifest matches
+all observed runs exactly and no eligible metric label is missing. `balanced_runs=true` alone does
+not establish completeness. Partial scores remain available and must be reported as partial.
+
+The scorer also reports unique cases, run balance, reviewer agreement and redacted
 aggregates. Only adjudicated labels enter outcome metrics. Schema v2 retains old flat fields as
 per-run averages for existing consumers and adds `metrics` and `metrics_by_split`. Each metric has
 `numerator`, `denominator`, `eligible_runs`, `labeled_runs`, `missing_labels`, and `value`; a zero
@@ -107,8 +127,10 @@ remain in its denominator, unavailable is excluded and counted separately. Unsup
 rate is unsupported emitted claims / all emitted claims only where an explicit item count exists;
 the separate total count still includes older cards without a denominator. Correct abstention is
 abstentions / labeled cases that require abstention. **Incorrect abstention** is abstentions /
-labeled answerable cases, where lower is better. Answerable answer correctness excludes required-
-abstention cases. Grounding, citation correctness, retrieval recall and temporal correctness have
+labeled definitive-value cases, where lower is better. Answerable answer correctness excludes
+required-abstention and unresolved-state cases. Unresolved handling is scored separately, so a
+supported conflict explanation cannot inflate incorrect abstention. Grounding, citation
+correctness, retrieval recall and temporal correctness have
 separate counts. Missing labels never become negative outcomes.
 
 The scorer does not generate confidence intervals or prove independent review. A publishable M1

@@ -51,6 +51,7 @@ case/run pairs are rejected. See the [client evaluation protocol](client-evaluat
 for blinded input packets and fresh-vault isolation.
 A review may supply `matched_gold_keys` (keys of claims captured in the committed flush),
 `unsupported_claims`, `extracted_claims_count`, `retrieved_gold_keys`, `temporal_correct`,
+`unresolved_handling_correct`,
 `answer_correct`, `grounded`, `citations_correct`, `abstained`, and `source_outcome`.
 The latter is one of `reviewed`, `partial`, `unprocessed`, or `unavailable` for
 the case's source pack, judged from the original source and the client's coverage report. Source
@@ -59,19 +60,26 @@ are counted separately. It measures whether accessible material was reviewed, **
 every useful claim was extracted. Claim coverage remains a separate metric.
 The v2 report gives numerator, denominator, eligible/labeled run counts and missing-label count
 for each metric and split. It separates correct abstention on evidence-insufficient cases from
-incorrect abstention on answerable cases. `extracted_claims_count` is required for an unsupported-
+incorrect abstention on definitive-value cases. Temporal conflict, ambiguity and unknown cases
+require an accurate unresolved explanation, scored separately from abstention rates; a generic
+unsupported refusal is not a correct conflict explanation. `extracted_claims_count` is required for an unsupported-
 claim rate; an unsupported count alone remains a count. Missing fields remain unmeasured.
 Annotators must read the original source and client output,
 without viewing the backend benchmark result or each other's initial labels. Run:
 
 ```bash
 uv run python scripts/quality_score_judgments.py /operator-local/judgments.json \
+  --packets /operator-local/kv-client-dev-packets.json \
   --report /tmp/kv-quality-judgments.json
 ```
 
 The scorer validates gold keys, rejects repeated case/run pairs, reports agreement and split-level metrics,
 and emits no source, assertion or answer text. It cannot verify that reviewers were truly
 independent; the operator must preserve that review process.
+With `--packets`, it also checks every planned case/run pair and reports expected, observed,
+missing and extra runs. `study_complete` requires this manifest check and all eligible labels;
+without a manifest, status is `unchecked` even if `balanced_runs=true`. Legacy judgment files
+remain scoreable without a manifest, but their completeness cannot be claimed.
 
 Before changing ranking, compare the same corpus, model and machine. Use the failure IDs in the
 redacted report to inspect synthetic cases. A ranking change belongs in a separate M2 PR and must

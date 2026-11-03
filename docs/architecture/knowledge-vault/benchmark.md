@@ -32,9 +32,10 @@ Include negative cases with common lexical overlap but wrong subject, a long pro
 | Extraction | **Claim coverage:** gold required claims correctly captured with necessary detail and epistemic label, denominator includes missed claims | Unsupported claim rate, rationale preservation, source citation coverage, secret rejection, duplicate decision precision, per-source rejection accounting. |
 | Retrieval on gold-seeded corpus | **Recall@10** for all relevant supporting IDs, plus **nDCG@10** for graded relevance | Precision@10, MRR for single-answer tasks, lexical/vector overlap, empty-result accuracy, language and category slices, p50/p95 latency, index freshness. |
 | Temporal resolution | **State correctness** across current, `as_of`, `known_at`, ambiguity/conflict and abstention cases | Import permutation consistency, correction-vs-change, precision-window cases, overflow behavior. |
-| Answer | **Grounded answer correctness** and **citation correctness** against source truth cards | Correct abstention when evidence is insufficient; incorrect abstention on answerable cases; answerable-case answer correctness, unsupported statement count, context loss and missed-retrieval rate. Report each with labeled and missing-label denominators. |
+| Answer | **Grounded answer correctness** and **citation correctness** against source truth cards | Correct abstention when evidence is insufficient; incorrect abstention on definitive-value cases; correctness of evidence-backed conflict/unknown explanations; definitive-value answer correctness, unsupported statement count, context loss and missed-retrieval rate. Report each with labeled and missing-label denominators. |
 
 Avoid a single blended score. Report numerator/denominator, Wilson or bootstrap intervals, category slices, and the exact corpus/fixture/model/client versions. Use blinded human adjudication for ambiguous answer judgments; an LLM judge may triage but cannot supply ground truth. No production query log or private assertion contents enter CI.
+Compare judged case/run pairs with the generated packet manifest before calling a client study complete. Equal repetition counts among the observed cases do not establish that every planned case ran. Publish missing/extra counts without source text, private trace or answer content.
 
 ## Baseline and decision procedure
 
