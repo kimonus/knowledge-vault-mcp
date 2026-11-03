@@ -4,6 +4,7 @@
 import argparse
 import asyncio
 import contextlib
+import fcntl
 import hashlib
 import hmac
 import json
@@ -11,13 +12,15 @@ import os
 import platform
 import secrets
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from uuid import uuid4
 
 import httpx2
@@ -43,6 +46,39 @@ TABLES = (
     "flush_parts, flush_batches, assertion_sources, assertions, artifacts, "
     "knowledge_contexts, topic_aliases, temporal_retirements, temporal_evidence"
 )
+
+
+class LabInterrupted(Exception):
+    """An operator signal requested a clean end to this disposable run."""
+
+
+def local_mcp_url(base: str) -> str:
+    parsed = urlsplit(base)
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname != "127.0.0.1"
+        or parsed.port is None
+        or parsed.path not in {"", "/"}
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise RuntimeError("MCP client URL must be plain HTTP on 127.0.0.1")
+    return f"http://127.0.0.1:{parsed.port}/mcp"
+
+
+def local_http_client(*, token: str | None = None, timeout: float = 30) -> httpx2.AsyncClient:
+    headers = {"Authorization": f"Bearer {token}"} if token is not None else None
+    # httpx2 defaults trust_env=True, which can route even loopback through an inherited proxy
+    # when NO_PROXY is changed. The SDK uses this supplied client for every MCP request.
+    return httpx2.AsyncClient(
+        headers=headers,
+        timeout=timeout,
+        trust_env=False,
+        proxy=None,
+        follow_redirects=False,
+    )
 
 
 def refuse_inherited_configuration(environ: dict[str, str]) -> None:
@@ -104,15 +140,141 @@ def owned_resource(kind: str, name: str, owner: str) -> bool:
     return label == owner
 
 
+def remove_owned_container(container: str, owner: str) -> None:
+    if owned_resource("container", container, owner):
+        docker("rm", "-f", "-v", container)
+    elif docker("ps", "-a", "--filter", f"name=^{container}$", "--format", "{{.Names}}"):
+        raise RuntimeError("container name exists without expected owner label")
+
+
+def remove_owned_socket(socket_dir: Path, owner: str) -> None:
+    if not socket_dir.exists() and not socket_dir.is_symlink():
+        return
+    marker = socket_dir / ".kv-client-lab-owner"
+    if (
+        socket_dir.parent != Path("/tmp")  # noqa: S108  # Fixed root for private mkdtemp.
+        or not socket_dir.name.startswith(f"kv-client-lab-{owner}-")
+        or socket_dir.is_symlink()
+        or socket_dir.stat().st_uid != os.getuid()
+        or not marker.is_file()
+        or marker.is_symlink()
+        or marker.read_text(encoding="ascii") != owner
+    ):
+        raise RuntimeError("socket directory is not positively owned by this lab run")
+    shutil.rmtree(socket_dir)
+
+
+def check_interruption(stop_requested: Callable[[], bool] | None) -> None:
+    if stop_requested is not None and stop_requested():
+        raise LabInterrupted
+
+
+def prepare_output(output: Path, owner: str, socket_dir: Path) -> None:
+    if output.resolve().is_relative_to(ROOT):
+        raise RuntimeError("output directory must be outside the repository")
+    output.mkdir(mode=0o700, parents=True, exist_ok=False)
+    (output / ".kv-client-lab-owner").write_text(owner, encoding="ascii")
+    (output / "environment.json").write_text(
+        json.dumps({"lab_owner": owner, "db_socket_dir": str(socket_dir)}) + "\n"
+    )
+
+
+def owned_output(output: Path, owner: str) -> bool:
+    marker = output / ".kv-client-lab-owner"
+    return (
+        not output.is_symlink()
+        and output.stat().st_uid == os.getuid()
+        and marker.is_file()
+        and not marker.is_symlink()
+        and marker.read_text(encoding="ascii") == owner
+    )
+
+
+def cleanup_owned(owner: str, socket_dir: Path, output: Path | None) -> None:
+    remove_owned_container(f"kv-client-lab-db-{owner}", owner)
+    output_error = None
+    if output is not None:
+        if output.exists() and owned_output(output, owner):
+            (output / "lab-token").unlink(missing_ok=True)
+        elif output.exists():
+            output_error = RuntimeError("output directory is not positively owned by this lab run")
+    remove_owned_socket(socket_dir, owner)
+    if output_error is not None:
+        raise output_error
+
+
+def start_watcher(owner: str, socket_dir: Path, output: Path | None) -> int:
+    lock_path = socket_dir / ".parent-lock"
+    descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
+    fcntl.flock(descriptor, fcntl.LOCK_EX)
+    args = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "watch",
+        "--owner",
+        owner,
+        "--socket-dir",
+        str(socket_dir),
+    ]
+    if output is not None:
+        args.extend(("--output", str(output)))
+    try:
+        with (socket_dir / ".watcher-error").open("w", encoding="utf-8") as log:
+            subprocess.Popen(  # noqa: S603  # Fixed Python executable and generated paths.
+                args,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=log,
+                start_new_session=True,
+                env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+            )
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def watch_parent(owner: str, socket_dir: Path, output: Path | None) -> None:
+    if not socket_dir.exists():
+        return
+    marker = socket_dir / ".kv-client-lab-owner"
+    if not marker.is_file() or marker.read_text(encoding="ascii") != owner:
+        raise RuntimeError("watcher refused an unowned socket directory")
+    try:
+        descriptor = os.open(socket_dir / ".parent-lock", os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        # Normal parent cleanup may finish before this process opens the lock.
+        return
+    try:
+        # The parent holds this lock until its cleanup finishes. Kernel release also covers
+        # SIGKILL and wrappers that terminate the Python process without delivering a signal.
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+    finally:
+        os.close(descriptor)
+    # A Docker run already in flight when the parent died can finish just after lock release.
+    import time
+
+    time.sleep(1)
+    cleanup_owned(owner, socket_dir, output)
+
+
 @contextlib.contextmanager
-def disposable_postgres():
+def disposable_postgres(
+    stop_requested: Callable[[], bool] | None = None, output: Path | None = None
+):
     owner = uuid4().hex
     container = f"kv-client-lab-db-{owner}"
     password = secrets.token_urlsafe(32)
     socket_dir = Path(tempfile.mkdtemp(prefix=f"kv-client-lab-{owner}-", dir="/tmp"))
     socket_dir.chmod(0o700)
     url = f"postgresql+psycopg://lab:{quote(password)}@/lab?host={quote(str(socket_dir), safe='/')}"
+    lock_descriptor: int | None = None
     try:
+        (socket_dir / ".kv-client-lab-owner").write_text(owner, encoding="ascii")
+        if output is not None:
+            prepare_output(output, owner, socket_dir)
+        lock_descriptor = start_watcher(owner, socket_dir, output)
+        check_interruption(stop_requested)
         docker(
             "run",
             "-d",
@@ -149,7 +311,9 @@ def disposable_postgres():
             "-c",
             "listen_addresses=",
         )
+        check_interruption(stop_requested)
         for _ in range(60):
+            check_interruption(stop_requested)
             probe = subprocess.run(  # noqa: S603  # Fixed executable, owned container.
                 [
                     "/usr/bin/docker",
@@ -192,9 +356,11 @@ def disposable_postgres():
         yield url, owner, container, socket_dir
     finally:
         ACTIVE_URLS.discard(url)
-        if owned_resource("container", container, owner):
-            docker("rm", "-f", "-v", container)
-        shutil.rmtree(socket_dir)
+        try:
+            cleanup_owned(owner, socket_dir, output)
+        finally:
+            if lock_descriptor is not None:
+                os.close(lock_descriptor)
 
 
 def migrate(url: str) -> None:
@@ -276,9 +442,9 @@ def server_commit() -> str:
 
 
 def write_operator_files(output: Path, token: str, manifest: dict[str, object]) -> Path:
-    if output.resolve().is_relative_to(ROOT):
-        raise RuntimeError("output directory must be outside the repository")
-    output.mkdir(mode=0o700, parents=True, exist_ok=False)
+    owner = manifest.get("lab_owner")
+    if not isinstance(owner, str) or not owned_output(output, owner):
+        raise RuntimeError("output directory is not positively owned by this lab run")
     token_path = output / "lab-token"
     descriptor = os.open(token_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "w", encoding="ascii") as handle:
@@ -304,14 +470,7 @@ def cleanup_interrupted(output: Path) -> None:
         f"kv-client-lab-{owner}-"
     ):
         raise RuntimeError("invalid lab socket directory in manifest")
-    container = f"kv-client-lab-db-{owner}"
-    if owned_resource("container", container, owner):
-        docker("rm", "-f", "-v", container)
-    elif docker("ps", "-a", "--filter", f"name=^{container}$", "--format", "{{.Names}}"):
-        raise RuntimeError("container name exists without expected owner label")
-    (output / "lab-token").unlink(missing_ok=True)
-    if socket_dir.exists() and socket_dir.stat().st_uid == os.getuid():
-        shutil.rmtree(socket_dir)
+    cleanup_owned(owner, socket_dir, output)
 
 
 class LocalServer(uvicorn.Server):
@@ -348,13 +507,14 @@ async def serve(settings: Settings):
 
 
 async def smoke(base: str, token: str) -> dict[str, object]:
-    async with httpx2.AsyncClient(timeout=10) as anonymous:
-        refusal = await anonymous.post(f"{base}/mcp", json={})
+    url = local_mcp_url(base)
+    async with local_http_client(timeout=10) as anonymous:
+        refusal = await anonymous.post(url, json={})
         if refusal.status_code != 401:
             raise RuntimeError("anonymous MCP request was not refused")
     async with (
-        httpx2.AsyncClient(headers={"Authorization": f"Bearer {token}"}, timeout=30) as http,
-        streamable_http_client(f"{base}/mcp", http_client=http) as streams,
+        local_http_client(token=token) as http,
+        streamable_http_client(url, http_client=http) as streams,
         ClientSession(streams[0], streams[1]) as session,
     ):
         initialized = await session.initialize()
@@ -414,13 +574,18 @@ async def smoke(base: str, token: str) -> dict[str, object]:
         }
 
 
-async def run(mode: str, output: Path | None) -> None:
+async def run(mode: str, output: Path | None, stop: asyncio.Event | None = None) -> None:
+    stop = stop or asyncio.Event()
     preflight = check_host()
-    with disposable_postgres() as (url, owner, _container, socket_dir):
+    check_interruption(stop.is_set)
+    with disposable_postgres(stop.is_set, output) as (url, owner, _container, socket_dir):
         migrate(url)
+        check_interruption(stop.is_set)
         reset_and_verify(url)
+        check_interruption(stop.is_set)
         settings, token = credentials(url)
         async with serve(settings) as base:
+            check_interruption(stop.is_set)
             manifest = {
                 "created_utc": datetime.now(UTC).isoformat(),
                 "lab_owner": owner,
@@ -439,6 +604,7 @@ async def run(mode: str, output: Path | None) -> None:
             }
             if mode == "smoke":
                 result = await smoke(base, token)
+                check_interruption(stop.is_set)
                 reset_and_verify(url)
                 print(json.dumps({"manifest": manifest, "smoke": result, "reset_verified": True}))
             else:
@@ -447,21 +613,44 @@ async def run(mode: str, output: Path | None) -> None:
                 token_path = output / "lab-token"
                 try:
                     await asyncio.to_thread(write_operator_files, output, token, manifest)
+                    check_interruption(stop.is_set)
                     print(
                         f"MCP endpoint: {base}/mcp\nToken file: {token_path}\n"
                         "Press Ctrl-C to end this run.",
                         flush=True,
                     )
-                    await asyncio.Event().wait()
+                    await stop.wait()
                 finally:
-                    token_path.unlink(missing_ok=True)
-                    reset_and_verify(url)
+                    try:
+                        token_path.unlink(missing_ok=True)
+                    finally:
+                        reset_and_verify(url)
+    check_interruption(stop.is_set)
+
+
+@contextlib.contextmanager
+def operator_signals(stop: asyncio.Event):
+    old_int = signal.getsignal(signal.SIGINT)
+    old_term = signal.getsignal(signal.SIGTERM)
+
+    def request_stop(_signum: int, _frame: object) -> None:
+        stop.set()
+
+    signal.signal(signal.SIGINT, request_stop)
+    signal.signal(signal.SIGTERM, request_stop)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, old_int)
+        signal.signal(signal.SIGTERM, old_term)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("preflight", "smoke", "serve", "cleanup"))
+    parser.add_argument("mode", choices=("preflight", "smoke", "serve", "cleanup", "watch"))
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--owner")
+    parser.add_argument("--socket-dir", type=Path)
     args = parser.parse_args()
     os.chdir(ROOT)
     if args.mode == "preflight":
@@ -471,9 +660,17 @@ def main() -> None:
         if args.output is None:
             parser.error("cleanup requires --output")
         cleanup_interrupted(args.output)
+    elif args.mode == "watch":
+        if args.owner is None or args.socket_dir is None:
+            parser.error("internal watcher requires --owner and --socket-dir")
+        watch_parent(args.owner, args.socket_dir, args.output)
     else:
-        with contextlib.suppress(KeyboardInterrupt):
-            asyncio.run(run(args.mode, args.output))
+        stop = asyncio.Event()
+        with operator_signals(stop):
+            try:
+                asyncio.run(run(args.mode, args.output, stop))
+            except LabInterrupted:
+                print("lab interrupted; owned resources cleaned", file=sys.stderr)
 
 
 if __name__ == "__main__":

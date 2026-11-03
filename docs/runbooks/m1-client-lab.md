@@ -20,7 +20,7 @@ Run from the feature worktree after checking no `KNOWLEDGE_VAULT_*`, `PG*`, `HF_
 /tmp/uv-x86_64-unknown-linux-gnu/uv run --offline python scripts/quality_client_lab.py smoke
 ```
 
-Smoke creates a fresh database, applies existing Alembic migrations, verifies zero assertions and zero temporal evidence, starts the existing FastAPI/MCP application on loopback with a random evaluation-only scoped token, and connects over real Streamable HTTP. It checks initialization, tool discovery, begin/append/commit, duplicate commit, readback and search. Its trace is a list of tool names only; no source text or token is printed. It resets and verifies the database again before owner-checked teardown. On a failed run, inspect the error and rerun; do not reuse the failed instance.
+Smoke creates a fresh database, applies existing Alembic migrations, verifies zero assertions and zero temporal evidence, starts the existing FastAPI/MCP application on loopback with a random evaluation-only scoped token, and connects over real Streamable HTTP. Both the anonymous probe and authenticated MCP client explicitly disable environment-derived HTTP configuration (`trust_env=False`), proxies and redirects. The client URL is required to be plain HTTP on `127.0.0.1`; no inherited `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, altered `NO_PROXY`, netrc or certificate environment can reroute its token or payload. It checks initialization, tool discovery, begin/append/commit, duplicate commit, readback and search. Its trace is a list of tool names only; no source text or token is printed. It resets and verifies the database again before owner-checked teardown. On a failed run, inspect the error and rerun; do not reuse the failed instance.
 
 For a supervised assistant run, use a **new isolated client home and profile** with no existing MCP config or auth store, and one new lab invocation per packet. The local operator output directory must be outside Git and access controlled:
 
@@ -29,18 +29,20 @@ For a supervised assistant run, use a **new isolated client home and profile** w
   --output /operator-local/m1/run-0001
 ```
 
-The command prints the loopback MCP URL and a temporary token-file path. Configure the assistant's MCP client using only that URL and token. The token file is created with mode 0600. After each run, **always run owner-checked cleanup**, including after Ctrl-C or a failed client interaction:
+The command prints the loopback MCP URL and a temporary token-file path. Configure the assistant's MCP client using only that URL and token, with proxy use disabled for loopback traffic. The token file is created with mode 0600. The lab handles SIGINT and SIGTERM and holds a private file lock while running. A detached local watcher waits for kernel release of that lock and performs owner-checked cleanup if a wrapper or abrupt process termination prevents Python's handler from running. The output directory contains a minimal owner manifest from before container startup, so crash recovery remains possible. The watcher receives neither the database password nor the MCP token value.
+
+For crash recovery (including SIGKILL or host failure), or to confirm idempotent cleanup, run:
 
 ```bash
 /tmp/uv-x86_64-unknown-linux-gnu/uv run --offline python scripts/quality_client_lab.py cleanup \
   --output /operator-local/m1/run-0001
 ```
 
-Cleanup reads the run manifest, checks the container's owner label, and removes only that run's container, token file and socket directory. In the verified PTY test, Ctrl-C stopped the wrapper before automatic cleanup, so the explicit command was necessary. A new `serve` command creates and verifies a new empty database for the next run. Preserve failed-run traces and mark their status failed; never silently rerun the same run ID.
+Cleanup reads the run manifest, checks the container's owner label and the output and socket owner markers, and removes only that run's container, token file and socket directory. It can be repeated. If ownership checks or Docker removal fail, it reports an error and preserves the uncertain resource for inspection. A new `serve` command creates and verifies a new empty database for the next run. Preserve failed-run traces and mark their status failed; never silently rerun the same run ID.
 
 ## Verified synthetic smoke (2026-11-03)
 
-The final smoke used PostgreSQL 17.8 and schema `0006_temporal_evidence`. The disposable container had Docker network mode `none`, only its generated socket directory mounted, no published ports, and bounded CPU, memory, processes and temporary data. An unauthenticated `/mcp` request returned 401. An authenticated SDK client initialized `knowledge-vault`, listed 30 tools, committed one synthetic item, repeated commit with the same assertion ID, read it back and found it by lexical search. The reset checked zero assertions, temporal evidence, temporal retirements and flush batches. A post-run Docker check found no labeled lab containers; Docker volume count remained 26. An operator-mode run created a mode-0700 directory and mode-0600 token file; the explicit cleanup command removed the container, token and socket after Ctrl-C. No embedding or real assistant was used.
+The synthetic smoke used PostgreSQL 17.8 and schema `0006_temporal_evidence`. The disposable container had Docker network mode `none`, only its generated socket directory mounted, no published ports, and bounded CPU, memory, processes and temporary data. An unauthenticated `/mcp` request returned 401. An authenticated SDK client initialized `knowledge-vault`, listed 30 tools, committed one synthetic item, repeated commit with the same assertion ID, read it back and found it by lexical search. The reset checked zero assertions, temporal evidence, temporal retirements and flush batches. Regression tests directed all proxy variables to a local trap and changed `NO_PROXY`; the authenticated token and payload reached the local target, and the trap received nothing. A bounded operator-mode PTY test then sent Ctrl+C to the wrapper. The detached watcher removed the lab container, mode-0600 token file and socket directory without manual cleanup; the Docker volume count remained 26. No embedding or real assistant was used.
 
 ## Genuine study operator workflow
 

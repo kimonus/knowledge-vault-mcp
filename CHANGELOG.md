@@ -33,6 +33,9 @@ stable release.
 
 ### Fixed
 
+- M1 lab MCP probes ignore inherited proxies and other HTTP environment settings. An owned,
+  detached watcher cleans up a disposable run even when a PTY wrapper stops before Python's
+  signal handler; crash recovery remains owner checked and idempotent.
 - Release checksums use artifact filenames, so downloaded assets can be verified directly with
   `sha256sum -c SHA256SUMS` outside the CI runner.
 
