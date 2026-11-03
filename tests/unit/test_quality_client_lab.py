@@ -43,7 +43,7 @@ def test_migration_and_reset_refuse_nonlab_url(url: str) -> None:
         lab.reset_and_verify(url)
 
 
-def test_cleanup_only_owned_resources() -> None:
+def test_cleanup_only_owned_resources(tmp_path: Path) -> None:
     calls: list[tuple[str, ...]] = []
 
     def fake_docker(*args: str) -> str:
@@ -52,6 +52,7 @@ def test_cleanup_only_owned_resources() -> None:
 
     with (
         patch.object(lab, "docker", fake_docker),
+        patch.object(lab, "default_smoke_output", side_effect=lambda owner: tmp_path / owner),
         patch.object(lab, "start_watcher", side_effect=RuntimeError("interrupted startup")),
         pytest.raises(RuntimeError, match="interrupted startup"),
         lab.disposable_postgres(),
@@ -61,7 +62,7 @@ def test_cleanup_only_owned_resources() -> None:
 
 
 @pytest.mark.parametrize("cancelled", [False, True])
-def test_disposable_postgres_waits_for_launcher_cleanup(cancelled: bool) -> None:
+def test_disposable_postgres_waits_for_launcher_cleanup(tmp_path: Path, cancelled: bool) -> None:
     socket_dir: Path | None = None
     waited = False
 
@@ -95,6 +96,7 @@ def test_disposable_postgres_waits_for_launcher_cleanup(cancelled: bool) -> None
 
     with (
         patch.object(lab, "docker", fake_docker),
+        patch.object(lab, "default_smoke_output", side_effect=lambda owner: tmp_path / owner),
         patch.object(lab.subprocess, "run", return_value=Ready()),
         patch.object(lab, "start_watcher", side_effect=fake_start),
         patch.object(lab, "wait_for_launch"),
@@ -110,7 +112,7 @@ def test_disposable_postgres_waits_for_launcher_cleanup(cancelled: bool) -> None
     assert waited
 
 
-def test_startup_signal_waits_for_launcher_cleanup() -> None:
+def test_startup_signal_waits_for_launcher_cleanup(tmp_path: Path) -> None:
     started = False
     waited = False
 
@@ -133,6 +135,7 @@ def test_startup_signal_waits_for_launcher_cleanup() -> None:
 
     with (
         patch.object(lab, "docker", return_value=""),
+        patch.object(lab, "default_smoke_output", side_effect=lambda owner: tmp_path / owner),
         patch.object(lab, "start_watcher", side_effect=fake_start),
         patch.object(lab, "wait_for_launch", side_effect=mark_started),
         pytest.raises(lab.LabInterrupted),
@@ -142,14 +145,283 @@ def test_startup_signal_waits_for_launcher_cleanup() -> None:
     assert waited
 
 
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_readiness_probe_timeout_is_bounded_and_releases_parent_lock(
+    tmp_path: Path, interrupted: bool
+) -> None:
+    calls: list[float] = []
+    cleaned = False
+    stop = threading.Event()
+
+    class FakeWatcher:
+        def __init__(self, owner: str, socket: Path, output: Path) -> None:
+            self.owner, self.socket, self.output = owner, socket, output
+
+        def wait(self, *, timeout: float) -> int:
+            nonlocal cleaned
+            assert timeout == 120
+            with (self.socket / ".parent-lock").open("rb") as handle:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            lab.cleanup_owned(self.owner, self.socket, self.output)
+            cleaned = True
+            return 0
+
+    def fake_start(owner: str, socket: Path, output: Path, _password: str):
+        descriptor = os.open(socket / ".parent-lock", os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        return descriptor, FakeWatcher(owner, socket, output)
+
+    def timed_out_probe(*_args: object, timeout: float, **_kwargs: object):
+        calls.append(timeout)
+        if interrupted:
+            stop.set()
+        raise subprocess.TimeoutExpired("docker", timeout)
+
+    def fake_docker(*args: str, timeout: float = 30) -> str:
+        return "" if args[0] == "ps" else "unready"
+
+    with (
+        patch.object(lab, "default_smoke_output", side_effect=lambda owner: tmp_path / owner),
+        patch.object(lab, "start_watcher", side_effect=fake_start),
+        patch.object(lab, "wait_for_launch"),
+        patch.object(lab.subprocess, "run", side_effect=timed_out_probe),
+        patch.object(lab.time, "sleep"),
+        patch.object(lab, "docker", side_effect=fake_docker),
+    ):
+        if interrupted:
+            with pytest.raises(lab.LabInterrupted), lab.disposable_postgres(stop.is_set):
+                pass
+        else:
+            with (
+                pytest.raises(RuntimeError, match="did not become ready"),
+                lab.disposable_postgres(),
+            ):
+                pass
+    assert calls == [5] * (1 if interrupted else 60)
+    assert cleaned
+
+
+def test_blocked_probe_interruption_waits_for_probe_exit_then_cleanup(tmp_path: Path) -> None:
+    entered = threading.Event()
+    release = threading.Event()
+    stop = threading.Event()
+    cleaned = threading.Event()
+    errors: list[BaseException] = []
+
+    class FakeWatcher:
+        def __init__(self, owner: str, socket: Path, output: Path) -> None:
+            self.owner, self.socket, self.output = owner, socket, output
+
+        def wait(self, *, timeout: float) -> int:
+            assert timeout == 120
+            lab.cleanup_owned(self.owner, self.socket, self.output)
+            cleaned.set()
+            return 0
+
+    def fake_start(owner: str, socket: Path, output: Path, _password: str):
+        descriptor = os.open(socket / ".parent-lock", os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        return descriptor, FakeWatcher(owner, socket, output)
+
+    def blocked_probe(*_args: object, timeout: float, **_kwargs: object):
+        assert timeout == 5
+        entered.set()
+        assert release.wait(3)
+        raise subprocess.TimeoutExpired("docker", timeout)
+
+    def parent() -> None:
+        try:
+            with lab.disposable_postgres(stop.is_set):
+                pass
+        except BaseException as exc:
+            errors.append(exc)
+
+    with (
+        patch.object(lab, "default_smoke_output", side_effect=lambda owner: tmp_path / owner),
+        patch.object(lab, "start_watcher", side_effect=fake_start),
+        patch.object(lab, "wait_for_launch"),
+        patch.object(lab.subprocess, "run", side_effect=blocked_probe),
+        patch.object(lab, "docker", return_value=""),
+    ):
+        thread = threading.Thread(target=parent)
+        thread.start()
+        assert entered.wait(3)
+        assert not cleaned.is_set()
+        stop.set()
+        release.set()
+        thread.join(timeout=3)
+    assert not thread.is_alive()
+    assert len(errors) == 1 and isinstance(errors[0], lab.LabInterrupted)
+    assert cleaned.is_set()
+
+
+def watcher_inputs(tmp_path: Path, owner: str) -> tuple[Path, Path]:
+    socket = Path(tempfile.mkdtemp(prefix=f"kv-client-lab-{owner}-", dir="/tmp"))
+    (socket / ".kv-client-lab-owner").write_text(owner)
+    password = socket / ".db-password"
+    password.write_text("synthetic")
+    password.chmod(0o600)
+    (socket / ".parent-lock").touch(mode=0o600)
+    output = tmp_path / "run"
+    lab.prepare_output(output, owner, socket)
+    return socket, output
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        "missing_output",
+        "malformed_owner",
+        "foreign_path",
+        "symlink",
+        "wrong_marker",
+        "unexpected_mount",
+        "malformed_manifest",
+        "started_lifecycle",
+        "password_symlink",
+    ],
+)
+def test_direct_watcher_refuses_invalid_invocation(tmp_path: Path, invalid: str) -> None:
+    owner = "1" * 32
+    socket, output = watcher_inputs(tmp_path, owner)
+    argument_owner = owner
+    argument_socket = socket
+    argument_output: Path | None = output
+    if invalid == "missing_output":
+        argument_output = None
+    elif invalid == "malformed_owner":
+        argument_owner = "bad-owner"
+    elif invalid == "foreign_path":
+        argument_socket = tmp_path
+    elif invalid == "symlink":
+        argument_socket = Path(f"/tmp/kv-client-lab-{owner}-alias123")  # noqa: S108
+        argument_socket.symlink_to(socket, target_is_directory=True)
+    elif invalid == "wrong_marker":
+        (socket / ".kv-client-lab-owner").write_text("foreign")
+    elif invalid == "unexpected_mount":
+        (output / "environment.json").write_text(
+            json.dumps({"lab_owner": owner, "db_socket_dir": str(tmp_path / "unrelated")})
+        )
+    elif invalid == "malformed_manifest":
+        (output / "environment.json").write_text("[]")
+    elif invalid == "started_lifecycle":
+        state = lab.read_lifecycle(output, owner)
+        state["launch"] = "started"
+        lab.write_lifecycle(output, owner, state)
+    elif invalid == "password_symlink":
+        (socket / ".db-password").unlink()
+        (socket / ".db-password").symlink_to(output / "environment.json")
+    try:
+        with (
+            patch.object(lab, "docker") as docker_call,
+            pytest.raises(RuntimeError),
+        ):
+            lab.watch_parent(argument_owner, argument_socket, argument_output)
+        docker_call.assert_not_called()
+    finally:
+        if invalid == "symlink":
+            argument_socket.unlink()
+
+
+def test_direct_watcher_refuses_already_claimed_run(tmp_path: Path) -> None:
+    owner = "a" * 32
+    socket, output = watcher_inputs(tmp_path, owner)
+    (socket / ".watcher-claim").touch(mode=0o600)
+    with (
+        patch.object(lab, "docker") as docker_call,
+        pytest.raises(RuntimeError, match="already claimed"),
+    ):
+        lab.watch_parent(owner, socket, output)
+    docker_call.assert_not_called()
+
+
+def test_smoke_records_recovery_before_docker_startup(tmp_path: Path) -> None:
+    def refuse_start(owner: str, socket: Path, output: Path, _password: str):
+        state = lab.read_lifecycle(output, owner)
+        assert state["launch"] == "pending" and state["cleanup"] == "pending"
+        assert state["socket_dir"] == str(socket)
+        assert _password not in (output / "environment.json").read_text()
+        assert _password not in (output / ".lifecycle-status").read_text()
+        raise RuntimeError("synthetic startup failure")
+
+    with (
+        patch.object(lab, "check_host", return_value={}),
+        patch.object(lab.secrets, "token_urlsafe", return_value="synthetic-lab-password"),
+        patch.object(lab, "default_smoke_output", side_effect=lambda owner: tmp_path / owner),
+        patch.object(lab, "start_watcher", side_effect=refuse_start),
+        patch.object(lab, "docker", return_value=""),
+        pytest.raises(RuntimeError, match="synthetic startup failure"),
+    ):
+        asyncio.run(lab.run("smoke", None))
+    outputs = list(tmp_path.iterdir())
+    assert len(outputs) == 1
+    owner = outputs[0].name
+    assert lab.read_lifecycle(outputs[0], owner)["cleanup"] == "complete"
+
+
+def test_smoke_recovery_root_is_private_and_outside_disposable_socket(tmp_path: Path) -> None:
+    owner = "b" * 32
+    with patch.object(Path, "home", return_value=tmp_path):
+        output = lab.default_smoke_output(owner)
+    assert output == tmp_path / ".local/state/knowledge-vault/client-lab" / f"smoke-{owner}"
+    assert output.parent.stat().st_mode & 0o777 == 0o700
+
+
+def test_smoke_uncertain_launch_keeps_recovery_record(tmp_path: Path) -> None:
+    def fake_start(owner: str, socket: Path, output: Path, password: str):
+        descriptor = os.open(socket / ".parent-lock", os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        secret_file = socket / ".db-password"
+        secret_file.write_text(password)
+        secret_file.chmod(0o600)
+
+        class FakeWatcher:
+            def wait(self, *, timeout: float) -> int:
+                assert timeout == 120
+                with pytest.raises(RuntimeError, match="did not complete successfully"):
+                    lab.watch_parent(owner, socket, output)
+                return 1
+
+        return descriptor, FakeWatcher()
+
+    def timeout_docker(*args: str, timeout: float = 30) -> str:
+        if args[0] == "run":
+            raise subprocess.TimeoutExpired("docker", timeout)
+        return ""
+
+    with (
+        patch.object(lab, "check_host", return_value={}),
+        patch.object(lab, "default_smoke_output", side_effect=lambda owner: tmp_path / owner),
+        patch.object(lab, "start_watcher", side_effect=fake_start),
+        patch.object(lab, "wait_for_launch", side_effect=lab.LabInterrupted),
+        patch.object(lab, "docker", side_effect=timeout_docker),
+        pytest.raises(RuntimeError, match="watcher reported incomplete cleanup"),
+    ):
+        asyncio.run(lab.run("smoke", None))
+    outputs = list(tmp_path.iterdir())
+    assert len(outputs) == 1
+    output = outputs[0]
+    owner = output.name
+    state = lab.read_lifecycle(output, owner)
+    assert not Path(str(state["socket_dir"])).exists()
+    assert lab.read_lifecycle(output, owner)["launch"] == "uncertain"
+    state["parent"] = [999999999, 1]
+    state["watcher"] = [999999998, 1]
+    lab.write_lifecycle(output, owner, state)
+    with (
+        patch.object(lab, "docker", return_value=""),
+        pytest.raises(RuntimeError, match="launch outcome is unresolved"),
+    ):
+        lab.cleanup_interrupted(output)
+
+
 @pytest.mark.parametrize("phase", ["before", "during", "after"])
 def test_launcher_completes_before_cleanup_even_when_parent_exits(
     tmp_path: Path, phase: str
 ) -> None:
     owner = "f" * 32
-    (tmp_path / ".kv-client-lab-owner").write_text(owner)
-    (tmp_path / ".db-password").write_text("synthetic")
-    descriptor = os.open(tmp_path / ".parent-lock", os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
+    socket, output = watcher_inputs(tmp_path, owner)
+    descriptor = os.open(socket / ".parent-lock", os.O_RDWR)
     fcntl.flock(descriptor, fcntl.LOCK_EX)
     launch_entered = threading.Event()
     allow_creation = threading.Event()
@@ -173,7 +445,7 @@ def test_launcher_completes_before_cleanup_even_when_parent_exits(
     ):
         if phase == "before":
             os.close(descriptor)
-        watcher = threading.Thread(target=lab.watch_parent, args=(owner, tmp_path, None))
+        watcher = threading.Thread(target=lab.watch_parent, args=(owner, socket, output))
         watcher.start()
         assert launch_entered.wait(2)
         if phase == "during":
@@ -186,21 +458,19 @@ def test_launcher_completes_before_cleanup_even_when_parent_exits(
         watcher.join(timeout=3)
     assert not watcher.is_alive()
     assert cleaned.is_set()
-    assert (tmp_path / ".launch-status").read_text() == "started"
+    assert (socket / ".launch-status").read_text() == "started"
 
 
 def test_failed_launcher_reports_incomplete_cleanup(tmp_path: Path) -> None:
     owner = "a" * 32
-    (tmp_path / ".kv-client-lab-owner").write_text(owner)
-    (tmp_path / ".db-password").write_text("synthetic")
-    (tmp_path / ".parent-lock").touch()
+    socket, output = watcher_inputs(tmp_path, owner)
     with (
         patch.object(lab, "docker", side_effect=OSError("synthetic Docker failure")),
         patch.object(lab, "cleanup_owned"),
         pytest.raises(RuntimeError, match="did not complete successfully"),
     ):
-        lab.watch_parent(owner, tmp_path, None)
-    assert (tmp_path / ".launch-status").read_text() == "failed"
+        lab.watch_parent(owner, socket, output)
+    assert (socket / ".launch-status").read_text() == "failed"
 
 
 def test_manual_cleanup_waits_for_launch_and_parent_lock(tmp_path: Path) -> None:
@@ -252,12 +522,7 @@ def test_watcher_uncertain_launch_after_socket_removal_requires_confirmation(
     tmp_path: Path,
 ) -> None:
     owner = "4" * 32
-    socket_dir = Path(tempfile.mkdtemp(prefix=f"kv-client-lab-{owner}-", dir="/tmp"))
-    (socket_dir / ".kv-client-lab-owner").write_text(owner)
-    (socket_dir / ".db-password").write_text("synthetic")
-    (socket_dir / ".parent-lock").touch()
-    output = tmp_path / "run"
-    lab.prepare_output(output, owner, socket_dir)
+    socket_dir, output = watcher_inputs(tmp_path, owner)
     state = lab.read_lifecycle(output, owner)
     state["parent"] = [999999999, 1]
     lab.write_lifecycle(output, owner, state)
@@ -286,17 +551,21 @@ def test_watcher_uncertain_launch_after_socket_removal_requires_confirmation(
 
 def test_failed_before_docker_has_safe_completed_cleanup(tmp_path: Path) -> None:
     owner = "8" * 32
-    socket_dir = Path(tempfile.mkdtemp(prefix=f"kv-client-lab-{owner}-", dir="/tmp"))
-    (socket_dir / ".kv-client-lab-owner").write_text(owner)
-    (socket_dir / ".parent-lock").touch()
-    output = tmp_path / "run"
-    lab.prepare_output(output, owner, socket_dir)
+    socket_dir, output = watcher_inputs(tmp_path, owner)
     state = lab.read_lifecycle(output, owner)
     state["parent"] = [999999999, 1]
     lab.write_lifecycle(output, owner, state)
+    original_read = Path.read_text
+
+    def failed_password_read(path: Path, *args: object, **kwargs: object) -> str:
+        if path.name == ".db-password":
+            raise OSError("synthetic prelaunch failure")
+        return original_read(path, *args, **kwargs)
+
     with (
         patch.object(lab, "docker", return_value="") as docker_call,
         patch.object(lab, "process_identity", return_value=[999999998, 1]),
+        patch.object(Path, "read_text", failed_password_read),
     ):
         lab.watch_parent(owner, socket_dir, output)
     assert not socket_dir.exists()

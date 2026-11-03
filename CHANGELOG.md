@@ -41,6 +41,8 @@ stable release.
   operator confirms the daemon has settled.
 - M1 lab manual cleanup now checks a durable lifecycle record even when its socket directory is
   gone. Uncertain Docker outcomes still require operator confirmation; missing records fail closed.
+- M1 lab readiness probes now have bounded Docker CLI timeouts. Smoke runs retain private recovery
+  metadata before Docker starts, and direct watcher invocations must validate and claim the run.
 - Release checksums use artifact filenames, so downloaded assets can be verified directly with
   `sha256sum -c SHA256SUMS` outside the CI runner.
 

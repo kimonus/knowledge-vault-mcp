@@ -10,6 +10,7 @@ import hmac
 import json
 import os
 import platform
+import re
 import secrets
 import shutil
 import signal
@@ -175,10 +176,13 @@ def prepare_output(output: Path, owner: str, socket_dir: Path) -> None:
     if output.resolve().is_relative_to(ROOT):
         raise RuntimeError("output directory must be outside the repository")
     output.mkdir(mode=0o700, parents=True, exist_ok=False)
-    (output / ".kv-client-lab-owner").write_text(owner, encoding="ascii")
-    (output / "environment.json").write_text(
-        json.dumps({"lab_owner": owner, "db_socket_dir": str(socket_dir)}) + "\n"
-    )
+    marker = output / ".kv-client-lab-owner"
+    manifest = output / "environment.json"
+    marker.write_text(owner, encoding="ascii")
+    manifest.write_text(json.dumps({"lab_owner": owner, "db_socket_dir": str(socket_dir)}) + "\n")
+    for path in (marker, manifest):
+        with path.open("rb") as handle:
+            os.fsync(handle.fileno())
     write_lifecycle(
         output,
         owner,
@@ -191,6 +195,19 @@ def prepare_output(output: Path, owner: str, socket_dir: Path) -> None:
             "socket_dir": str(socket_dir),
         },
     )
+    parent_fd = os.open(output.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(parent_fd)
+    finally:
+        os.close(parent_fd)
+
+
+def default_smoke_output(owner: str) -> Path:
+    root = Path.home() / ".local" / "state" / "knowledge-vault" / "client-lab"
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if root.is_symlink() or root.stat().st_uid != os.getuid() or root.stat().st_mode & 0o077:
+        raise RuntimeError("smoke recovery root is not private and owned by this user")
+    return root / f"smoke-{owner}"
 
 
 def owned_output(output: Path, owner: str) -> bool:
@@ -358,6 +375,7 @@ def start_watcher(
     ]
     if output is not None:
         args.extend(("--output", str(output)))
+    watcher: subprocess.Popen[bytes] | None = None
     try:
         password_fd = os.open(password_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(password_fd, "w", encoding="ascii") as handle:
@@ -372,8 +390,12 @@ def start_watcher(
                 env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
             )
     except BaseException:
+        if watcher is not None:
+            # A logging-file close failure after Popen must not orphan a live launcher.
+            return descriptor, watcher
         os.close(descriptor)
         raise
+    assert watcher is not None
     return descriptor, watcher
 
 
@@ -398,20 +420,70 @@ def wait_for_launch(
     raise RuntimeError("Docker launch outcome is unknown after 90 seconds; cleanup is incomplete")
 
 
-def watch_parent(owner: str, socket_dir: Path, output: Path | None) -> None:
-    if not socket_dir.exists():
-        return
+def validate_watcher_start(owner: str, socket_dir: Path, output: Path | None) -> dict[str, object]:
+    if (
+        not re.fullmatch(r"[0-9a-f]{32}", owner)
+        or socket_dir.parent != Path("/tmp")  # noqa: S108
+        or not re.fullmatch(rf"kv-client-lab-{owner}-[a-z0-9_]{{8}}", socket_dir.name)
+        or socket_dir.is_symlink()
+        or not socket_dir.is_dir()
+        or socket_dir.stat().st_uid != os.getuid()
+        or socket_dir.stat().st_mode & 0o077
+    ):
+        raise RuntimeError("watcher refused an invalid lab socket directory")
     marker = socket_dir / ".kv-client-lab-owner"
-    if not marker.is_file() or marker.read_text(encoding="ascii") != owner:
+    lock = socket_dir / ".parent-lock"
+    auth_file = socket_dir / ".db-password"
+    if (
+        not marker.is_file()
+        or marker.is_symlink()
+        or marker.read_text(encoding="ascii") != owner
+        or not lock.is_file()
+        or lock.is_symlink()
+        or lock.stat().st_uid != os.getuid()
+        or lock.stat().st_mode & 0o077
+        or not auth_file.is_file()
+        or auth_file.is_symlink()
+        or auth_file.stat().st_uid != os.getuid()
+        or auth_file.stat().st_mode & 0o077
+    ):
         raise RuntimeError("watcher refused an unowned socket directory")
+    if output is None or not owned_output(output, owner):
+        raise RuntimeError("watcher requires an owned recovery directory")
+    manifest = json.loads((output / "environment.json").read_text(encoding="ascii"))
+    lifecycle = read_lifecycle(output, owner)
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("lab_owner") != owner
+        or manifest.get("db_socket_dir") != str(socket_dir)
+        or lifecycle["socket_dir"] != str(socket_dir)
+        or lifecycle["launch"] != "pending"
+        or lifecycle["cleanup"] != "pending"
+        or lifecycle["watcher"] is not None
+    ):
+        raise RuntimeError("watcher refused inconsistent recovery state")
+    return lifecycle
+
+
+def watch_parent(owner: str, socket_dir: Path, output: Path | None) -> None:
+    lifecycle = validate_watcher_start(owner, socket_dir, output)
+    assert output is not None
+    # One detached watcher may claim this run. A second direct invocation cannot launch Docker.
+    try:
+        claim = os.open(
+            socket_dir / ".watcher-claim",
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+        )
+    except FileExistsError as exc:
+        raise RuntimeError("watcher already claimed this lab run") from exc
+    os.close(claim)
     descriptor = os.open(socket_dir / ".parent-lock", os.O_RDONLY | os.O_NOFOLLOW)
     password_path = socket_dir / ".db-password"
     launch_complete = False
     attempted_launch = False
-    lifecycle = read_lifecycle(output, owner) if output is not None else None
-    if lifecycle is not None and output is not None:
-        lifecycle["watcher"] = process_identity(os.getpid())
-        write_lifecycle(output, owner, lifecycle)
+    lifecycle["watcher"] = process_identity(os.getpid())
+    write_lifecycle(output, owner, lifecycle)
     try:
         try:
             password = password_path.read_text(encoding="ascii")
@@ -419,18 +491,16 @@ def watch_parent(owner: str, socket_dir: Path, output: Path | None) -> None:
             # The detached watcher owns this CLI. Parent death cannot end it or race cleanup
             # against a container that the daemon is still creating.
             attempted_launch = True
-            if lifecycle is not None and output is not None:
-                lifecycle["launch"] = "uncertain"
-                write_lifecycle(output, owner, lifecycle)
+            lifecycle["launch"] = "uncertain"
+            write_lifecycle(output, owner, lifecycle)
             docker(*postgres_run_args(owner, socket_dir, password), timeout=75)
             launch_complete = True
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, UnicodeError):
             pass
-        if lifecycle is not None and output is not None:
-            lifecycle["launch"] = (
-                "started" if launch_complete else "uncertain" if attempted_launch else "failed_safe"
-            )
-            write_lifecycle(output, owner, lifecycle)
+        lifecycle["launch"] = (
+            "started" if launch_complete else "uncertain" if attempted_launch else "failed_safe"
+        )
+        write_lifecycle(output, owner, lifecycle)
         status_error: OSError | None = None
         try:
             status_path = socket_dir / ".launch-status"
@@ -451,28 +521,26 @@ def watch_parent(owner: str, socket_dir: Path, output: Path | None) -> None:
             subprocess.TimeoutExpired,
             OSError,
         ) as exc:
-            if lifecycle is not None and output is not None:
-                lifecycle["cleanup"] = "incomplete"
-                write_lifecycle(output, owner, lifecycle)
-            if output is not None and output.exists() and owned_output(output, owner):
+            lifecycle["cleanup"] = "incomplete"
+            write_lifecycle(output, owner, lifecycle)
+            if output.exists() and owned_output(output, owner):
                 (output / ".cleanup-status").write_text(f"incomplete: {type(exc).__name__}\n")
             raise RuntimeError("owner-checked Docker cleanup did not complete") from exc
-        if lifecycle is not None and output is not None:
-            lifecycle["cleanup"] = (
-                "complete"
-                if (launch_complete or not attempted_launch) and status_error is None
-                else "incomplete"
-            )
-            write_lifecycle(output, owner, lifecycle)
+        lifecycle["cleanup"] = (
+            "complete"
+            if (launch_complete or not attempted_launch) and status_error is None
+            else "incomplete"
+        )
+        write_lifecycle(output, owner, lifecycle)
         if (attempted_launch and not launch_complete) or status_error is not None:
-            if output is not None and output.exists() and owned_output(output, owner):
+            if output.exists() and owned_output(output, owner):
                 (output / ".cleanup-status").write_text(
                     "incomplete: Docker launch or status outcome uncertain\n"
                 )
             raise RuntimeError(
                 "Docker launch did not complete successfully; recheck owned resources"
             )
-        if output is not None and output.exists() and owned_output(output, owner):
+        if output.exists() and owned_output(output, owner):
             (output / ".cleanup-status").write_text("complete\n")
     finally:
         os.close(descriptor)
@@ -492,35 +560,41 @@ def disposable_postgres(
     watcher: subprocess.Popen[bytes] | None = None
     try:
         (socket_dir / ".kv-client-lab-owner").write_text(owner, encoding="ascii")
-        if output is not None:
-            prepare_output(output, owner, socket_dir)
+        if output is None:
+            output = default_smoke_output(owner)
+        prepare_output(output, owner, socket_dir)
+        print(f"Lab recovery directory: {output}", flush=True)
         lock_descriptor, watcher = start_watcher(owner, socket_dir, output, password)
         wait_for_launch(watcher, socket_dir, stop_requested)
         check_interruption(stop_requested)
         for _ in range(60):
             check_interruption(stop_requested)
-            probe = subprocess.run(  # noqa: S603  # Fixed executable, owned container.
-                [
-                    "/usr/bin/docker",
-                    "-H",
-                    "unix:///var/run/docker.sock",
-                    "exec",
-                    container,
-                    "pg_isready",
-                    "-h",
-                    "/var/run/postgresql",
-                    "-U",
-                    "lab",
-                    "-d",
-                    "lab",
-                ],
-                capture_output=True,
-                env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
-            )
-            if probe.returncode == 0:
-                break
-            import time
-
+            try:
+                probe = subprocess.run(  # noqa: S603  # Fixed executable, owned container.
+                    [
+                        "/usr/bin/docker",
+                        "-H",
+                        "unix:///var/run/docker.sock",
+                        "exec",
+                        container,
+                        "pg_isready",
+                        "-h",
+                        "/var/run/postgresql",
+                        "-U",
+                        "lab",
+                        "-d",
+                        "lab",
+                    ],
+                    capture_output=True,
+                    env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+                    timeout=5,
+                )
+            except subprocess.TimeoutExpired:
+                check_interruption(stop_requested)
+            else:
+                if probe.returncode == 0:
+                    break
+            check_interruption(stop_requested)
             time.sleep(0.5)
         else:
             state = docker(
@@ -825,6 +899,8 @@ async def smoke(base: str, token: str) -> dict[str, object]:
 
 async def run(mode: str, output: Path | None, stop: asyncio.Event | None = None) -> None:
     stop = stop or asyncio.Event()
+    if mode == "serve" and output is None:
+        raise RuntimeError("serve requires an operator-local output directory")
     preflight = check_host()
     check_interruption(stop.is_set)
     with disposable_postgres(stop.is_set, output) as (url, owner, _container, socket_dir):
