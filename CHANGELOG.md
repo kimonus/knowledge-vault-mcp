@@ -19,6 +19,10 @@ stable release.
 
 ### Changed
 
+- M1 client scoring distinguishes unresolved conflict explanations from definitive answers and
+  validates planned case/run pairs when the operator supplies the generated packet manifest with
+  `--packets`. Reports retain partial and legacy scores but mark unchecked or missing runs; an
+  independent study must include the manifest and two actual reviewers before quality claims.
 - **Operator action required for legacy enrichment:** inspect source material and the target's
   content hash and successor link; use the admin attachment endpoint only for reviewed facts.
   Existing flush clients continue unchanged. No new migration is required beyond temporal schema

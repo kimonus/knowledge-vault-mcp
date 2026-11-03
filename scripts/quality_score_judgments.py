@@ -15,12 +15,20 @@ from quality.judgments import score_judgments
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("judgments", type=Path, help="operator-local JSON file; do not commit it")
+    parser.add_argument(
+        "--packets",
+        type=Path,
+        help="generated blinded packet manifest for expected-run validation",
+    )
     parser.add_argument("--report", type=Path, help="write aggregate JSON here")
     args = parser.parse_args()
     raw = json.loads(args.judgments.read_text(encoding="utf-8"))
     if not isinstance(raw, list):
         parser.error("judgments must be a JSON list")
-    scored = score_judgments(cases(), raw)
+    packet_manifest = json.loads(args.packets.read_text(encoding="utf-8")) if args.packets else None
+    if packet_manifest is not None and not isinstance(packet_manifest, dict):
+        parser.error("packet manifest must be a JSON object")
+    scored = score_judgments(cases(), raw, packet_manifest=packet_manifest)
     serialized = json.dumps(scored, indent=2) + "\n"
     if args.report:
         args.report.write_text(serialized, encoding="utf-8")
