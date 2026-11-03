@@ -7,6 +7,9 @@ stable release.
 
 ### Added
 
+- Isolated M1 client evaluation lab runbook and bounded, network-disabled PostgreSQL/MCP harness
+  for synthetic infrastructure checks. Genuine evaluation still requires an independent offline
+  embedding cache, a separately configured assistant client, and independent reviewers.
 - Admin-only, idempotent attachment of reviewed source-backed temporal evidence to an existing
   assertion UUID without changing its row, source rows, embeddings or supersession links.
 - Bounded historical resolution for a superseded legacy assertion only when reviewed evidence
@@ -30,6 +33,16 @@ stable release.
 
 ### Fixed
 
+- M1 lab MCP probes ignore inherited proxies and other HTTP environment settings. An owned,
+  detached watcher cleans up a disposable run even when a PTY wrapper stops before Python's
+  signal handler; crash recovery remains owner checked and idempotent.
+- M1 lab container creation now runs inside the detached launcher, which waits for the Docker
+  command to finish before cleanup. Manual recovery refuses an unresolved launch unless the
+  operator confirms the daemon has settled.
+- M1 lab manual cleanup now checks a durable lifecycle record even when its socket directory is
+  gone. Uncertain Docker outcomes still require operator confirmation; missing records fail closed.
+- M1 lab readiness probes now have bounded Docker CLI timeouts. Smoke runs retain private recovery
+  metadata before Docker starts, and direct watcher invocations must validate and claim the run.
 - Release checksums use artifact filenames, so downloaded assets can be verified directly with
   `sha256sum -c SHA256SUMS` outside the CI runner.
 
