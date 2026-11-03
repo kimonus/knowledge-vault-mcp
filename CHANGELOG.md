@@ -39,6 +39,8 @@ stable release.
 - M1 lab container creation now runs inside the detached launcher, which waits for the Docker
   command to finish before cleanup. Manual recovery refuses an unresolved launch unless the
   operator confirms the daemon has settled.
+- M1 lab manual cleanup now checks a durable lifecycle record even when its socket directory is
+  gone. Uncertain Docker outcomes still require operator confirmation; missing records fail closed.
 - Release checksums use artifact filenames, so downloaded assets can be verified directly with
   `sha256sum -c SHA256SUMS` outside the CI runner.
 

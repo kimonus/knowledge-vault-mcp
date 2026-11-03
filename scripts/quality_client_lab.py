@@ -20,7 +20,7 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote, urlsplit
 from uuid import uuid4
 
@@ -179,6 +179,18 @@ def prepare_output(output: Path, owner: str, socket_dir: Path) -> None:
     (output / "environment.json").write_text(
         json.dumps({"lab_owner": owner, "db_socket_dir": str(socket_dir)}) + "\n"
     )
+    write_lifecycle(
+        output,
+        owner,
+        {
+            "launch": "pending",
+            "cleanup": "pending",
+            "settled_confirmed": False,
+            "parent": process_identity(os.getpid()),
+            "watcher": None,
+            "socket_dir": str(socket_dir),
+        },
+    )
 
 
 def owned_output(output: Path, owner: str) -> bool:
@@ -190,6 +202,90 @@ def owned_output(output: Path, owner: str) -> bool:
         and not marker.is_symlink()
         and marker.read_text(encoding="ascii") == owner
     )
+
+
+def process_identity(pid: int) -> list[int]:
+    # The start tick distinguishes a live process from a later reuse of its PID.
+    stat = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
+    return [pid, int(stat.rsplit(") ", 1)[1].split()[19])]
+
+
+def process_active(identity: list[int]) -> bool:
+    try:
+        return process_identity(identity[0]) == identity
+    except FileNotFoundError:
+        return False
+
+
+def write_lifecycle(output: Path, owner: str, state: dict[str, object]) -> None:
+    if not owned_output(output, owner):
+        raise RuntimeError("output directory is not positively owned by this lab run")
+    path = output / ".lifecycle-status"
+    temporary = output / f".lifecycle-status-{uuid4().hex}.tmp"
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="ascii") as handle:
+            json.dump(state, handle, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.replace(path)
+        directory_fd = os.open(output, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def read_lifecycle(output: Path, owner: str) -> dict[str, object]:
+    if not owned_output(output, owner):
+        raise RuntimeError("output directory is not positively owned by this lab run")
+    try:
+        path = output / ".lifecycle-status"
+        if path.is_symlink():
+            raise RuntimeError("invalid lab lifecycle status")
+        state = json.loads(path.read_text(encoding="ascii"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise RuntimeError("missing or invalid lab lifecycle status") from exc
+    if not isinstance(state, dict) or set(state) != {
+        "launch",
+        "cleanup",
+        "settled_confirmed",
+        "parent",
+        "watcher",
+        "socket_dir",
+    }:
+        raise RuntimeError("invalid lab lifecycle status")
+
+    def valid_identity(value: object) -> bool:
+        return (
+            isinstance(value, list)
+            and len(value) == 2
+            and all(type(item) is int and item > 0 for item in value)
+        )
+
+    if (
+        not isinstance(state["launch"], str)
+        or state["launch"] not in {"pending", "started", "failed_safe", "uncertain"}
+        or not isinstance(state["cleanup"], str)
+        or state["cleanup"] not in {"pending", "incomplete", "complete"}
+        or type(state["settled_confirmed"]) is not bool
+        or not isinstance(state["socket_dir"], str)
+        or not valid_identity(state["parent"])
+        or (state["watcher"] is not None and not valid_identity(state["watcher"]))
+        or (state["cleanup"] == "complete" and state["launch"] == "pending")
+        or (
+            state["cleanup"] == "complete"
+            and state["launch"] == "uncertain"
+            and not state["settled_confirmed"]
+        )
+        or (state["settled_confirmed"] and state["cleanup"] != "complete")
+        or (state["settled_confirmed"] and state["launch"] != "uncertain")
+    ):
+        raise RuntimeError("contradictory lab lifecycle status")
+    return state
 
 
 def cleanup_owned(owner: str, socket_dir: Path, output: Path | None) -> None:
@@ -311,16 +407,30 @@ def watch_parent(owner: str, socket_dir: Path, output: Path | None) -> None:
     descriptor = os.open(socket_dir / ".parent-lock", os.O_RDONLY | os.O_NOFOLLOW)
     password_path = socket_dir / ".db-password"
     launch_complete = False
+    attempted_launch = False
+    lifecycle = read_lifecycle(output, owner) if output is not None else None
+    if lifecycle is not None and output is not None:
+        lifecycle["watcher"] = process_identity(os.getpid())
+        write_lifecycle(output, owner, lifecycle)
     try:
         try:
             password = password_path.read_text(encoding="ascii")
             password_path.unlink()
             # The detached watcher owns this CLI. Parent death cannot end it or race cleanup
             # against a container that the daemon is still creating.
+            attempted_launch = True
+            if lifecycle is not None and output is not None:
+                lifecycle["launch"] = "uncertain"
+                write_lifecycle(output, owner, lifecycle)
             docker(*postgres_run_args(owner, socket_dir, password), timeout=75)
             launch_complete = True
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, UnicodeError):
             pass
+        if lifecycle is not None and output is not None:
+            lifecycle["launch"] = (
+                "started" if launch_complete else "uncertain" if attempted_launch else "failed_safe"
+            )
+            write_lifecycle(output, owner, lifecycle)
         status_error: OSError | None = None
         try:
             status_path = socket_dir / ".launch-status"
@@ -341,10 +451,20 @@ def watch_parent(owner: str, socket_dir: Path, output: Path | None) -> None:
             subprocess.TimeoutExpired,
             OSError,
         ) as exc:
+            if lifecycle is not None and output is not None:
+                lifecycle["cleanup"] = "incomplete"
+                write_lifecycle(output, owner, lifecycle)
             if output is not None and output.exists() and owned_output(output, owner):
                 (output / ".cleanup-status").write_text(f"incomplete: {type(exc).__name__}\n")
             raise RuntimeError("owner-checked Docker cleanup did not complete") from exc
-        if not launch_complete or status_error is not None:
+        if lifecycle is not None and output is not None:
+            lifecycle["cleanup"] = (
+                "complete"
+                if (launch_complete or not attempted_launch) and status_error is None
+                else "incomplete"
+            )
+            write_lifecycle(output, owner, lifecycle)
+        if (attempted_launch and not launch_complete) or status_error is not None:
             if output is not None and output.exists() and owned_output(output, owner):
                 (output / ".cleanup-status").write_text(
                     "incomplete: Docker launch or status outcome uncertain\n"
@@ -423,6 +543,11 @@ def disposable_postgres(
         ACTIVE_URLS.discard(url)
         if lock_descriptor is None or watcher is None:
             cleanup_owned(owner, socket_dir, output)
+            if output is not None:
+                state = read_lifecycle(output, owner)
+                state["launch"] = "failed_safe"
+                state["cleanup"] = "complete"
+                write_lifecycle(output, owner, state)
         else:
             os.close(lock_descriptor)
             try:
@@ -526,6 +651,8 @@ def write_operator_files(output: Path, token: str, manifest: dict[str, object]) 
 
 
 def cleanup_interrupted(output: Path, *, confirmed_settled: bool = False) -> None:
+    if output.is_symlink() or not output.is_dir() or output.stat().st_uid != os.getuid():
+        raise RuntimeError("output directory is not positively owned by this lab run")
     manifest = json.loads((output / "environment.json").read_text())
     owner = manifest.get("lab_owner")
     socket_raw = manifest.get("db_socket_dir")
@@ -543,26 +670,56 @@ def cleanup_interrupted(output: Path, *, confirmed_settled: bool = False) -> Non
     ):
         raise RuntimeError("invalid lab socket directory in manifest")
     if not socket_dir.exists():
-        cleanup_owned(owner, socket_dir, output)
-        return
-    launch_status = socket_dir / ".launch-status"
-    if (
-        not launch_status.exists() or launch_status.read_text(encoding="ascii") != "started"
-    ) and not confirmed_settled:
-        raise RuntimeError(
-            "Docker launch outcome is unresolved; wait for watcher or confirm daemon settled"
-        )
-    descriptor = os.open(socket_dir / ".parent-lock", os.O_RDONLY | os.O_NOFOLLOW)
+        descriptor = None
+    else:
+        descriptor = os.open(socket_dir / ".parent-lock", os.O_RDONLY | os.O_NOFOLLOW)
     try:
-        try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise RuntimeError("lab parent or watcher is active; cleanup is not yet safe") from exc
+        if descriptor is not None:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise RuntimeError(
+                    "lab parent or watcher is active; cleanup is not yet safe"
+                ) from exc
+        if not owned_output(output, owner):
+            raise RuntimeError("output directory is not positively owned by this lab run")
+        state = read_lifecycle(output, owner)
+        if state["socket_dir"] != str(socket_dir):
+            raise RuntimeError("contradictory lab socket directory")
+        if state["cleanup"] == "complete" and descriptor is not None:
+            raise RuntimeError("completed cleanup has a remaining socket directory")
+        if process_active(cast(list[int], state["parent"])) or (
+            state["watcher"] is not None and process_active(cast(list[int], state["watcher"]))
+        ):
+            raise RuntimeError("lab parent or watcher is active; cleanup is not yet safe")
+        if state["watcher"] is None and state["launch"] != "failed_safe":
+            raise RuntimeError("Docker launcher identity is missing; cleanup is not yet safe")
+        if descriptor is not None:
+            launch_status = socket_dir / ".launch-status"
+            if launch_status.exists():
+                recorded = launch_status.read_text(encoding="ascii")
+                if (
+                    recorded not in {"started", "failed"}
+                    or (recorded == "started" and state["launch"] != "started")
+                    or (recorded == "failed" and state["launch"] == "started")
+                ):
+                    raise RuntimeError("contradictory Docker launch status")
+        if state["launch"] in {"pending", "uncertain"} and not (
+            state["settled_confirmed"] or confirmed_settled
+        ):
+            raise RuntimeError(
+                "Docker launch outcome is unresolved; wait for watcher or confirm daemon settled"
+            )
         cleanup_owned(owner, socket_dir, output)
-        if owned_output(output, owner):
-            (output / ".cleanup-status").write_text("complete by manual recovery\n")
+        state["cleanup"] = "complete"
+        if state["launch"] == "pending":
+            state["launch"] = "uncertain"
+        state["settled_confirmed"] = state["launch"] == "uncertain"
+        write_lifecycle(output, owner, state)
+        (output / ".cleanup-status").write_text("complete by manual recovery\n")
     finally:
-        os.close(descriptor)
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 class LocalServer(uvicorn.Server):

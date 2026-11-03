@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 import signal
+import subprocess
 import tempfile
 import threading
 from pathlib import Path
@@ -177,8 +178,7 @@ def test_launcher_completes_before_cleanup_even_when_parent_exits(
         assert launch_entered.wait(2)
         if phase == "during":
             os.close(descriptor)
-            # The old sleep(1) would have checked for the container by now.
-            assert not cleaned.wait(1.1)
+            assert not cleaned.is_set()
         allow_creation.set()
         assert created.wait(2)
         if phase == "after":
@@ -210,11 +210,17 @@ def test_manual_cleanup_waits_for_launch_and_parent_lock(tmp_path: Path) -> None
     descriptor = os.open(socket_dir / ".parent-lock", os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
     output = tmp_path / "run"
     lab.prepare_output(output, owner, socket_dir)
+    state = lab.read_lifecycle(output, owner)
+    state["parent"] = [999999999, 1]
+    state["watcher"] = [999999998, 1]
+    lab.write_lifecycle(output, owner, state)
     (output / "lab-token").write_text("synthetic")
     with patch.object(lab, "docker", return_value=""):
         with pytest.raises(RuntimeError, match="launch outcome is unresolved"):
             lab.cleanup_interrupted(output)
         (socket_dir / ".launch-status").write_text("started")
+        state["launch"] = "started"
+        lab.write_lifecycle(output, owner, state)
         fcntl.flock(descriptor, fcntl.LOCK_EX)
         with pytest.raises(RuntimeError, match="lab parent or watcher is active"):
             lab.cleanup_interrupted(output)
@@ -232,11 +238,147 @@ def test_manual_recovery_of_uncertain_launch_requires_explicit_confirmation(tmp_
     (socket_dir / ".parent-lock").touch()
     output = tmp_path / "run"
     lab.prepare_output(output, owner, socket_dir)
+    state = lab.read_lifecycle(output, owner)
+    state.update(launch="uncertain", parent=[999999999, 1], watcher=[999999998, 1])
+    lab.write_lifecycle(output, owner, state)
     with patch.object(lab, "docker", return_value=""):
         with pytest.raises(RuntimeError, match="launch outcome is unresolved"):
             lab.cleanup_interrupted(output)
         lab.cleanup_interrupted(output, confirmed_settled=True)
     assert not socket_dir.exists()
+
+
+def test_watcher_uncertain_launch_after_socket_removal_requires_confirmation(
+    tmp_path: Path,
+) -> None:
+    owner = "4" * 32
+    socket_dir = Path(tempfile.mkdtemp(prefix=f"kv-client-lab-{owner}-", dir="/tmp"))
+    (socket_dir / ".kv-client-lab-owner").write_text(owner)
+    (socket_dir / ".db-password").write_text("synthetic")
+    (socket_dir / ".parent-lock").touch()
+    output = tmp_path / "run"
+    lab.prepare_output(output, owner, socket_dir)
+    state = lab.read_lifecycle(output, owner)
+    state["parent"] = [999999999, 1]
+    lab.write_lifecycle(output, owner, state)
+
+    def fake_docker(*args: str, timeout: float = 30) -> str:
+        if args[0] == "run":
+            raise subprocess.TimeoutExpired("docker", timeout)
+        return ""
+
+    with (
+        patch.object(lab, "docker", side_effect=fake_docker),
+        patch.object(lab, "process_identity", return_value=[999999998, 1]),
+        pytest.raises(RuntimeError, match="did not complete successfully"),
+    ):
+        lab.watch_parent(owner, socket_dir, output)
+    assert not socket_dir.exists()
+    state = lab.read_lifecycle(output, owner)
+    assert (state["launch"], state["cleanup"]) == ("uncertain", "incomplete")
+    with patch.object(lab, "docker", return_value=""):
+        with pytest.raises(RuntimeError, match="launch outcome is unresolved"):
+            lab.cleanup_interrupted(output)
+        lab.cleanup_interrupted(output, confirmed_settled=True)
+        lab.cleanup_interrupted(output)
+    assert lab.read_lifecycle(output, owner)["settled_confirmed"] is True
+
+
+def test_failed_before_docker_has_safe_completed_cleanup(tmp_path: Path) -> None:
+    owner = "8" * 32
+    socket_dir = Path(tempfile.mkdtemp(prefix=f"kv-client-lab-{owner}-", dir="/tmp"))
+    (socket_dir / ".kv-client-lab-owner").write_text(owner)
+    (socket_dir / ".parent-lock").touch()
+    output = tmp_path / "run"
+    lab.prepare_output(output, owner, socket_dir)
+    state = lab.read_lifecycle(output, owner)
+    state["parent"] = [999999999, 1]
+    lab.write_lifecycle(output, owner, state)
+    with (
+        patch.object(lab, "docker", return_value="") as docker_call,
+        patch.object(lab, "process_identity", return_value=[999999998, 1]),
+    ):
+        lab.watch_parent(owner, socket_dir, output)
+    assert not socket_dir.exists()
+    assert not any(call.args[0] == "run" for call in docker_call.call_args_list)
+    state = lab.read_lifecycle(output, owner)
+    assert (state["launch"], state["cleanup"]) == ("failed_safe", "complete")
+    with patch.object(lab, "docker", return_value=""):
+        lab.cleanup_interrupted(output)
+
+
+def test_contradictory_lifecycle_refuses_cleanup(tmp_path: Path) -> None:
+    owner = "9" * 32
+    output = tmp_path / "run"
+    lab.prepare_output(output, owner, Path(f"/tmp/kv-client-lab-{owner}-missing"))  # noqa: S108
+    state = lab.read_lifecycle(output, owner)
+    state.update(launch="uncertain", cleanup="complete", parent=[999999999, 1])
+    lab.write_lifecycle(output, owner, state)
+    with (
+        patch.object(lab, "docker", return_value=""),
+        pytest.raises(RuntimeError, match="contradictory lab lifecycle status"),
+    ):
+        lab.cleanup_interrupted(output, confirmed_settled=True)
+
+
+@pytest.mark.parametrize("status", [None, "garbage", '{"launch": "started"}'])
+def test_cleanup_fails_closed_on_missing_or_corrupt_lifecycle(
+    tmp_path: Path, status: str | None
+) -> None:
+    owner = "5" * 32
+    output = tmp_path / "run"
+    lab.prepare_output(output, owner, Path(f"/tmp/kv-client-lab-{owner}-missing"))  # noqa: S108
+    path = output / ".lifecycle-status"
+    if status is None:
+        path.unlink()
+    else:
+        path.write_text(status)
+    with (
+        patch.object(lab, "docker", return_value=""),
+        pytest.raises(RuntimeError, match="lifecycle status"),
+    ):
+        lab.cleanup_interrupted(output, confirmed_settled=True)
+
+
+@pytest.mark.parametrize("active", ["parent", "watcher"])
+def test_missing_socket_cleanup_refuses_active_process(tmp_path: Path, active: str) -> None:
+    owner = "6" * 32
+    output = tmp_path / "run"
+    lab.prepare_output(output, owner, Path(f"/tmp/kv-client-lab-{owner}-missing"))  # noqa: S108
+    state = lab.read_lifecycle(output, owner)
+    state.update(
+        launch="uncertain", cleanup="incomplete", parent=[999999999, 1], watcher=[999999998, 1]
+    )
+    state[active] = lab.process_identity(os.getpid())
+    lab.write_lifecycle(output, owner, state)
+    with (
+        patch.object(lab, "docker", return_value=""),
+        pytest.raises(RuntimeError, match="lab parent or watcher is active"),
+    ):
+        lab.cleanup_interrupted(output, confirmed_settled=True)
+
+
+def test_foreign_container_blocks_missing_socket_recovery(tmp_path: Path) -> None:
+    owner = "7" * 32
+    output = tmp_path / "run"
+    lab.prepare_output(output, owner, Path(f"/tmp/kv-client-lab-{owner}-missing"))  # noqa: S108
+    state = lab.read_lifecycle(output, owner)
+    state.update(
+        launch="uncertain", cleanup="incomplete", parent=[999999999, 1], watcher=[999999998, 1]
+    )
+    lab.write_lifecycle(output, owner, state)
+    calls: list[tuple[str, ...]] = []
+
+    def foreign_docker(*args: str, timeout: float = 30) -> str:
+        calls.append(args)
+        return f"kv-client-lab-db-{owner}"
+
+    with (
+        patch.object(lab, "docker", side_effect=foreign_docker),
+        pytest.raises(RuntimeError, match="without expected owner label"),
+    ):
+        lab.cleanup_interrupted(output, confirmed_settled=True)
+    assert not any(call[0] == "rm" for call in calls)
 
 
 def test_generated_credentials_have_no_admin_scope_or_secret_in_settings_repr() -> None:
@@ -308,11 +450,14 @@ def test_cleanup_refuses_foreign_container(tmp_path: Path) -> None:
 def test_cleanup_after_interruption_is_owner_scoped(tmp_path: Path) -> None:
     owner = "b" * 32
     socket_dir = Path(f"/tmp/kv-client-lab-{owner}-missing")  # noqa: S108
-    (tmp_path / "environment.json").write_text(
-        json.dumps({"lab_owner": owner, "db_socket_dir": str(socket_dir)})
+    output = tmp_path / "run"
+    lab.prepare_output(output, owner, socket_dir)
+    state = lab.read_lifecycle(output, owner)
+    state.update(
+        launch="started", cleanup="complete", parent=[999999999, 1], watcher=[999999998, 1]
     )
-    (tmp_path / ".kv-client-lab-owner").write_text(owner)
-    token = tmp_path / "lab-token"
+    lab.write_lifecycle(output, owner, state)
+    token = output / "lab-token"
     token.write_text("synthetic")
     calls: list[tuple[str, ...]] = []
 
@@ -324,7 +469,7 @@ def test_cleanup_after_interruption_is_owner_scoped(tmp_path: Path) -> None:
         patch.object(lab, "docker", fake_docker),
         patch.object(lab, "owned_resource", return_value=True),
     ):
-        lab.cleanup_interrupted(tmp_path)
+        lab.cleanup_interrupted(output)
     assert ("rm", "-f", "-v", f"kv-client-lab-db-{owner}") in calls
     assert not token.exists()
 
@@ -350,18 +495,21 @@ def test_foreign_container_is_never_removed() -> None:
 def test_cleanup_is_idempotent(tmp_path: Path) -> None:
     owner = "d" * 32
     socket_dir = Path(f"/tmp/kv-client-lab-{owner}-missing")  # noqa: S108
-    (tmp_path / "environment.json").write_text(
-        json.dumps({"lab_owner": owner, "db_socket_dir": str(socket_dir)})
+    output = tmp_path / "run"
+    lab.prepare_output(output, owner, socket_dir)
+    state = lab.read_lifecycle(output, owner)
+    state.update(
+        launch="started", cleanup="complete", parent=[999999999, 1], watcher=[999999998, 1]
     )
-    (tmp_path / ".kv-client-lab-owner").write_text(owner)
-    (tmp_path / "lab-token").write_text("synthetic")
+    lab.write_lifecycle(output, owner, state)
+    (output / "lab-token").write_text("synthetic")
     with (
         patch.object(lab, "owned_resource", return_value=False),
         patch.object(lab, "docker", return_value=""),
     ):
-        lab.cleanup_interrupted(tmp_path)
-        lab.cleanup_interrupted(tmp_path)
-    assert not (tmp_path / "lab-token").exists()
+        lab.cleanup_interrupted(output)
+        lab.cleanup_interrupted(output)
+    assert not (output / "lab-token").exists()
 
 
 def test_sigint_and_sigterm_request_stop_and_restore_handlers() -> None:
