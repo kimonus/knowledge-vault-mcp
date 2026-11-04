@@ -1,0 +1,136 @@
+name: TASK-0014 single synthetic E2E smoke
+
+on:
+  pull_request:
+    types: [opened]
+    branches: [main]
+    paths:
+      - .github/workflows/task-0014-synthetic-smoke.yml
+      - scripts/ci/task_0014_*
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task-0014-single-synthetic-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.action == 'opened' &&
+      github.run_attempt == 1 &&
+      github.repository == 'kimonus/knowledge-vault-mcp' &&
+      github.event.repository.private == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'diag/task-0014-umask-fixture'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: orchestration
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          ref: 14f9517e51e5221a00ae53833cf03360298f0e7c
+          path: source
+          fetch-depth: 3
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6, verified official tag
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.13.6'
+          enable-cache: false
+      - name: Verify ordinary CI exclusion before image access
+        timeout-minutes: 3
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: timeout -k 5s 140s python orchestration/scripts/ci/task_0014_ci_gate.py
+      - name: Prepare owned private staging and signed distribution Bubblewrap
+        timeout-minutes: 6
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_ENVIRONMENT:$RUNNER_OS:$RUNNER_ARCH" = github-hosted:Linux:X64
+          . /etc/os-release
+          test "$ID:$VERSION_ID" = ubuntu:22.04
+          cat /etc/os-release
+          uname -a
+          echo "image_os=$ImageOS image_version=$ImageVersion"
+          test "$(git -C orchestration rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git -C orchestration status --porcelain)"
+          test "$(git -C source rev-parse HEAD)" = 14f9517e51e5221a00ae53833cf03360298f0e7c
+          test -z "$(git -C source status --porcelain)"
+          python orchestration/scripts/ci/task_0014_guards.py orchestration source
+          sha256sum orchestration/.github/workflows/task-0014-synthetic-smoke.yml orchestration/scripts/ci/task_0014_*
+          timeout 120s sudo apt-get update -o Acquire::Retries=0
+          timeout 120s sudo apt-get install --no-install-recommends --yes -o Acquire::Retries=0 bubblewrap
+          dpkg-query -W bubblewrap
+          dpkg -V bubblewrap
+          /usr/bin/bwrap --version
+          test "$(stat -c %a:%u:%g /usr/bin/bwrap)" = 755:0:0
+          getent group 1000 || sudo groupadd --gid 1000 kv-smoke
+          getent passwd 1000 || sudo useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin kv-smoke
+          staging="$(mktemp -d /var/tmp/kv-task-0014.XXXXXXXX)"
+          echo "TASK_0014_STAGING=$staging" >> "$GITHUB_ENV"
+          mkdir -m 700 "$staging/bin"
+          cp -a source orchestration "$staging/"
+          install -m 700 "$(command -v uv)" "$staging/bin/uv"
+          sudo chown -R 1000:1000 "$staging"
+          python -c 'import sys; print(sys.executable)' > "$RUNNER_TEMP/task0014-python"
+          sudo -u '#1000' -g '#1000' namei -l "$staging/source"
+      - name: One bounded preflight and conditional synthetic run
+        timeout-minutes: 21
+        shell: bash
+        run: |
+          set -euo pipefail
+          unit="task-0014-${GITHUB_RUN_ID}.service"
+          echo "TASK_0014_UNIT=$unit" >> "$GITHUB_ENV"
+          set +e
+          timeout --signal=TERM --kill-after=10s 1230s sudo systemd-run --unit="$unit" --wait --pipe \
+            --uid=1000 --gid=1000 --property=CPUQuota=200% --property=MemoryMax=8G \
+            --property=MemorySwapMax=0 --property=TasksMax=256 \
+            --property=RuntimeMaxSec=1200 --property=TimeoutStopSec=10 \
+            --property=KillMode=control-group --property=NoNewPrivileges=yes \
+            --property=LimitFSIZE=536870912 --property=UMask=0077 \
+            --property=TemporaryFileSystem=/tmp:size=6G,mode=1777 \
+            /usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8 \
+            /bin/bash "$TASK_0014_STAGING/orchestration/scripts/ci/task_0014_run.sh" \
+            "$TASK_0014_STAGING" "$(cat "$RUNNER_TEMP/task0014-python")"
+          result=$?
+          set -e
+          echo "systemd_run_exit=$result"
+          sudo systemctl show "$unit" -p Result -p ExecMainStatus -p ActiveState -p SubState \
+            -p ControlGroup -p TasksCurrent -p CPUQuotaPerSecUSec -p MemoryMax -p MemorySwapMax \
+            -p TasksMax -p RuntimeMaxUSec -p TimeoutStopUSec -p NoNewPrivileges -p KillMode \
+            -p MemoryPeak -p CPUUsageNSec
+          exit "$result"
+      - name: Stop owned unit and clean only settled owner staging
+        if: always()
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -n "${TASK_0014_UNIT:-}"; then
+            sudo systemctl stop "$TASK_0014_UNIT"
+            cg="$(systemctl show "$TASK_0014_UNIT" -p ControlGroup --value)"
+            if test -n "$cg" && test -e "/sys/fs/cgroup$cg/cgroup.procs"; then
+              test -z "$(cat "/sys/fs/cgroup$cg/cgroup.procs")"
+            fi
+            echo 'unfinished_service_descendants=0 private_tmpfs_released=true'
+          fi
+          if test -n "${TASK_0014_STAGING:-}"; then
+            case "$TASK_0014_STAGING" in /var/tmp/kv-task-0014.????????) ;; *) exit 1 ;; esac
+            test "$(stat -c %a:%u:%g "$TASK_0014_STAGING")" = 700:1000:1000
+            sudo -u '#1000' -g '#1000' python -c 'import shutil,sys; shutil.rmtree(sys.argv[1])' "$TASK_0014_STAGING"
+            test ! -e "$TASK_0014_STAGING"
+            echo 'owner_private_staging_removed=true'
+          fi
