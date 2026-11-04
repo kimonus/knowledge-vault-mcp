@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   quality:
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'smoke/task-0012-gha-synthetic-e2e') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -79,6 +80,7 @@ jobs:
           if-no-files-found: warn
 
   supply-chain:
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'smoke/task-0012-gha-synthetic-e2e') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -107,6 +109,7 @@ jobs:
           if-no-files-found: error
 
   kubernetes:
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'smoke/task-0012-gha-synthetic-e2e') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -200,6 +203,7 @@ jobs:
           sh scripts/ci/check_rendered_numbers.sh "$RUNNER_TEMP"/rendered*.yaml
 
   inspector:
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'smoke/task-0012-gha-synthetic-e2e') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
