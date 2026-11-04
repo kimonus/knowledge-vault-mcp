@@ -12,6 +12,7 @@ import httpx2
 import uvicorn
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from scripts.feasibility_diagnostics import write_record
 from scripts.feasibility_gateway import Refused, RetrievalGateway
 from sqlalchemy import func, select
 
@@ -24,6 +25,7 @@ MCP_SOCKET = "/tmp/mcp.sock"  # noqa: S108  # Namespace-private tmpfs.
 GATEWAY_SOCKET = "/tmp/client/gateway.sock"  # noqa: S108  # Owner-only socket mount.
 
 sys.stdout = sys.stderr
+write_record("python_imports", "completed")
 
 
 def require(condition, message):
@@ -32,6 +34,7 @@ def require(condition, message):
 
 
 async def main():
+    write_record("fixture_seed")
     token, pepper = secrets.token_urlsafe(48), secrets.token_urlsafe(48)
     digest = hmac.new(pepper.encode(), token.encode(), hashlib.sha256).hexdigest()
     Settings.model_config["env_file"] = None
@@ -68,6 +71,8 @@ async def main():
     require(commit.counts.inserted == 1, "fixture commit failed")
     async with container.database.sessions() as db:
         usage_before = await db.scalar(select(func.count()).select_from(AssertionUsageRow))
+    write_record("fixture_seed", "completed")
+    write_record("python_start")
     server = uvicorn.Server(
         uvicorn.Config(create_app(container), uds=MCP_SOCKET, log_config=None, access_log=False)
     )
@@ -79,6 +84,8 @@ async def main():
                     await task
                     raise RuntimeError("server exited")
                 await asyncio.sleep(0.01)
+        write_record("python_start", "completed")
+        write_record("readiness_checks")
         transport = httpx2.AsyncHTTPTransport(uds=MCP_SOCKET, trust_env=False)
         async with httpx2.AsyncClient(transport=transport, trust_env=False) as http:
             r = await http.post("http://localhost/mcp", json={})
@@ -147,7 +154,10 @@ async def main():
 
             endpoint = await asyncio.start_unix_server(mock_gateway, GATEWAY_SOCKET, limit=65536)
             try:
+                write_record("readiness_checks", "completed")
+                write_record("gateway_ready")
                 print("SYNTHETIC_GATEWAY_READY", file=sys.__stdout__, flush=True)
+                write_record("gateway_ready", "completed")
                 await asyncio.wait_for(complete.wait(), 45)
             finally:
                 endpoint.close()
