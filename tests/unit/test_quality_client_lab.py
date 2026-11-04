@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -80,6 +81,45 @@ def test_incomplete_or_unsafe_snapshot_fails(
         manifest.write_text(json.dumps(content))
     with pytest.raises(RuntimeError):
         offline_model.verify_snapshot(snapshot, manifest)
+
+
+def test_snapshot_rejects_fifo(monkeypatch: pytest.MonkeyPatch) -> None:
+    with tempfile.TemporaryDirectory(prefix="m1-entry-", dir="/tmp") as temporary:
+        snapshot, manifest = independent_snapshot(Path(temporary), monkeypatch)
+        entry = snapshot / "special"
+        os.mkfifo(entry)
+        with pytest.raises(RuntimeError, match="unsupported filesystem entry"):
+            offline_model.verify_snapshot(snapshot, manifest)
+
+
+@pytest.mark.parametrize("special_mode", [stat.S_IFSOCK, stat.S_IFCHR, stat.S_IFBLK])
+def test_snapshot_rejects_special_node_classification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, special_mode: int
+) -> None:
+    snapshot, manifest = independent_snapshot(tmp_path, monkeypatch)
+    entry = snapshot / "device"
+    entry.write_bytes(b"stand-in for special filesystem node")
+    original_stat = Path.stat
+
+    def device_stat(path: Path, *args: object, **kwargs: object) -> os.stat_result:
+        result = original_stat(path, *args, **kwargs)
+        if path == entry:
+            return os.stat_result((special_mode | 0o600, *result[1:]))
+        return result
+
+    monkeypatch.setattr(Path, "stat", device_stat)
+    with pytest.raises(RuntimeError, match="unsupported filesystem entry"):
+        offline_model.verify_snapshot(snapshot, manifest)
+
+
+def test_genuine_study_requires_semantic_serve() -> None:
+    runbook = SCRIPT.parents[1] / "docs" / "runbooks" / "m1-client-lab.md"
+    procedure = runbook.read_text(encoding="utf-8")
+    study = procedure.split("## Genuine study operator workflow", 1)[1]
+    assert "new `semantic-serve` instance" in study
+    assert "new `serve` instance" not in study
+    assert "quality_client_lab.py semantic-serve" in procedure
+    assert "--model-path" in procedure and "--model-manifest" in procedure
 
 
 def test_offline_environment_uses_empty_cache(tmp_path: Path) -> None:

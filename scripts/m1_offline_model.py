@@ -42,13 +42,16 @@ def verify_snapshot(path: Path, manifest_path: Path) -> dict[str, object]:
     for item in path.rglob("*"):
         if item.is_symlink() or item.is_mount():
             raise RuntimeError("model snapshot contains a symlink or mount point")
-        if item.is_file():
-            relative = item.relative_to(path).as_posix()
-            digest = hashlib.sha256()
-            with item.open("rb") as source:
-                for chunk in iter(lambda: source.read(1024 * 1024), b""):
-                    digest.update(chunk)
-            actual[relative] = digest.hexdigest()
+        if item.is_dir():
+            continue
+        if not item.is_file():
+            raise RuntimeError("model snapshot contains an unsupported filesystem entry")
+        relative = item.relative_to(path).as_posix()
+        digest = hashlib.sha256()
+        with item.open("rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        actual[relative] = digest.hexdigest()
     if not actual or files != actual:
         raise RuntimeError("model snapshot files or SHA-256 checksums differ from manifest")
     if (
