@@ -1,6 +1,7 @@
 """Run the synthetic local feasibility probe against a pre-staged image filesystem."""
 
 import argparse
+import contextlib
 import json
 import os
 import subprocess
@@ -13,6 +14,151 @@ from scripts.feasibility_workspace import Workspace
 
 ROOT = Path(__file__).resolve().parents[1]
 SUPPORT = ROOT / "scripts" / "feasibility_support"
+IMAGE_MOUNT_TARGETS = ("opt/python", "opt/site", "opt/repo")
+
+
+def prepare_mount_directories(image_root: Path) -> None:
+    """Create mount points without following any extracted image symlink."""
+    root_descriptor = os.open(image_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for target in IMAGE_MOUNT_TARGETS:
+            descriptor = os.dup(root_descriptor)
+            try:
+                for component in target.split("/"):
+                    with contextlib.suppress(FileExistsError):
+                        os.mkdir(component, 0o755, dir_fd=descriptor)
+                    child = os.open(
+                        component,
+                        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                        dir_fd=descriptor,
+                    )
+                    os.close(descriptor)
+                    descriptor = child
+            finally:
+                os.close(descriptor)
+    finally:
+        os.close(root_descriptor)
+
+
+def staging_command(staged_layers: Path, image_root: Path) -> list[str]:
+    """Build the extraction sandbox with one writable host bind, the image root."""
+    return [
+        "/usr/bin/bwrap",
+        "--unshare-all",
+        "--die-with-parent",
+        "--clearenv",
+        "--ro-bind",
+        "/usr",
+        "/usr",
+        "--ro-bind",
+        "/lib",
+        "/lib",
+        "--ro-bind",
+        "/lib64",
+        "/lib64",
+        "--ro-bind",
+        str(staged_layers),
+        "/layers",
+        "--ro-bind",
+        str(SUPPORT / "unpack.py"),
+        "/unpack.py",
+        "--bind",
+        str(image_root),
+        "/rootfs",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+        "--tmpfs",
+        "/tmp",  # noqa: S108  # Namespace-private tmpfs.
+        "/usr/bin/python3",
+        "/unpack.py",
+    ]
+
+
+def prepare_run_commands(
+    workspace: Workspace,
+    image_root: Path,
+    python_root: Path,
+    site: Path,
+    revision: str,
+    dirty: bool,
+) -> tuple[list[str], list[str], Path]:
+    """Prepare host paths and sandbox commands, cleaning only a settled workspace on failure."""
+    try:
+        prepare_mount_directories(image_root)
+        shared = workspace.root / "client"
+        shared.mkdir(mode=0o700)
+        telemetry = workspace.root / "telemetry"
+        telemetry.mkdir(mode=0o700)
+        common = [
+            "/usr/bin/bwrap",
+            "--unshare-all",
+            "--die-with-parent",
+            "--clearenv",
+            "--ro-bind",
+            str(image_root),
+            "/",
+            "--ro-bind",
+            str(python_root),
+            f"/{IMAGE_MOUNT_TARGETS[0]}",
+            "--proc",
+            "/proc",
+            "--dev",
+            "/dev",
+            "--tmpfs",
+            "/tmp",  # noqa: S108  # Namespace-private tmpfs.
+            "--bind",
+            str(shared),
+            "/tmp/client",  # noqa: S108  # Owner-only client socket mount.
+        ]
+        server = [
+            *common,
+            "--ro-bind",
+            str(SUPPORT / "passwd"),
+            "/etc/passwd",
+            "--ro-bind",
+            str(SUPPORT / "group"),
+            "/etc/group",
+            "--ro-bind",
+            str(site),
+            f"/{IMAGE_MOUNT_TARGETS[1]}",
+            "--ro-bind",
+            str(ROOT),
+            f"/{IMAGE_MOUNT_TARGETS[2]}",
+            "--bind",
+            str(telemetry),
+            "/tmp/telemetry",  # noqa: S108  # Server-only telemetry mount.
+            "--setenv",
+            "KV_SOURCE_REVISION",
+            revision,
+            "--setenv",
+            "KV_SOURCE_DIRTY",
+            "1" if dirty else "0",
+            "--ro-bind",
+            str(SUPPORT / "server.py"),
+            "/tmp/probe.py",  # noqa: S108  # Private namespace mount.
+            "--ro-bind",
+            str(SUPPORT / "server.sh"),
+            "/tmp/run.sh",  # noqa: S108  # Private namespace mount.
+            "/bin/sh",
+            "/tmp/run.sh",  # noqa: S108  # Private namespace mount.
+        ]
+        client = [
+            *common,
+            "--ro-bind",
+            str(SUPPORT / "client.py"),
+            "/tmp/client-probe.py",  # noqa: S108  # Private namespace mount.
+            "--setenv",
+            "LC_ALL",
+            "C",
+            f"/{IMAGE_MOUNT_TARGETS[0]}/bin/python3.12",
+            "/tmp/client-probe.py",  # noqa: S108  # Private namespace mount.
+        ]
+        return server, client, telemetry
+    except BaseException:
+        workspace.cleanup_if_settled()
+        raise
 
 
 def main() -> None:
@@ -38,10 +184,10 @@ def main() -> None:
 
     workspace = Workspace.create(Path("/tmp"))  # noqa: S108  # mkdtemp creates an owned directory.
     image_root = workspace.root / "rootfs"
-    image_root.mkdir(mode=0o700)
-    workspace.mark_launched()
     process = None
+    launch_attempted = False
     try:
+        image_root.mkdir(mode=0o700)
         staged_layers = workspace.root / "layers"
         staged_layers.mkdir(mode=0o700)
         descriptor = os.open(layers / "manifest.json", os.O_RDONLY | os.O_NOFOLLOW)
@@ -63,122 +209,35 @@ def main() -> None:
                 if source.read(1):
                     raise RuntimeError("image layer grew while copying")
         verify_layers(staged_layers)
+        launch_attempted = True
+        workspace.mark_launched()
         process = subprocess.Popen(  # noqa: S603  # Fixed command and verified layers.
-            [
-                "/usr/bin/bwrap",
-                "--unshare-all",
-                "--die-with-parent",
-                "--clearenv",
-                "--ro-bind",
-                "/usr",
-                "/usr",
-                "--ro-bind",
-                "/lib",
-                "/lib",
-                "--ro-bind",
-                "/lib64",
-                "/lib64",
-                "--ro-bind",
-                str(staged_layers),
-                "/layers",
-                "--ro-bind",
-                str(SUPPORT / "unpack.py"),
-                "/unpack.py",
-                "--bind",
-                str(image_root),
-                "/rootfs",
-                "--proc",
-                "/proc",
-                "--dev",
-                "/dev",
-                "--tmpfs",
-                "/tmp",  # noqa: S108  # Namespace-private tmpfs.
-                "/usr/bin/python3",
-                "/unpack.py",
-            ],
+            staging_command(staged_layers, image_root),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         if process.wait(timeout=120) != 0:
             raise RuntimeError("isolated image staging failed")
-    except BaseException:
-        if process is not None and process.poll() is None:
-            process.kill()
-            process.wait(timeout=10)
         workspace.mark_settled()
-        workspace.cleanup()
+    except BaseException:
+        settled = process is None or process.poll() is not None
+        if process is not None and not settled:
+            try:
+                process.kill()
+                process.wait(timeout=10)
+                settled = process.poll() is not None
+            except BaseException:
+                settled = False
+        if settled:
+            if launch_attempted:
+                marker = workspace.root / "child-unsettled"
+                if marker.exists() or marker.is_symlink():
+                    workspace.mark_settled()
+            workspace.cleanup()
         raise
-    workspace.mark_settled()
-    for destination in ("python", "site", "repo"):
-        (image_root / "opt" / destination).mkdir(parents=True, exist_ok=True)
-    shared = workspace.root / "client"
-    shared.mkdir(mode=0o700)
-    telemetry = workspace.root / "telemetry"
-    telemetry.mkdir(mode=0o700)
-    common = [
-        "/usr/bin/bwrap",
-        "--unshare-all",
-        "--die-with-parent",
-        "--clearenv",
-        "--ro-bind",
-        str(image_root),
-        "/",
-        "--ro-bind",
-        str(python_root),
-        "/opt/python",
-        "--proc",
-        "/proc",
-        "--dev",
-        "/dev",
-        "--tmpfs",
-        "/tmp",  # noqa: S108  # Private namespace tmpfs.
-        "--bind",
-        str(shared),
-        "/tmp/client",  # noqa: S108  # Private namespace mount.
-    ]
-    server = [
-        *common,
-        "--ro-bind",
-        str(SUPPORT / "passwd"),
-        "/etc/passwd",
-        "--ro-bind",
-        str(SUPPORT / "group"),
-        "/etc/group",
-        "--ro-bind",
-        str(site),
-        "/opt/site",
-        "--ro-bind",
-        str(ROOT),
-        "/opt/repo",
-        "--bind",
-        str(telemetry),
-        "/tmp/telemetry",  # noqa: S108  # Server-only private mount.
-        "--setenv",
-        "KV_SOURCE_REVISION",
-        revision,
-        "--setenv",
-        "KV_SOURCE_DIRTY",
-        "1" if dirty else "0",
-        "--ro-bind",
-        str(SUPPORT / "server.py"),
-        "/tmp/probe.py",  # noqa: S108  # Private namespace mount.
-        "--ro-bind",
-        str(SUPPORT / "server.sh"),
-        "/tmp/run.sh",  # noqa: S108  # Private namespace mount.
-        "/bin/sh",
-        "/tmp/run.sh",  # noqa: S108  # Private namespace mount.
-    ]
-    client = [
-        *common,
-        "--ro-bind",
-        str(SUPPORT / "client.py"),
-        "/tmp/client-probe.py",  # noqa: S108  # Private namespace mount.
-        "--setenv",
-        "LC_ALL",
-        "C",
-        "/opt/python/bin/python3.12",
-        "/tmp/client-probe.py",  # noqa: S108  # Private namespace mount.
-    ]
+    server, client, telemetry = prepare_run_commands(
+        workspace, image_root, python_root, site, revision, dirty
+    )
 
     def emit_trace() -> None:
         trace = telemetry / "trace.json"

@@ -46,6 +46,16 @@ class Workspace:
             os.close(self._descriptor)
             self._descriptor = -1
 
+    def cleanup_if_settled(self) -> bool:
+        """Clean an owned workspace only when no child may still be active."""
+        if self._descriptor < 0:
+            return True
+        marker = self.root / "child-unsettled"
+        if marker.exists() or marker.is_symlink():
+            return False
+        self.cleanup()
+        return True
+
     def mark_launched(self) -> None:
         """Persist uncertainty before spawning any sandbox child."""
         if self._descriptor < 0:

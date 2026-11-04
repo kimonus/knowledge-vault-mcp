@@ -37,6 +37,15 @@ the checkout, locked dependencies, Python runtime and staged image; the client c
 database, MCP socket, checkout or seeder process. The server and seeder share a trusted process.
 The read identity is generated for this one run and is not mounted in the client namespace.
 
+During image extraction, `/rootfs` is the only writable host bind; image layers and the unpacker
+are read-only binds, while `/tmp` is a namespace tmpfs. Layer extraction interprets absolute OCI
+symlink targets inside the image root, rejects path and hardlink escapes, and applies ordinary
+and opaque whiteouts before extracting the layer's entries. Host-side mount-point preparation
+uses no-follow directory descriptors for `/opt/python`, `/opt/site` and `/opt/repo`, and refuses
+any extracted symlink in those paths. A setup failure after extraction removes the owned
+workspace when children are settled; if child state is uncertain, the workspace is retained for
+manual recovery.
+
 On success the runner prints one JSON trace containing source commit and dirty state, tool counts,
 returned IDs, first-seen order, response bytes and durations. The IDs are generated from synthetic
 data. Agent-selected IDs, model-visible context and provider usage are null because no model or
