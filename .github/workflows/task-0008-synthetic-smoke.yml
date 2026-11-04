@@ -1,0 +1,98 @@
+name: TASK-0008 authorized UID-access follow-up
+
+on:
+  pull_request:
+    types: [opened]
+    branches: [main]
+    paths:
+      - .github/workflows/task-0008-synthetic-smoke.yml
+      - scripts/ci/task_0008_smoke.sh
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task-0008-single-synthetic-smoke
+  cancel-in-progress: false
+
+jobs:
+  preflight-and-conditional-smoke:
+    if: >-
+      github.run_attempt == 1 &&
+      github.repository == 'kimonus/knowledge-vault-mcp' &&
+      github.event.repository.private == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'task-0008-followup-uid-access'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout reviewable orchestration only
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: task
+          persist-credentials: false
+      - name: Checkout immutable smoke source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          ref: 578f4758a81107e3c517c71afd80bda4d13d95d3
+          path: source
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: "0.13.6"
+          enable-cache: false
+      - name: Prepare disposable VM without changing sandbox policy
+        env:
+          UV_PYTHON_DOWNLOADS: never
+          UV_NO_CACHE: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$RUNNER_OS" = Linux
+          test "$RUNNER_ARCH" = X64
+          test "$(uname -m)" = x86_64
+          test -f /etc/os-release
+          . /etc/os-release
+          test "$ID:$VERSION_ID" = ubuntu:24.04
+          /usr/bin/python3.12 --version
+          timeout 180s sudo apt-get update -o Acquire::Retries=0
+          timeout 180s sudo apt-get install --no-install-recommends --yes bubblewrap
+          dpkg-query -W bubblewrap
+          /usr/bin/bwrap --version
+          getent group 1000 || sudo groupadd --gid 1000 kv-smoke
+          getent passwd 1000 || sudo useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin kv-smoke
+          # Diagnose the previous path failure without changing any ancestor permissions.
+          namei -l "$GITHUB_WORKSPACE/task/scripts/ci/task_0008_smoke.sh"
+          namei -l "$GITHUB_WORKSPACE/source"
+          # Prepare only a fresh private directory outside the runner's home tree.
+          staging="$(mktemp -d /var/tmp/kv-task-0008.XXXXXXXX)"
+          test "$(stat -c %a "$staging")" = 700
+          cp -a "$GITHUB_WORKSPACE/source" "$staging/source"
+          install -m 700 "$GITHUB_WORKSPACE/task/scripts/ci/task_0008_smoke.sh" "$staging/preflight.sh"
+          cd "$staging/source"
+          timeout 300s uv sync --locked --python /usr/bin/python3.12
+          timeout 30s uv lock --check
+          sudo chown -R 1000:1000 "$staging"
+          sudo -u '#1000' -g '#1000' namei -l "$staging/preflight.sh"
+          sudo -u '#1000' -g '#1000' test -r "$staging/preflight.sh"
+          sudo -u '#1000' -g '#1000' test -x "$staging/source/.venv/bin/python"
+          echo "TASK_0008_STAGING=$staging" >> "$GITHUB_ENV"
+      - name: Bounded unprivileged preflight then at most one smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Root only configures resource ceilings in this disposable VM.
+          # The script, Bubblewrap, fetch, and harness all execute as 1000:1000.
+          sudo systemd-run --unit="task-0008-${GITHUB_RUN_ID}" --wait --pipe --collect \
+            --uid=1000 --gid=1000 \
+            --property=CPUQuota=200% --property=MemoryMax=6G \
+            --property=MemorySwapMax=0 --property=TasksMax=256 \
+            --property=RuntimeMaxSec=900 --property=TimeoutStopSec=20 \
+            --property=KillMode=control-group --property=NoNewPrivileges=yes \
+            --property=LimitFSIZE=536870912 --property=UMask=0077 \
+            --property=TemporaryFileSystem=/tmp:size=6G,mode=1777 \
+            /usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8 \
+            /bin/bash "$TASK_0008_STAGING/preflight.sh" \
+            "$TASK_0008_STAGING/source"
