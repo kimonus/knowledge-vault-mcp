@@ -1,0 +1,114 @@
+name: TASK-0010 one-off Ubuntu 22.04 Bubblewrap diagnostic
+
+on:
+  pull_request:
+    types: [opened]
+    branches: [main]
+    paths:
+      - .github/workflows/task-0010-bwrap-diagnostic.yml
+      - scripts/ci/task_0010_bwrap.sh
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task-0010-single-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  diagnostic:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.action == 'opened' &&
+      github.run_attempt == 1 &&
+      github.repository == 'kimonus/knowledge-vault-mcp' &&
+      github.event.repository.private == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'diagnostic/task-0010-ubuntu2204-bwrap'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0, existing CI pin
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Verify exact source and prepare disposable identity
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_ENVIRONMENT:$RUNNER_OS:$RUNNER_ARCH" = github-hosted:Linux:X64
+          test "$(uname -m)" = x86_64
+          . /etc/os-release
+          test "$ID:$VERSION_ID" = ubuntu:22.04
+          cat /etc/os-release
+          uname -a
+          echo "image_os=$ImageOS image_version=$ImageVersion"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          echo "source_revision=$EXPECTED_HEAD source_dirty=false"
+          sha256sum .github/workflows/ci.yml .github/workflows/task-0010-bwrap-diagnostic.yml scripts/ci/task_0010_bwrap.sh
+          if ! command -v bwrap; then
+            timeout 120s sudo apt-get update -o Acquire::Retries=0
+            timeout 120s sudo apt-get install --no-install-recommends --yes bubblewrap
+          fi
+          dpkg-query -W bubblewrap
+          /usr/bin/bwrap --version
+          stat -c 'bwrap_mode=%a owner=%u:%g' /usr/bin/bwrap
+          getent group 1000 || sudo groupadd --gid 1000 kv-diagnostic
+          getent passwd 1000 || sudo useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin kv-diagnostic
+          staging="$(mktemp -d /var/tmp/kv-task-0010.XXXXXXXX)"
+          echo "TASK_0010_STAGING=$staging" >> "$GITHUB_ENV"
+          test "$(stat -c %a "$staging")" = 700
+          install -m 700 scripts/ci/task_0010_bwrap.sh "$staging/probe.sh"
+          sudo chown -R 1000:1000 "$staging"
+          sudo -u '#1000' -g '#1000' namei -l "$staging/probe.sh"
+          sudo -u '#1000' -g '#1000' test -r "$staging/probe.sh"
+          for setting in kernel.apparmor_restrict_unprivileged_userns kernel.unprivileged_userns_clone user.max_user_namespaces; do
+            sysctl "$setting" || true
+          done
+          if test -r /sys/module/apparmor/parameters/enabled; then cat /sys/module/apparmor/parameters/enabled; fi
+          if command -v aa-status; then aa-status || true; fi
+      - name: One bounded unprivileged diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          unit="task-0010-${GITHUB_RUN_ID}.service"
+          set +e
+          timeout --signal=TERM --kill-after=10s 90s sudo systemd-run --unit="$unit" --wait --pipe \
+            --uid=1000 --gid=1000 \
+            --property=CPUQuota=100% --property=MemoryMax=1G \
+            --property=MemorySwapMax=0 --property=TasksMax=64 \
+            --property=RuntimeMaxSec=60 --property=TimeoutStopSec=5 \
+            --property=KillMode=control-group --property=NoNewPrivileges=yes \
+            --property=LimitFSIZE=16777216 --property=UMask=0077 \
+            --property=TemporaryFileSystem=/tmp:size=1G,mode=1777 \
+            /usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8 \
+            /bin/bash "$TASK_0010_STAGING/probe.sh"
+          service_exit=$?
+          set -e
+          echo "systemd_run_exit=$service_exit"
+          sudo systemctl show "$unit" -p Result -p ExecMainStatus -p ActiveState -p SubState \
+            -p ControlGroup -p TasksCurrent -p CPUQuotaPerSecUSec -p MemoryMax -p MemorySwapMax \
+            -p TasksMax -p RuntimeMaxUSec -p TimeoutStopUSec -p NoNewPrivileges -p KillMode
+          active="$(systemctl show "$unit" -p ActiveState --value)"
+          test "$active" = inactive || test "$active" = failed
+          cg="$(systemctl show "$unit" -p ControlGroup --value)"
+          if test -n "$cg" && test -e "/sys/fs/cgroup$cg/cgroup.procs"; then
+            test -z "$(cat "/sys/fs/cgroup$cg/cgroup.procs")"
+          fi
+          echo 'unfinished_service_descendants=0'
+          exit "$service_exit"
+      - name: Remove only owned diagnostic staging
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -n "${TASK_0010_STAGING:-}"; then
+            case "$TASK_0010_STAGING" in /var/tmp/kv-task-0010.????????) ;; *) exit 1 ;; esac
+            sudo -u '#1000' -g '#1000' /usr/bin/unlink "$TASK_0010_STAGING/probe.sh"
+            sudo -u '#1000' -g '#1000' /usr/bin/rmdir "$TASK_0010_STAGING"
+            test ! -e "$TASK_0010_STAGING"
+            echo 'owner_private_staging_removed=true'
+          fi
