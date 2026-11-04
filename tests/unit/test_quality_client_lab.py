@@ -2,11 +2,13 @@
 
 import asyncio
 import fcntl
+import hashlib
 import importlib.util
 import json
 import os
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 from pathlib import Path
@@ -15,10 +17,190 @@ from unittest.mock import patch
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "quality_client_lab.py"
+sys.path.insert(0, str(SCRIPT.parent))
+import m1_offline_model as offline_model  # noqa: E402
+
 spec = importlib.util.spec_from_file_location("quality_client_lab", SCRIPT)
 assert spec is not None and spec.loader is not None
 lab = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(lab)
+
+
+def independent_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    root = tmp_path / "independent"
+    root.mkdir()
+    monkeypatch.setattr(offline_model, "INDEPENDENT_ROOT", root)
+    snapshot = root / ("a" * 40)
+    snapshot.mkdir()
+    files = {
+        "modules.json": b"[]",
+        "config.json": b"{}",
+        "tokenizer_config.json": b"{}",
+        "model.safetensors": b"synthetic weights",
+    }
+    for name, content in files.items():
+        (snapshot / name).write_bytes(content)
+    manifest = root / f"{snapshot.name}.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "model_id": offline_model.MODEL_ID,
+                "revision": snapshot.name,
+                "dimensions": 384,
+                "files": {
+                    name: hashlib.sha256(content).hexdigest() for name, content in files.items()
+                },
+            }
+        )
+    )
+    return snapshot, manifest
+
+
+def test_verified_independent_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    snapshot, manifest = independent_snapshot(tmp_path, monkeypatch)
+    result = offline_model.verify_snapshot(snapshot, manifest)
+    assert result["revision"] == "a" * 40
+    assert result["file_count"] == 4
+
+
+@pytest.mark.parametrize("damage", ["missing", "changed", "symlink", "wrong_dimension"])
+def test_incomplete_or_unsafe_snapshot_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, damage: str
+) -> None:
+    snapshot, manifest = independent_snapshot(tmp_path, monkeypatch)
+    if damage == "missing":
+        (snapshot / "modules.json").unlink()
+    elif damage == "changed":
+        (snapshot / "model.safetensors").write_bytes(b"modified")
+    elif damage == "symlink":
+        (snapshot / "outside").symlink_to(tmp_path)
+    else:
+        content = json.loads(manifest.read_text())
+        content["dimensions"] = 768
+        manifest.write_text(json.dumps(content))
+    with pytest.raises(RuntimeError):
+        offline_model.verify_snapshot(snapshot, manifest)
+
+
+def test_offline_environment_uses_empty_cache(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+    with offline_model.offline_environment(cache):
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
+        assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
+        assert os.environ["HF_HOME"] == str(cache)
+        assert not list(cache.iterdir())
+    assert "HF_HOME" not in os.environ
+
+
+def test_semantic_mode_requires_verified_model_before_database(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        lab,
+        "check_host",
+        lambda: {
+            "memory_available_bytes": 8 * 1024**3,
+            "load_average_1m": 0.1,
+        },
+    )
+    with (
+        patch.object(lab, "disposable_postgres") as database,
+        pytest.raises(RuntimeError, match="independent M1 model root"),
+    ):
+        asyncio.run(
+            lab.run(
+                "semantic-smoke",
+                None,
+                model_path=Path("/absent"),
+                model_manifest=Path("/absent.json"),
+            )
+        )
+    database.assert_not_called()
+
+
+def test_semantic_capacity_rejects_pressure() -> None:
+    with pytest.raises(RuntimeError, match="5 GiB"):
+        lab.check_semantic_capacity({"memory_available_bytes": 4 * 1024**3, "load_average_1m": 0})
+
+
+@pytest.mark.parametrize(
+    "counts,success",
+    [((1, 1, 0), True), ((1, 0, 1), False), ((1, 1, 1), False), ((0, 0, 0), False)],
+)
+def test_semantic_index_must_be_complete(counts: tuple[int, int, int], success: bool) -> None:
+    class Connection:
+        def __init__(self) -> None:
+            self.values = iter(counts)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            pass
+
+        def scalar(self, _query: object) -> int:
+            return next(self.values)
+
+    class Engine:
+        def connect(self) -> Connection:
+            return Connection()
+
+        def dispose(self) -> None:
+            pass
+
+    url = "lab-only"
+    lab.ACTIVE_URLS.add(url)
+    try:
+        with patch.object(lab, "create_engine", return_value=Engine()):
+            if success:
+                assert lab.require_complete_index(url, 1, "model")["ready"] == 1
+            else:
+                with pytest.raises(RuntimeError, match="indexing incomplete"):
+                    lab.require_complete_index(url, 1, "model")
+    finally:
+        lab.ACTIVE_URLS.discard(url)
+
+
+def test_semantic_retrieval_rejects_lexical_or_degraded_fallback() -> None:
+    hit = {"assertion": {"id": "vector-id"}}
+    lab.require_vector_retrieval({"results": [hit], "embedding_degraded": False}, "vector-id", 0)
+    for results, degraded, lexical in [([hit], False, 1), ([hit], True, 0), ([], False, 0)]:
+        with pytest.raises(RuntimeError):
+            lab.require_vector_retrieval(
+                {"results": results, "embedding_degraded": degraded}, "vector-id", lexical
+            )
+
+
+async def test_semantic_model_load_failure_never_starts_database(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot, manifest = independent_snapshot(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        lab,
+        "check_host",
+        lambda: {
+            "memory_available_bytes": 8 * 1024**3,
+            "load_average_1m": 0.1,
+        },
+    )
+
+    class BrokenProvider:
+        def __init__(
+            self, _path: str, _dimensions: int, *, allow_download: bool, retry_after_seconds: float
+        ) -> None:
+            assert not allow_download and retry_after_seconds == 0
+
+        async def embed(self, _texts: list[str]) -> None:
+            raise RuntimeError("model initialization failed")
+
+    with (
+        patch.object(lab, "SentenceTransformerProvider", BrokenProvider),
+        patch.object(lab, "disposable_postgres") as database,
+        pytest.raises(RuntimeError, match="model initialization failed"),
+    ):
+        await lab.run("semantic-smoke", None, model_path=snapshot, model_manifest=manifest)
+    database.assert_not_called()
 
 
 @pytest.mark.parametrize(

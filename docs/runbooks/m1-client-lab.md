@@ -1,6 +1,46 @@
 # Isolated M1 client evaluation lab
 
-This lab supports the [independent client protocol](../architecture/knowledge-vault/client-evaluation-protocol.md). It is an infrastructure harness, not an assistant or scorer. It never connects to the production vault. The current smoke mode disables embeddings and therefore cannot measure multilingual retrieval quality.
+This lab supports the [independent client protocol](../architecture/knowledge-vault/client-evaluation-protocol.md). It is an infrastructure harness, not an assistant or scorer. It never connects to the production vault. The default smoke mode disables embeddings and therefore cannot measure multilingual retrieval quality. The separately selected semantic modes require an independently stored, verified offline snapshot.
+
+## Offline semantic readiness (2026-11-04)
+
+The target is `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensions. No independent snapshot or exact upstream revision has been established on this host. The previously observed model copy is in production storage and must remain untouched. Common independent cache locations (`/mnt/data/models`, the user Hugging Face cache, and the user local share cache) were absent on 2026-11-04. **The real-model readiness run is blocked until the operator supplies an independent snapshot and its full revision.** No model was downloaded or substituted.
+
+Use a separately acquired, complete snapshot at `/mnt/data/knowledge-vault-m1-models/<40-character-upstream-commit>/`. Acquisition requires explicit operator authorization and must take place without using the production model volume. Record the source URL, acquisition time, exact upstream commit, transfer method, and original checksum receipt in operator-local records. The directory must contain regular files only, including `modules.json`, `config.json`, `tokenizer_config.json`, and a weight file. Place a JSON manifest beside it at `/mnt/data/knowledge-vault-m1-models/<commit>.json` with `model_id`, `revision`, `dimensions`, and `files` mapping every relative file name to its SHA-256 digest. The manifest's revision must equal the directory name. The lab recomputes every hash, refuses missing or added files, symlinks and mounts, and records the manifest SHA-256. The manifest is a local integrity receipt; the operator's acquisition record establishes that the named commit is genuinely the upstream revision.
+
+After authorization, the operator can fetch from the model's upstream repository on a separate staging machine using `huggingface_hub.snapshot_download(repo_id="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", revision=FULL_UPSTREAM_COMMIT, local_dir=INDEPENDENT_STAGING_DIR)`. Confirm that `FULL_UPSTREAM_COMMIT` is a 40-character commit from the upstream repository, then transfer the complete resolved files into the dedicated root above. Generate the manifest from those transferred files, for example:
+
+```python
+from hashlib import sha256
+from json import dumps
+from pathlib import Path
+
+revision = "FULL_UPSTREAM_COMMIT"
+root = Path("/mnt/data/knowledge-vault-m1-models")
+snapshot = root / revision
+files = {}
+for path in sorted(snapshot.rglob("*")):
+    if path.is_symlink():
+        raise SystemExit("snapshot contains a symlink")
+    if path.is_file():
+        files[path.relative_to(snapshot).as_posix()] = sha256(path.read_bytes()).hexdigest()
+(root / f"{revision}.json").write_text(dumps({
+    "model_id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "revision": revision, "dimensions": 384, "files": files,
+}, sort_keys=True) + "\n")
+```
+
+Once the snapshot exists, run the following from the reviewed branch. The commands perform no model download. They require a fresh private cache and force both Hugging Face Hub and Transformers offline. The model provider additionally passes `local_files_only=True`. The semantic smoke loads one model instance before starting the disposable database, checks 384-dimensional output, indexes one synthetic assertion, requires every job to complete, and searches for `car fixed` against `The automobile was repaired yesterday.` after confirming that the lexical query has zero matches. A degraded search or missing vector result fails the run.
+
+```bash
+/tmp/uv-x86_64-unknown-linux-gnu/uv run --offline python scripts/quality_client_lab.py semantic-smoke \
+  --model-path /mnt/data/knowledge-vault-m1-models/<commit> \
+  --model-manifest /mnt/data/knowledge-vault-m1-models/<commit>.json
+```
+
+For a later isolated client evaluation, select `semantic-serve` with the same model arguments and an operator-local `--output`. It shares the single loaded model between query embedding and the lab worker and checks that every assertion is indexed when the run ends. The endpoint, database, token, watcher, owner-checked cleanup, and Docker restrictions are the same as the disabled smoke mode. A failed model load exits before database startup. The manifest records server commit, schema revision, model revision and manifest digest, and measured incremental process resident memory.
+
+Before either semantic command, check available RAM, Docker disk space, and one-minute load. The lab requires at least 5 GiB available RAM, 10 GiB Docker-root free space, and load below one runnable task per CPU. Its planning budget is 2 GiB for the model process plus the existing 768 MiB PostgreSQL cap and more than 2 GiB headroom. On 2026-11-04 the host had 14 GiB RAM, 7.6 GiB available, 3.9/4.0 GiB swap used, 23 GiB free on `/opt`, and load averages 0.20/0.28/0.44. These are a point-in-time assessment, not permission to run later. No real-model resource test was attempted.
 
 ## Safety preflight (2026-11-03)
 
@@ -46,7 +86,7 @@ The synthetic smoke used PostgreSQL 17.8 and schema `0006_temporal_evidence`. Th
 
 ## Genuine study operator workflow
 
-1. Obtain an **independent offline model cache copy** and verify its exact snapshot revision, file digest, offline load, 384-dimensional output, and memory on the lab host. Do not mount the production model volume. Enable embeddings in a reviewed follow-up lab configuration and verify indexing completion before quality measurements. The current disabled mode is only an infrastructure smoke.
+1. Obtain an **independent offline model snapshot** and verify its exact revision, file digests, offline load, 384-dimensional output, and memory on the lab host. Do not mount the production model volume. Run `semantic-smoke` successfully before any quality measurements. The default disabled mode remains only an infrastructure smoke.
 2. Generate `41 × 3 = 123` blinded development packets with `scripts/quality_client_packets.py --split dev --repetitions 3 --output /operator-local/m1/packets.json`. Keep the packet file and its SHA-256 outside Git. Do not run all packets as part of lab setup.
 3. Freeze client name/version, model/settings, fresh isolated profile, skill file path/digest, server commit, schema revision, PostgreSQL version, embedding revision/digest, host information, timing rules, run order and seed in a protected manifest. The harness writes `environment.json` with server and host facts and no credentials; add the client and reviewer process fields yourself.
 4. For each packet and repetition, start a new `serve` instance, confirm its fresh zero-count database, use a fresh client conversation, submit only the blinded source, ask the assistant to flush to **this lab MCP**, then ask the packet question or state request. Capture the complete client tool trace, emitted items, commit receipts, readback IDs, indexing status, retrieved context, answer, citations and abstention in an access-controlled local directory. Do not check raw traces into Git.
