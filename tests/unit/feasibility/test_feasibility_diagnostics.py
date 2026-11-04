@@ -2,6 +2,7 @@
 
 import json
 import os
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -111,9 +112,73 @@ def test_snapshot_overwrites_and_writer_refuses_symlink(diagnostic, tmp_path, mo
 def test_rejects_insecure_directory_before_file_creation(tmp_path):
     directory = tmp_path / "unsafe"
     directory.mkdir(mode=0o755)
+    directory.chmod(0o755)
+    assert stat.S_IMODE(directory.stat().st_mode) == 0o755
     with pytest.raises(ValueError, match="invalid diagnosis directory"):
         diagnosis.StartupDiagnostics(directory)
     assert not (directory / "startup.status").exists()
+
+
+@pytest.mark.parametrize("mask", [0o077, 0o022], ids=["umask-077", "umask-022"])
+def test_directory_permissions_under_isolated_umask(tmp_path, mask):
+    code = """
+import json
+import os
+import stat
+import sys
+import tempfile
+from pathlib import Path
+from scripts.feasibility_diagnostics import StartupDiagnostics
+
+mask = int(sys.argv[2])
+os.umask(mask)
+with tempfile.TemporaryDirectory(dir=sys.argv[1]) as parent_name:
+    parent = Path(parent_name)
+    assert stat.S_IMODE(parent.stat().st_mode) == 0o700
+    assert parent.stat().st_uid == os.getuid()
+    unsafe = parent / 'unsafe'
+    unsafe.mkdir(mode=0o755)
+    initial = stat.S_IMODE(unsafe.stat().st_mode)
+    assert initial == (0o755 & ~mask)
+    unsafe.chmod(0o755)
+    assert stat.S_IMODE(unsafe.stat().st_mode) == 0o755
+    assert unsafe.stat().st_uid == os.getuid()
+    try:
+        value = StartupDiagnostics(unsafe)
+    except ValueError as exc:
+        assert str(exc) == 'invalid diagnosis directory'
+    else:
+        value.close()
+        raise AssertionError('insecure directory accepted')
+    assert not (unsafe / 'startup.status').exists()
+    secure = parent / 'secure'
+    secure.mkdir(mode=0o700)
+    assert stat.S_IMODE(secure.stat().st_mode) == 0o700
+    assert secure.stat().st_uid == os.getuid()
+    value = StartupDiagnostics(secure)
+    try:
+        assert stat.S_IMODE(value.path.stat().st_mode) == 0o600
+        assert value.path.stat().st_uid == os.getuid()
+    finally:
+        value.close()
+    print(json.dumps({'umask': oct(mask), 'initial': oct(initial),
+                      'rejected': '0o755', 'accepted': '0o700', 'file': '0o600'}))
+"""
+    result = subprocess.run(  # noqa: S603  # Fixed offline code; pytest-owned path and mask.
+        [sys.executable, "-c", code, str(tmp_path), str(mask)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    assert not result.stderr
+    assert json.loads(result.stdout) == {
+        "umask": oct(mask),
+        "initial": oct(0o755 & ~mask),
+        "rejected": "0o755",
+        "accepted": "0o700",
+        "file": "0o600",
+    }
 
 
 def test_changed_during_read_is_not_published(diagnostic, monkeypatch):
