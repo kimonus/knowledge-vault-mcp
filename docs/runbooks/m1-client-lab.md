@@ -24,10 +24,18 @@ for path in sorted(snapshot.rglob("*")):
         raise SystemExit("snapshot contains a symlink")
     if path.is_file():
         files[path.relative_to(snapshot).as_posix()] = sha256(path.read_bytes()).hexdigest()
-(root / f"{revision}.json").write_text(dumps({
-    "model_id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-    "revision": revision, "dimensions": 384, "files": files,
-}, sort_keys=True) + "\n")
+(root / f"{revision}.json").write_text(
+    dumps(
+        {
+            "model_id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            "revision": revision,
+            "dimensions": 384,
+            "files": files,
+        },
+        sort_keys=True,
+    )
+    + "\n"
+)
 ```
 
 Once the snapshot exists, run the following from the reviewed branch. The commands perform no model download. They require a fresh private cache and force both Hugging Face Hub and Transformers offline. The model provider additionally passes `local_files_only=True`. The semantic smoke loads one model instance before starting the disposable database, checks 384-dimensional output, indexes one synthetic assertion, requires every job to complete, and searches for `car fixed` against `The automobile was repaired yesterday.` after confirming that the lexical query has zero matches. A degraded search or missing vector result fails the run.
