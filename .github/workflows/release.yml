@@ -55,7 +55,7 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run ruff check .
       - run: uv run pyright
-      - run: uv run pytest --cov --cov-branch --cov-report=json --cov-report=term-missing -q
+      - run: uv run pytest --cov=knowledge_vault --cov-branch --cov-report=json --cov-report=term-missing -q
       - run: uv run python scripts/check_coverage.py coverage.json
       - run: uv run pip-audit --path .venv/lib/python3.12/site-packages --progress-spinner off
       - run: uv run bandit -q -r src

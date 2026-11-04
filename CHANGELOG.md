@@ -7,6 +7,8 @@ stable release.
 
 ### Added
 
+- Synthetic-only isolated retrieval feasibility prototype with a read-scoped MCP client, bounded
+  gateway, local mock client and owner-checked workspace. It does not enable a hosted client study.
 - Isolated M1 client evaluation lab runbook and bounded, network-disabled PostgreSQL/MCP harness
   for synthetic infrastructure checks. Genuine evaluation still requires an independent offline
   embedding cache, a separately configured assistant client, and independent reviewers.
