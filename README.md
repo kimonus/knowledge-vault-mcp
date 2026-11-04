@@ -73,7 +73,7 @@ uv run ruff format --check .
 uv run ruff check .
 uv run pyright
 uv run pytest -q
-uv run pytest --cov --cov-branch --cov-report=term-missing --cov-report=xml
+uv run pytest --cov=knowledge_vault --cov-branch --cov-report=term-missing --cov-report=xml
 docker build --pull=false -t knowledge-vault:local .
 helm lint charts/knowledge-vault -f charts/knowledge-vault/values-minikube.yaml
 helm template knowledge-vault charts/knowledge-vault \
@@ -86,8 +86,10 @@ python3 "$CODEX_HOME/skills/.system/plugin-creator/scripts/validate_plugin.py" \
   plugin/knowledge-vault
 ```
 
-Integration and end-to-end tests use Testcontainers and require Docker. The coverage configuration
-enforces 90% statement coverage; the CI job separately checks 85% branch coverage.
+Integration and end-to-end tests use Testcontainers and require Docker. The global coverage gate
+measures only the `knowledge_vault` application package and enforces 90% statement and 85% branch
+coverage. CI measures feasibility tooling separately and publishes that report without an
+additional threshold.
 
 ## Configuration
 

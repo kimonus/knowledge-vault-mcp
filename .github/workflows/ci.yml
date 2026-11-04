@@ -23,21 +23,60 @@ jobs:
         with:
           version: "0.13.6"
           enable-cache: true
-      - run: uv sync --locked --extra embeddings
+      - name: Install locked dependencies
+        id: sync
+        run: uv sync --locked --extra embeddings
       - run: uv run ruff format --check .
       - run: uv run ruff check .
       - run: uv run pyright
-      - run: uv run pytest --cov --cov-branch --cov-report=term-missing --cov-report=json --cov-report=xml -q
-      - run: uv run python scripts/check_coverage.py coverage.json
-      - run: uv run pip-audit --path .venv/lib/python3.12/site-packages --progress-spinner off
-      - run: uv run bandit -q -r src
+      # An explicit source is required: bare --cov measures every imported file and overrides
+      # pyproject.toml's application-only source configuration.
+      - name: Test and measure application coverage
+        id: application-coverage
+        run: >-
+          uv run pytest --cov=knowledge_vault --cov-branch
+          --cov-report=term-missing --cov-report=json:coverage.json
+          --cov-report=xml:coverage.xml -q
+      - name: Measure feasibility tooling coverage
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
+        run: >-
+          uv run pytest tests/unit/feasibility
+          --cov=scripts --cov=scripts/feasibility_support
+          --cov-branch --cov-config=.coveragerc-feasibility
+          --cov-report=term-missing
+          --cov-report=json:feasibility-coverage.json
+          --cov-report=xml:feasibility-coverage.xml -q
+      - name: Check application coverage thresholds
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
+        run: |
+          if [[ -f coverage.json ]]; then
+            uv run python scripts/check_coverage.py coverage.json
+          else
+            echo "application coverage.json was not produced"
+            exit 1
+          fi
+      - name: Audit installed dependencies
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
+        run: uv run pip-audit --path .venv/lib/python3.12/site-packages --progress-spinner off
+      - name: Bandit source scan
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
+        run: uv run bandit -q -r src
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ always() && steps.sync.outcome == 'success' }}
         with:
-          name: coverage
+          name: application-coverage
           path: |
             coverage.xml
             coverage.json
-          if-no-files-found: error
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ always() && steps.sync.outcome == 'success' }}
+        with:
+          name: feasibility-tooling-coverage
+          path: |
+            feasibility-coverage.xml
+            feasibility-coverage.json
+          if-no-files-found: warn
 
   supply-chain:
     runs-on: ubuntu-24.04

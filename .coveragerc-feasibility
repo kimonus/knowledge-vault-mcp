@@ -1,0 +1,16 @@
+[run]
+# This report is informational; the application threshold remains in pyproject.toml.
+branch = True
+data_file = .coverage-feasibility
+source = scripts
+omit =
+    scripts/build_token_secret_patch.py
+    scripts/check_coverage.py
+    scripts/ci/*
+    scripts/generate_token.py
+    scripts/knowledge_vault_http_headers.py
+    scripts/quality_*.py
+
+[report]
+show_missing = True
+skip_covered = False

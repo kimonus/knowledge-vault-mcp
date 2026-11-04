@@ -58,7 +58,7 @@ uv run ruff check .
 uv run pyright
 uv run pytest tests/unit tests/property tests/contract
 uv run pytest tests/integration tests/e2e
-uv run pytest --cov --cov-branch --cov-report=json --cov-report=term-missing
+uv run pytest --cov=knowledge_vault --cov-branch --cov-report=json --cov-report=term-missing
 uv run python scripts/check_coverage.py coverage.json
 uv run pip-audit --progress-spinner off
 uv run bandit -q -r src
@@ -66,6 +66,10 @@ uv run bandit -q -r src
 
 Coverage must remain at least 90% statements and 85% branches for application code. Do not weaken
 tests, security checks, or exclusions to make a change pass.
+
+The global coverage run explicitly measures the `knowledge_vault` application package. CI publishes
+a separate explicit-source report for all feasibility Python modules; that report is informational
+and does not change the application thresholds.
 
 For container or deployment changes, also run:
 
