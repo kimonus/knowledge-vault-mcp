@@ -114,3 +114,102 @@ async def test_page_exhaustion_refuses_before_dispatch() -> None:
 def test_invalid_deadline_is_rejected(duration: float) -> None:
     with pytest.raises(ValueError):
         Limits(duration_seconds=duration)
+
+
+@pytest.mark.parametrize("value", [0, -1, True, 1.5])
+def test_count_limits_require_positive_integers(value: object) -> None:
+    with pytest.raises(ValueError, match="positive"):
+        Limits(calls=value)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments", "message"),
+    [
+        ("search_knowledge", {"query": "q", "unexpected": True}, "unsupported search"),
+        ("search_knowledge", {"query": "q", "limit": True}, "result limit"),
+        ("search_knowledge", {"query": "q", "limit": 0}, "result limit"),
+        ("get_knowledge", {}, "unsupported get"),
+        ("get_knowledge", {"assertion_id": "id", "extra": 1}, "unsupported get"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_invalid_tool_arguments_are_refused_before_dispatch(tool, arguments, message) -> None:
+    async def backend(name, args):
+        pytest.fail("invalid arguments reached the backend")
+
+    gateway = RetrievalGateway(backend, revision="synthetic")
+    with pytest.raises(Refused, match=message):
+        await gateway.invoke(tool, arguments)
+    assert gateway.trace.calls == 0
+    assert gateway.trace.refused == 1
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"results": None},
+        {"results": [None]},
+        {"results": [{}]},
+        {"results": [{"assertion": []}]},
+        {"results": [{"assertion": {"id": 1}}]},
+    ],
+)
+@pytest.mark.asyncio
+async def test_malformed_backend_search_responses_close_gateway(response) -> None:
+    async def backend(name, arguments):
+        return response
+
+    gateway = RetrievalGateway(backend, revision="synthetic")
+    with pytest.raises(Refused):
+        await gateway.invoke("search_knowledge", {"query": "q", "limit": 1})
+    assert gateway.trace.results == 0
+    with pytest.raises(Refused, match="prior failure"):
+        await gateway.invoke("get_knowledge", {"assertion_id": "id"})
+
+
+@pytest.mark.parametrize("response", [{}, {"id": None}, {"id": 5}])
+@pytest.mark.asyncio
+async def test_malformed_get_responses_are_refused(response) -> None:
+    async def backend(name, arguments):
+        return response
+
+    gateway = RetrievalGateway(backend, revision="synthetic")
+    with pytest.raises(Refused, match="id"):
+        await gateway.invoke("get_knowledge", {"assertion_id": "id"})
+    assert gateway.trace.events[0]["outcome"] == "failure"
+
+
+@pytest.mark.asyncio
+async def test_backend_failure_is_audited_and_closes_gateway() -> None:
+    async def backend(name, arguments):
+        raise OSError("synthetic backend failure")
+
+    gateway = RetrievalGateway(backend, revision="synthetic")
+    with pytest.raises(OSError, match="synthetic backend failure"):
+        await gateway.invoke("get_knowledge", {"assertion_id": "id"})
+    assert gateway.trace.events[0]["outcome"] == "failure"
+    with pytest.raises(Refused, match="prior failure"):
+        await gateway.invoke("get_knowledge", {"assertion_id": "id"})
+
+
+@pytest.mark.asyncio
+async def test_deadline_and_cumulative_response_size_are_enforced() -> None:
+    calls = 0
+
+    async def backend(name, arguments):
+        nonlocal calls
+        calls += 1
+        return {"id": str(calls)}
+
+    gateway = RetrievalGateway(backend, revision="synthetic", limits=Limits(response_bytes=18))
+    await gateway.invoke("get_knowledge", {"assertion_id": "one"})
+    with pytest.raises(Refused, match="byte limit"):
+        await gateway.invoke("get_knowledge", {"assertion_id": "two"})
+    assert gateway.trace.response_bytes > 0
+    assert gateway.trace.calls == 2
+
+    expired = RetrievalGateway(backend, revision="synthetic", limits=Limits(duration_seconds=0.01))
+    expired._deadline = 0
+    with pytest.raises(Refused, match="deadline"):
+        await expired.invoke("get_knowledge", {"assertion_id": "three"})
+    assert calls == 2

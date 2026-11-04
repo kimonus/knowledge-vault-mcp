@@ -27,6 +27,8 @@ def verify_layers(directory: Path) -> list[tuple[str, int]]:
     total = 0
     names: list[tuple[str, int]] = []
     for layer in layers:
+        if not isinstance(layer, dict) or "digest" not in layer or "size" not in layer:
+            raise ValueError("invalid layer metadata")
         digest, size = layer["digest"], layer["size"]
         if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
             raise ValueError("invalid layer digest")

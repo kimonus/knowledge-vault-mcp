@@ -79,3 +79,48 @@ def test_abandoned_unsettled_workspace_is_preserved(tmp_path: Path) -> None:
     with pytest.raises(WorkspaceError, match="manual recovery"):
         recover(workspace.root, workspace.owner)
     assert workspace.root.exists()
+
+
+def test_cleanup_requires_valid_owner_marker_and_private_mode(tmp_path: Path) -> None:
+    workspace = Workspace.create(tmp_path)
+    marker = workspace.root / "owner"
+    marker.unlink()
+    marker.symlink_to(tmp_path / "elsewhere")
+    with pytest.raises(WorkspaceError, match="owner mismatch"):
+        workspace.cleanup()
+    marker.unlink()
+    marker.write_text(workspace.owner, encoding="ascii")
+    workspace.root.chmod(0o777)
+    with pytest.raises(WorkspaceError, match="permissions mismatch"):
+        workspace.cleanup()
+    workspace.root.chmod(0o700)
+    workspace.cleanup()
+
+
+@pytest.mark.parametrize("owner", ["short", "g" * 32])
+def test_recovery_rejects_malformed_owner(tmp_path: Path, owner: str) -> None:
+    workspace = Workspace.create(tmp_path)
+    with pytest.raises(WorkspaceError, match="invalid owner"):
+        recover(workspace.root, owner)
+    workspace.cleanup()
+
+
+def test_recovery_requires_an_existing_owned_lock(tmp_path: Path) -> None:
+    workspace = Workspace.create(tmp_path)
+    os.close(workspace._descriptor)
+    (workspace.root / "lock").unlink()
+    with pytest.raises(WorkspaceError, match="lock unavailable"):
+        recover(workspace.root, workspace.owner)
+    assert workspace.root.exists()
+    (workspace.root / "lock").touch(mode=0o600)
+    recover(workspace.root, workspace.owner)
+    assert not workspace.root.exists()
+
+
+def test_double_launch_is_not_silently_accepted(tmp_path: Path) -> None:
+    workspace = Workspace.create(tmp_path)
+    workspace.mark_launched()
+    with pytest.raises(FileExistsError):
+        workspace.mark_launched()
+    workspace.mark_settled()
+    workspace.cleanup()
