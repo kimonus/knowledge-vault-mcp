@@ -41,7 +41,9 @@ On success the runner prints one JSON trace containing source commit and dirty s
 returned IDs, first-seen order, response bytes and durations. The IDs are generated from synthetic
 data. Agent-selected IDs, model-visible context and provider usage are null because no model or
 provider is present; do not infer them from the trace. This success trace is local output, separate
-from any scored gold. The prototype currently does not retain a complete trace on runner failure.
+from any scored gold. Supervised-run failures emit a minimal failure/timeout trace with unavailable
+gateway details marked null; they do not preserve partial tool events. Preflight and hard-kill
+failures may not produce a trace.
 Results are held until size and result-count checks pass, but the underlying MCP response is
 received before the gateway can check its encoded size.
 

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from scripts.feasibility_image import verify_layers
-from scripts.feasibility_lifecycle import run_pair
+from scripts.feasibility_lifecycle import RunError, run_pair
 from scripts.feasibility_workspace import Workspace
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -186,7 +186,28 @@ def main() -> None:
             raise RuntimeError("synthetic telemetry unavailable")
         print(json.dumps(json.loads(trace.read_text(encoding="utf-8"))))
 
-    run_pair(workspace, server, client, timeout=60, on_success=emit_trace)
+    try:
+        run_pair(workspace, server, client, timeout=60, on_success=emit_trace)
+    except Exception as exc:
+        is_timeout = isinstance(exc, RunError) and (
+            "timeout" in str(exc) or "timed out" in str(exc)
+        )
+        state = "timeout" if is_timeout else "failure"
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "source_revision": revision,
+                    "source_dirty": dirty,
+                    "state": state,
+                    "gateway": None,
+                    "agent_selected_ids": None,
+                    "model_visible_context": None,
+                    "provider_usage": None,
+                }
+            )
+        )
+        raise
     print("synthetic isolated feasibility smoke passed")
 
 
