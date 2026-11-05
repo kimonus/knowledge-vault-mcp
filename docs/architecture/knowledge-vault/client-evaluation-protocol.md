@@ -30,11 +30,18 @@ directory for packets, traces, truth review, judgments and results. Obtain conse
 source cases and keep them in that local store. Do not use production knowledge or credentials or
 place private source material, traces or judgments in Git or CI.
 
+Use two separately reported experimental arms: `lexical_only` disables embeddings and needs no
+local model; `hybrid` requires an independent verified offline embedding snapshot. Both
+may evaluate an actual assistant client's extraction, grounded answers, citations, temporal
+routing and abstention. Never pool arm metrics or interpret lexical-only observations as
+semantic-search quality. Neither requires an on-server generative LLM. A real assistant
+client and two independent human reviewers are still required.
+
 Record a manifest before running cases: UTC date, selected case IDs, packet/corpus SHA-256, run
 order and random seed, client name/version, client model and exact settings, MCP skill version or
-digest and installed path, server commit/image digest, Alembic revision, embedding model name and
-local weight revision/digest, PostgreSQL version, host CPU/RAM, index readiness, and whether model
-load time is included in timing. Use one configuration for all three repetitions. A fake vector
+digest and installed path, server commit/image digest, Alembic revision, `retrieval_mode`, embedding
+model name and local weight revision/digest (null in lexical-only mode), PostgreSQL version,
+host CPU/RAM, index readiness where applicable, and whether model load time is included in timing. Use one configuration for all three repetitions. A fake vector
 provider verifies plumbing but cannot support semantic quality claims. If the client cannot be
 automated, record manual operator actions and repeat them consistently.
 

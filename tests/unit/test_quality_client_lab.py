@@ -13,7 +13,7 @@ import sys
 import tempfile
 import threading
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -128,14 +128,58 @@ def test_snapshot_rejects_special_node_classification(
         offline_model.verify_snapshot(snapshot, manifest)
 
 
-def test_genuine_study_requires_semantic_serve() -> None:
+def test_study_runbook_distinguishes_lexical_and_semantic_arms() -> None:
     runbook = SCRIPT.parents[1] / "docs" / "runbooks" / "m1-client-lab.md"
     procedure = runbook.read_text(encoding="utf-8")
     study = procedure.split("## Genuine study operator workflow", 1)[1]
+    assert "new `serve` instance" in study
     assert "new `semantic-serve` instance" in study
-    assert "new `serve` instance" not in study
+    assert "quality_client_lab.py serve" in procedure
     assert "quality_client_lab.py semantic-serve" in procedure
-    assert "--model-path" in procedure and "--model-manifest" in procedure
+    assert "lexical_only" in procedure and "hybrid" in procedure
+
+
+@pytest.mark.parametrize("mode", ["serve", "smoke"])
+def test_no_model_provenance_cannot_claim_semantic_retrieval(mode: str) -> None:
+    result = lab.embedding_provenance(mode, "not-loaded", None, 99)
+    assert result["retrieval_mode"] == "lexical_only"
+    assert result["embedding_model"] is None
+    assert result["embedding_revision"] is None
+    assert result["embedding_manifest_sha256"] is None
+    assert result["embedding_model_rss_increment_bytes"] == 0
+    assert result["embedding_mode"] == (
+        "disabled lexical-only client evaluation"
+        if mode == "serve"
+        else "disabled infrastructure smoke"
+    )
+
+
+def test_semantic_provenance_requires_explicit_snapshot_metadata() -> None:
+    snapshot = {"revision": "a" * 40, "manifest_sha256": "b" * 64}
+    result = lab.embedding_provenance("semantic-serve", "verified-model", snapshot, 123)
+    assert result["retrieval_mode"] == "hybrid"
+    assert result["embedding_model"] == "verified-model"
+    assert result["embedding_revision"] == "a" * 40
+    assert result["embedding_manifest_sha256"] == "b" * 64
+    assert result["embedding_model_rss_increment_bytes"] == 123
+
+
+async def test_lexical_serve_never_initializes_embedding_provider(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        lab,
+        "check_host",
+        lambda: {"memory_available_bytes": 8 * 1024**3, "load_average_1m": 0.1},
+    )
+    with (
+        patch.object(lab, "SentenceTransformerProvider") as provider,
+        patch.object(lab, "run_database", new_callable=AsyncMock) as database,
+    ):
+        await lab.run("serve", tmp_path / "operator-run")
+    provider.assert_not_called()
+    database.assert_awaited_once()
+    assert database.await_args.args[4:] == (None, None, None, 0)
 
 
 def test_offline_environment_uses_empty_cache(tmp_path: Path) -> None:
