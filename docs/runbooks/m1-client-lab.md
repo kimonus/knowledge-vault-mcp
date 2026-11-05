@@ -8,6 +8,9 @@ This lab supports the [independent client protocol](../architecture/knowledge-va
 
 ## Lexical-only client evaluation (no local model)
 
+Use the [bounded assistant pilot](m1-client-pilot.md) before the full study. Its preparer reuses
+six existing cases and the existing packet builder; a prepared bundle executes zero client runs.
+
 The existing `serve` command supports a real assistant-client study using PostgreSQL full-text
 retrieval with embeddings disabled; no neural weights are downloaded or loaded:
 

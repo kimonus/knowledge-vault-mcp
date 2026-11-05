@@ -56,14 +56,14 @@ def test_audit_cannot_reuse_old_source_truth_binding():
 
 
 def test_source_remediation_preserves_fixture_identifiers_and_gold_contract():
-    # Freeze all non-source fields against the pre-remediation fixture contract.
+    # Freeze the revised contract, including attributed conflict reports.
     first = cases()
     contract = [
         {key: value for key, value in asdict(case).items() if key != "source"} for case in first
     ]
     assert (
         sha256(json.dumps(contract, sort_keys=True).encode()).hexdigest()
-        == "b66c61ace82efc950636a31fe046f253239b1d16bc3a43b5a64b6a75110255fb"
+        == "756abed5272cb10198acf7d387878fa98229693945eda9a2ccdf0d69c9bcce67"
     )
     assert len({case.id for case in first}) == 63
     keys = [claim.key for case in first for claim in case.claims]
@@ -80,3 +80,45 @@ def test_historical_corpus_digest_cannot_certify_corrected_experiment():
     manifest["corpus_sha256"] = "1afc3456c9f47938e45b33c1d5497c5861d961c219dd91a5a78081bb5d8a279a"
     with pytest.raises(ValueError, match="packet manifest differs"):
         score_judgments(cases(), [], packet_manifest=manifest, evaluation_mode="solo_operator")
+
+
+def test_pre_attribution_manifest_is_stale_even_with_unchanged_packet_text():
+    manifest = build_client_packets(cases(), split="dev", repetitions=3)
+    manifest["corpus_sha256"] = "2764de846bffe48b769e0f4b1d92386018936ca7f3941d81898229a084387128"
+    with pytest.raises(ValueError, match="packet manifest differs"):
+        score_judgments(cases(), [], packet_manifest=manifest, evaluation_mode="solo_operator")
+
+
+@pytest.mark.parametrize("case", [case for case in cases() if case.id.startswith("conflict-")])
+def test_conflicting_locations_remain_attributed_competing_reports(case):
+    assert case.state.outcome == "conflict"
+    assert case.state.values == ("room-a", "room-b")
+    assert [claim.key for claim in case.claims] == [case.id + "-a", case.id + "-b"]
+    for claim, prefix in zip(case.claims, ("One", "Another"), strict=True):
+        assert claim.payload["content"].startswith(prefix + " unverified note reports that ")
+        assert claim.payload["temporal"]["mode"] == "snapshot"
+        assert claim.payload["evidence_state"] == "reported"
+        assert claim.payload["observed_at"] == "2026-01-01T00:00:00Z"
+
+
+def test_categorical_conflict_approval_is_invalid_after_attribution_repair():
+    from copy import deepcopy
+    from dataclasses import replace
+
+    from .test_evaluation_modes import audit
+
+    corrected = next(case for case in cases() if case.id == "conflict-3")
+    old_claims = deepcopy(corrected.claims)
+    for claim, value in zip(old_claims, ("room-a", "room-b"), strict=True):
+        claim.payload["content"] = f"The thermostat is installed in {value}."
+    old = replace(corrected, claims=old_claims)
+    stale = audit()
+    stale.update(
+        case_id=corrected.id,
+        source_sha256=sha256(old.source.encode()).hexdigest(),
+        truth_card_sha256=truth_card_digest(old),
+    )
+    stale["provenance"]["evidence_sha256"] = stale["source_sha256"]
+    assert corrected.source == old.source
+    with pytest.raises(ValueError, match="card digest"):
+        validate_truth_audits((corrected,), [stale], "solo_operator")

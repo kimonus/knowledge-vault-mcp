@@ -48,3 +48,26 @@ execution, or a completed current-schema audit receipt. Missing generation/sourc
 metadata cannot be reconstructed as a verified claim. Exact Git commit and content hashes attest
 publication identity only. New corrected cards need their own recorded evaluation. No M1 quality
 gate is passed by these repairs or by generated packets.
+
+## Conflict attribution correction (second revision)
+
+Model semantic review found that `conflict-3` gold content asserted both locations categorically
+although the source supports only two unverified reports. All three conflict template siblings
+now attribute each location to its reporting note. Distinct evidence keys, timestamps, reported
+evidence state, competing values, source strings and expected `conflict` outcome are unchanged.
+This narrowly changes six gold content strings (two development, four held-out), so the earlier
+claim that all gold payloads are unchanged applies only to the first source correction above.
+
+| Corpus | Previous SHA-256 | Attribution-corrected SHA-256 |
+| --- | --- | --- |
+| Development (41) | `2764de846bffe48b769e0f4b1d92386018936ca7f3941d81898229a084387128` | `052266170d8039a87d2e9cd50c519451f2ad3a4d0bee211074ae1d4e209d9905` |
+| Full (63) | `410683e368ce8f47e318bd672a460166ca4e30159963176c7c0b0d74efbd7a47` | `6670b668a68aeeb3ada2f144439f438eda5c348bcbfaff84c4eefc2f67a50800` |
+
+Regenerate the whole development manifest even though its blinded source/task text is identical:
+the corpus digest binds expected truth too. An old `conflict-3` audit is incompatible even when
+its source digest matches; its truth-card digest must match the revised gold labels. The prior
+`needs_revision` verdict is retained historically, never changed to accepted by editing its hash.
+The other 40 accepted model reviews may be explicitly imported only after verifying both their
+source and truth-card hashes are unchanged, their real review artifact hash, and original
+reviewer/time/type. Record the import and any receipt repair separately; never call it a new
+independent review. The changed card needs a newly recorded semantic assessment.

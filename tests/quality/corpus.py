@@ -402,7 +402,7 @@ def cases() -> tuple[Case, ...]:
                 (
                     _claim(
                         left,
-                        f"The {subject} is installed in room-a.",
+                        f"One unverified note reports that the {subject} is installed in room-a.",
                         "configuration",
                         evidence_state="reported",
                         observed_at="2026-01-01T00:00:00Z",
@@ -410,7 +410,8 @@ def cases() -> tuple[Case, ...]:
                     ),
                     _claim(
                         right,
-                        f"The {subject} is installed in room-b.",
+                        "Another unverified note reports that "
+                        f"the {subject} is installed in room-b.",
                         "configuration",
                         evidence_state="reported",
                         observed_at="2026-01-01T00:00:00Z",

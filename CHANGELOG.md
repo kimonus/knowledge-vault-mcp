@@ -7,6 +7,9 @@ stable release.
 
 ### Added
 
+- Bounded, blinded lexical M1 pilot preparation using six existing development cases, a seeded
+  execution order, private artifacts and explicit missing evidence; no assistant is simulated.
+
 - Auditable M1 `solo_operator` scoring with one evaluator, explicit human/model/deterministic
   provenance, optional manual review, trace-bound client receipts and missing-judgment reporting.
   Readable source/truth cards and exported audit/judgment/receipt JSON Schemas support operator
@@ -55,6 +58,10 @@ stable release.
   revision 0006. Application rollback retains attached evidence in the additive table.
 
 ### Fixed
+
+- M1 conflict gold text now attributes each location to an unverified report, preserving both
+  competing records and the expected conflict outcome. Regenerate manifests for the second
+  corpus digest revision and re-audit the changed card; old approvals cannot be hash-rewritten.
 
 - Synthetic M1 sources now explicitly support gold observation timestamps and multilingual
   preference attribution; fixture identity aliases are documented separately from source facts.
