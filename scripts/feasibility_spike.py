@@ -156,6 +156,9 @@ def prepare_run_commands(
             "--setenv",
             "LC_ALL",
             "C",
+            "--setenv",
+            "LD_LIBRARY_PATH",
+            f"/{IMAGE_MOUNT_TARGETS[0]}/lib",
             f"/{IMAGE_MOUNT_TARGETS[0]}/bin/python3.12",
             "/tmp/client-probe.py",  # noqa: S108  # Private namespace mount.
         ]
