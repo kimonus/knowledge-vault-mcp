@@ -81,7 +81,7 @@ PYTHONPATH="$staging/orchestration:$staging/source/src" \
   "$staging/orchestration/tests/unit/feasibility/test_ci_evidence_gate.py" \
   "$staging/orchestration/tests/unit/feasibility/test_ci_checkout_history.py" -q
 stage=offline_guards
-timeout -k 5s 30s .venv/bin/python "$staging/orchestration/scripts/ci/task_0014_guards.py" "$staging/orchestration"
+timeout -k 5s 30s .venv/bin/python "$staging/orchestration/scripts/ci/task_0014_guards.py" "$staging/orchestration" "$staging/source"
 timeout -k 5s 30s .venv/bin/python "$staging/orchestration/scripts/ci/task_0014_offline.py"
 timeout -k 5s 30s .venv/bin/ruff check scripts/feasibility_diagnostics.py scripts/feasibility_lifecycle.py scripts/feasibility_spike.py scripts/feasibility_support/startup.py scripts/feasibility_support/server.py tests/unit/feasibility/test_feasibility_diagnostics.py
 sha256sum scripts/feasibility_diagnostics.py scripts/feasibility_lifecycle.py scripts/feasibility_spike.py scripts/feasibility_support/server.sh scripts/feasibility_support/server.py scripts/feasibility_support/startup.py tests/unit/feasibility/test_feasibility_diagnostics.py

@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -106,3 +107,46 @@ def test_workflow_guard_rejects_shallow_orchestration_history(tmp_path, depth):
             guards.main(tmp_path)
     else:
         guards.main(tmp_path)
+
+
+def test_bootstrap_gate_works_without_project_dependencies():
+    code = """
+import importlib.util
+import os
+import runpy
+import sys
+from unittest.mock import patch
+
+assert importlib.util.find_spec('yaml') is None
+os.environ['EXPECTED_HEAD'] = ''
+with patch('urllib.request.urlopen', side_effect=AssertionError('network forbidden')):
+    try:
+        runpy.run_path(sys.argv[1], run_name='__main__')
+    except SystemExit as exc:
+        assert str(exc) == 'BLOCKED: invalid_head'
+    else:
+        raise AssertionError('invalid input authorized')
+"""
+    result = subprocess.run(  # noqa: S603  # Fixed isolated interpreter and offline test code.
+        [sys.executable, "-I", "-S", "-c", code, str(ROOT / "scripts/ci/task_0014_ci_gate.py")],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    assert result.stdout == result.stderr == ""
+
+
+def test_project_checkout_guard_uses_locked_python_after_sync_before_oci():
+    workflow = yaml.load((ROOT / WORKFLOW).read_text(), Loader=yaml.BaseLoader)  # noqa: S506
+    steps = workflow["jobs"]["smoke"]["steps"]
+    preparation = next(step for step in steps if step.get("name", "").startswith("Prepare owned"))
+    assert "task_0014_guards.py" not in preparation["run"]
+    runner = (ROOT / "scripts/ci/task_0014_run.sh").read_text()
+    call = (
+        "timeout -k 5s 30s .venv/bin/python "
+        '"$staging/orchestration/scripts/ci/task_0014_guards.py" '
+        '"$staging/orchestration" "$staging/source"'
+    )
+    assert runner.count(call) == 1
+    assert runner.index("uv sync --locked") < runner.index(call) < runner.index("stage=oci_fetch")
