@@ -32,7 +32,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           path: orchestration
-          fetch-depth: 2
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
         with:
