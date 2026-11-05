@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from scripts.feasibility_diagnostics import StartupDiagnostics
 from scripts.feasibility_image import verify_layers
 from scripts.feasibility_lifecycle import RunError, run_pair
 from scripts.feasibility_workspace import Workspace
@@ -129,6 +130,9 @@ def prepare_run_commands(
             "--bind",
             str(telemetry),
             "/tmp/telemetry",  # noqa: S108  # Server-only telemetry mount.
+            "--bind",
+            str(workspace.root / "diagnostics/startup.status"),
+            "/tmp/startup.status",  # noqa: S108  # Single server-only diagnostic file.
             "--setenv",
             "KV_SOURCE_REVISION",
             revision,
@@ -152,6 +156,9 @@ def prepare_run_commands(
             "--setenv",
             "LC_ALL",
             "C",
+            "--setenv",
+            "LD_LIBRARY_PATH",
+            f"/{IMAGE_MOUNT_TARGETS[0]}/lib",
             f"/{IMAGE_MOUNT_TARGETS[0]}/bin/python3.12",
             "/tmp/client-probe.py",  # noqa: S108  # Private namespace mount.
         ]
@@ -186,7 +193,11 @@ def main() -> None:
     image_root = workspace.root / "rootfs"
     process = None
     launch_attempted = False
+    diagnostics = None
     try:
+        diagnostic_directory = workspace.root / "diagnostics"
+        diagnostic_directory.mkdir(mode=0o700)
+        diagnostics = StartupDiagnostics(diagnostic_directory)
         image_root.mkdir(mode=0o700)
         staged_layers = workspace.root / "layers"
         staged_layers.mkdir(mode=0o700)
@@ -211,6 +222,7 @@ def main() -> None:
         verify_layers(staged_layers)
         launch_attempted = True
         workspace.mark_launched()
+        diagnostics.mark("image_staging")
         process = subprocess.Popen(  # noqa: S603  # Fixed command and verified layers.
             staging_command(staged_layers, image_root),
             stdout=subprocess.DEVNULL,
@@ -218,8 +230,10 @@ def main() -> None:
         )
         if process.wait(timeout=120) != 0:
             raise RuntimeError("isolated image staging failed")
+        diagnostics.mark("image_staging", "completed")
         workspace.mark_settled()
-    except BaseException:
+    except BaseException as exc:
+        observed_returncode = process.poll() if process is not None else None
         settled = process is None or process.poll() is not None
         if process is not None and not settled:
             try:
@@ -228,16 +242,32 @@ def main() -> None:
                 settled = process.poll() is not None
             except BaseException:
                 settled = False
+        if diagnostics is not None:
+            diagnostics.capture(
+                observed_returncode,
+                (
+                    "staging_timeout"
+                    if isinstance(exc, subprocess.TimeoutExpired)
+                    else "staging_error"
+                ),
+                settled,
+            )
+            print(json.dumps({"startup": diagnostics.report}))
+            diagnostics.close()
         if settled:
             if launch_attempted:
                 marker = workspace.root / "child-unsettled"
                 if marker.exists() or marker.is_symlink():
                     workspace.mark_settled()
             workspace.cleanup()
+        raise SystemExit(1) from None
+    try:
+        server, client, telemetry = prepare_run_commands(
+            workspace, image_root, python_root, site, revision, dirty
+        )
+    except BaseException:
+        diagnostics.close()
         raise
-    server, client, telemetry = prepare_run_commands(
-        workspace, image_root, python_root, site, revision, dirty
-    )
 
     def emit_trace() -> None:
         trace = telemetry / "trace.json"
@@ -246,7 +276,9 @@ def main() -> None:
         print(json.dumps(json.loads(trace.read_text(encoding="utf-8"))))
 
     try:
-        run_pair(workspace, server, client, timeout=60, on_success=emit_trace)
+        run_pair(
+            workspace, server, client, timeout=60, on_success=emit_trace, diagnostics=diagnostics
+        )
     except Exception as exc:
         is_timeout = isinstance(exc, RunError) and (
             "timeout" in str(exc) or "timed out" in str(exc)
@@ -259,6 +291,7 @@ def main() -> None:
                     "source_revision": revision,
                     "source_dirty": dirty,
                     "state": state,
+                    "startup": diagnostics.report,
                     "gateway": None,
                     "agent_selected_ids": None,
                     "model_visible_context": None,
@@ -266,7 +299,11 @@ def main() -> None:
                 }
             )
         )
-        raise
+        raise SystemExit(1) from None
+    finally:
+        if diagnostics.report:
+            print(json.dumps({"startup": diagnostics.report}))
+        diagnostics.close()
     print("synthetic isolated feasibility smoke passed")
 
 

@@ -1,8 +1,94 @@
+import os
+import shlex
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
 from scripts import feasibility_spike
 from scripts.feasibility_workspace import Workspace
+
+
+def test_library_path_is_mapped_and_not_inherited_by_postgres(tmp_path, monkeypatch):
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/untrusted-host-library")
+    workspace = Workspace.create(tmp_path)
+    image = workspace.root / "rootfs"
+    image.mkdir()
+    try:
+        server, client, _ = feasibility_spike.prepare_run_commands(
+            workspace, image, tmp_path, tmp_path, "synthetic", False
+        )
+        assert "LD_LIBRARY_PATH" not in server
+        index = client.index("LD_LIBRARY_PATH")
+        assert client[index - 1 : index + 2] == ["--setenv", "LD_LIBRARY_PATH", "/opt/python/lib"]
+        for command in (server, client):
+            assert "--clearenv" in command and "/untrusted-host-library" not in command
+            assert command[command.index(str(tmp_path)) - 1] == "--ro-bind"
+    finally:
+        workspace.cleanup_if_settled()
+
+
+@pytest.mark.parametrize("inherited", [None, "/untrusted-host-library"])
+def test_python_helper_recovers_relocated_elf_without_exporting_library_path(tmp_path, inherited):
+    """Use a tiny real ELF fixture; no image, database, model or namespace is started."""
+    compiler = shutil.which("cc")
+    if compiler is None:
+        pytest.skip("C compiler unavailable for the offline ELF relocation regression")
+    runtime = tmp_path / "original"
+    (runtime / "bin").mkdir(parents=True)
+    (runtime / "lib").mkdir()
+    library = tmp_path / "library.c"
+    library.write_text("int kv_loader_fixture(void) { return 0; }\n")
+    main = tmp_path / "main.c"
+    main.write_text(
+        "extern int kv_loader_fixture(void); int main(void) { return kv_loader_fixture(); }\n"
+    )
+    env = {"PATH": os.defpath, "LC_ALL": "C"}
+    for command in (
+        [
+            compiler,
+            "-shared",
+            "-fPIC",
+            str(library),
+            "-o",
+            str(runtime / "lib/libkv_loader_fixture.so"),
+        ],
+        [
+            compiler,
+            str(main),
+            "-L" + str(runtime / "lib"),
+            "-lkv_loader_fixture",
+            "-Wl,-rpath," + str(runtime / "lib"),
+            "-o",
+            str(runtime / "bin/python3.12"),
+        ],
+    ):
+        subprocess.run(  # noqa: S603  # Installed compiler; fixed fixture code and owned paths.
+            command, env=env, capture_output=True, check=True, timeout=20
+        )
+    relocated = tmp_path / "relocated"
+    runtime.rename(relocated)
+    result = subprocess.run(  # noqa: S603  # Only the compiled fixture, not a server/Python.
+        [str(relocated / "bin/python3.12")], env=env, capture_output=True, timeout=5
+    )
+    assert result.returncode == 127
+    assert b"libkv_loader_fixture.so" in result.stderr
+
+    script = (feasibility_spike.SUPPORT / "server.sh").read_text()
+    start = script.index("python_runtime() {\n")
+    helper = script[start : script.index("\n}", start) + 2]
+    helper = helper.replace(
+        "/opt/python/bin/python3.12", shlex.quote(str(relocated / "bin/python3.12"))
+    ).replace("/opt/python/lib", shlex.quote(str(relocated / "lib")))
+    caller_env = env if inherited is None else {**env, "LD_LIBRARY_PATH": inherited}
+    result = subprocess.run(  # noqa: S603  # Actual fixed helper, fixture paths shell-quoted.
+        ["/bin/sh", "-ec", helper + '\npython_runtime\nprintf "%s" "${LD_LIBRARY_PATH-unset}"'],
+        env=caller_env,
+        capture_output=True,
+        check=True,
+        timeout=5,
+    )
+    assert result.stdout == (inherited or "unset").encode() and result.stderr == b""
 
 
 @pytest.mark.parametrize("link_path", ["opt", "opt/python", "opt/site", "opt/repo"])

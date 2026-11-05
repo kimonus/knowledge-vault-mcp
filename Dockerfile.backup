@@ -17,6 +17,7 @@ FROM postgres:17-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944
 # Keep the OpenSSL fix until the pinned base contains it; gosu is unused by this image.
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends --only-upgrade \
+      apt=2.6.2 libapt-pkg6.0=2.6.2 \
       libssl3=3.0.22-1~deb12u2 openssl=3.0.22-1~deb12u2 \
     && rm -rf /var/lib/apt/lists/* \
     && rm -f /usr/local/bin/gosu /etc/ssl/private/ssl-cert-snakeoil.key

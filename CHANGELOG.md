@@ -35,6 +35,8 @@ stable release.
 
 ### Fixed
 
+- Feasibility Python launches use the relocated read-only runtime's own library directory;
+  the server scopes this loader path to Python so PostgreSQL keeps the image's library search.
 - M1 lab MCP probes ignore inherited proxies and other HTTP environment settings. An owned,
   detached watcher cleans up a disposable run even when a PTY wrapper stops before Python's
   signal handler; crash recovery remains owner checked and idempotent.
