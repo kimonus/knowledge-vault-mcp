@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-BRANCH = "diag/task-0014-umask-fixture"
+BRANCH = "diag/task-0014-ci-gate-retry"
 SOURCE = "14f9517e51e5221a00ae53833cf03360298f0e7c"
 BASE_CI = "ea25e70a377c4844119d8a681d032177f6ab4a86574a1a27d07201716b751fa6"
 BASE_RELEASE = "efd61c675a3b9fdb4f6d00f5529d89e6a53ca97075e3eefd08eaf7eb071eaf1b"
@@ -141,6 +141,7 @@ def checkouts(orchestration: Path, source: Path) -> None:
     expected_orchestration = {
         ".github/workflows/ci.yml",
         ".github/workflows/task-0014-synthetic-smoke.yml",
+        "tests/unit/feasibility/test_ci_evidence_gate.py",
         *(
             "scripts/ci/task_0014_" + name
             for name in ("bwrap.sh", "ci_gate.py", "guards.py", "offline.py", "run.sh", "verify.py")
