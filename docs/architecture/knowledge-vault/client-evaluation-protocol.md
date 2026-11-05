@@ -92,6 +92,7 @@ freeze a new experiment revision before collecting replacement results; preserve
 The 41 development cases and 123 planned packets remain unchanged by this workflow change.
 
 One `TruthAudit` receipt records `case_id`, opaque `audit_id`, `reviewer_id`, source SHA-256,
+`truth_card_sha256` (the canonical case including expected labels),
 `artifact_sha256`, provenance, `verdict`, `independent`, `before_client_output`, and optional notes.
 Hash the separately completed review artifact (for example the evaluator's dated Markdown
 decisions), not the receipt JSON containing its own digest. An accepted source audit requires

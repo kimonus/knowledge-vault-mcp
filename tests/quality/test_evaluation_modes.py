@@ -4,6 +4,7 @@ import copy
 import json
 import subprocess
 import sys
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from pydantic import TypeAdapter
 
 from .client_packets import build_client_packets
 from .corpus import cases
-from .evaluation import TruthAudit, validate_truth_audits
+from .evaluation import TruthAudit, truth_card_digest, validate_truth_audits
 from .judgments import SoloCaseJudgment, score_judgments
 
 CASE = next(case for case in cases() if case.id == "decision-0")
@@ -43,6 +44,7 @@ def audit(reviewer="operator", kind="human", independent=False, artifact="b" * 6
         "audit_id": reviewer + "-audit",
         "reviewer_id": reviewer,
         "source_sha256": source,
+        "truth_card_sha256": truth_card_digest(CASE),
         "artifact_sha256": artifact,
         "provenance": provenance(kind, source),
         "verdict": "accepted",
@@ -262,6 +264,9 @@ def test_truth_revision_source_binding_and_unknown_cases():
     raw["provenance"]["evidence_sha256"] = "e" * 64
     with pytest.raises(ValueError, match="source digest"):
         validate_truth_audits((CASE,), [raw], "solo_operator")
+    changed_labels = replace(CASE, claims=())
+    with pytest.raises(ValueError, match="card digest"):
+        validate_truth_audits((changed_labels,), [audit()], "solo_operator")
 
 
 def test_arms_and_client_trace_provenance_cannot_be_pooled_or_forged():

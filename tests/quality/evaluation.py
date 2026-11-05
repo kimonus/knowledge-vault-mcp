@@ -1,6 +1,8 @@
 """Recorded evaluation provenance, distinct from evidence of reviewer independence."""
 
+import json
 from collections import Counter
+from dataclasses import asdict
 from hashlib import sha256
 from typing import Annotated, Any, Literal
 
@@ -13,6 +15,11 @@ RetrievalMode = Literal["lexical_only", "hybrid"]
 Identifier = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
 Digest = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
 JudgmentKind = Literal["human", "deterministic", "model"]
+
+
+def truth_card_digest(case: Case) -> str:
+    """Bind audits to expected labels as well as source text."""
+    return sha256(json.dumps(asdict(case), sort_keys=True, default=str).encode()).hexdigest()
 
 
 class Provenance(BaseModel):
@@ -47,6 +54,7 @@ class TruthAudit(BaseModel):
     audit_id: Identifier
     reviewer_id: Identifier
     source_sha256: Digest
+    truth_card_sha256: Digest
     artifact_sha256: Digest
     provenance: Provenance
     verdict: Literal["accepted", "needs_revision", "unjudged"]
@@ -113,6 +121,8 @@ def validate_truth_audits(
             raise ValueError("unknown truth-audit case")
         if audit.source_sha256 != sha256(by_id[audit.case_id].source.encode()).hexdigest():
             raise ValueError("truth audit source digest differs from the frozen corpus")
+        if audit.truth_card_sha256 != truth_card_digest(by_id[audit.case_id]):
+            raise ValueError("truth audit card digest differs from the frozen labels")
         reviewer = (audit.case_id, audit.reviewer_id.casefold())
         artifact = (audit.case_id, audit.artifact_sha256)
         if audit.audit_id in audit_ids or artifact in artifacts or reviewer in reviewers:

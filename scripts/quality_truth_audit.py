@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests"))
 
 from quality.corpus import cases
+from quality.evaluation import truth_card_digest
 
 
 def main() -> None:
@@ -73,6 +74,7 @@ def main() -> None:
                 "audit_id": None,
                 "reviewer_id": None,
                 "source_sha256": digest,
+                "truth_card_sha256": truth_card_digest(case),
                 "artifact_sha256": None,
                 "provenance": {
                     "kind": None,
