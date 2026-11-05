@@ -59,6 +59,12 @@ stable release.
 
 ### Fixed
 
+- MCP clients receive a minimal valid assertion example and explicit metadata dependencies in
+  initialization/tool schemas: provenance locators, kind/state matching, active conflicting
+  reports, historical roles, ASCII identities and UUID usage events. This addresses actual M1
+  ingestion losses without relaxing server validation or changing source truth. After upgrade,
+  reconnect clients to refresh instructions/tool schemas; no database/configuration change.
+
 - M1 audit validation rejects source/truth-card digests used as a completed-review artifact
   digest. Importers must explicitly verify and seal the actual review artifact; semantic
   decisions and original provenance remain distinct from receipt normalization.

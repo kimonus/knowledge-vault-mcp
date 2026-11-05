@@ -105,7 +105,14 @@ class AssertionInput(KnowledgeMetadata):
     content: Annotated[SafeText, Field(min_length=1, max_length=16_000)]
     kind: AssertionKind
     origin: AssertionOrigin
-    status: AssertionStatus = AssertionStatus.CURRENT
+    status: AssertionStatus = Field(
+        default=AssertionStatus.CURRENT,
+        description=(
+            "current means active evidence, not verified truth. Keep competing active source "
+            "reports current with evidence_state=reported; the resolver determines conflict. "
+            "disputed/uncertain evidence is unreliable for state resolution."
+        ),
+    )
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     topics: list[Topic] = Field(default_factory=list, max_length=32)
     sources: list[SourceInput] = Field(default_factory=list, max_length=16)
@@ -116,7 +123,14 @@ class AssertionInput(KnowledgeMetadata):
     supersedes_id: UUID | None = None
     # IDs returned by commit_knowledge_artifact; the assertion describes those artifacts.
     artifact_ids: list[UUID] = Field(default_factory=list, max_length=8)
-    temporal: TemporalInput | None = None
+    temporal: TemporalInput | None = Field(
+        default=None,
+        description=(
+            "Optional structured configuration/preference/fact evidence. Omit for decisions, "
+            "procedures and rejected options; preserve their content and rationale directly. "
+            "For observed/corrected state, assertion kind must match identity.state_type."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_semantics(self) -> "AssertionInput":
