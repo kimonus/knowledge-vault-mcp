@@ -81,6 +81,33 @@ async def test_sentence_transformer_provider_wraps_load_error(
         await provider.embed(["private text"])
 
 
+async def test_sentence_transformer_provider_recovers_after_failed_first_load(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts = 0
+
+    class FlakyModel:
+        def __init__(self, _model_id: str, *, local_files_only: bool) -> None:
+            nonlocal attempts
+            assert local_files_only
+            attempts += 1
+            if attempts == 1:
+                raise OSError("interrupted initialization")
+
+        def encode(self, texts: list[str], *, normalize_embeddings: bool) -> list[list[float]]:
+            assert normalize_embeddings
+            return [[1.0, 0.0] for _ in texts]
+
+    monkeypatch.setitem(
+        sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=FlakyModel)
+    )
+    provider = SentenceTransformerProvider("independent-model", dimensions=2, retry_after_seconds=0)
+    with pytest.raises(EmbeddingsUnavailableError):
+        await provider.embed(["probe"])
+    assert await provider.embed(["probe"]) == [[1.0, 0.0]]
+    assert attempts == 2
+
+
 async def test_sentence_transformer_provider_loads_once_under_concurrent_first_calls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

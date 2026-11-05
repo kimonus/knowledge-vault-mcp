@@ -7,6 +7,10 @@ stable release.
 
 ### Added
 
+- Separate offline semantic mode for the isolated M1 client lab. It requires an independent
+  full-revision model snapshot and SHA-256 manifest, verifies dimensions, complete indexing,
+  and vector-only retrieval, and records model and memory provenance. The existing disabled
+  smoke remains available; a real-model run awaits an independently acquired snapshot.
 - Synthetic-only isolated retrieval feasibility prototype with a read-scoped MCP client, bounded
   gateway, local mock client and owner-checked workspace. It does not enable a hosted client study.
 - Isolated M1 client evaluation lab runbook and bounded, network-disabled PostgreSQL/MCP harness
