@@ -29,6 +29,7 @@ import httpx2
 import uvicorn
 from alembic import command
 from alembic.config import Config
+from m1_offline_model import DIMENSIONS, offline_environment, verify_snapshot
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from sqlalchemy import create_engine, text
@@ -36,6 +37,8 @@ from sqlalchemy import create_engine, text
 from knowledge_vault.api.app import create_app
 from knowledge_vault.config import Settings
 from knowledge_vault.container import build_container
+from knowledge_vault.embeddings.providers import SentenceTransformerProvider
+from knowledge_vault.worker.jobs import EmbeddingWorker
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_URLS: set[str] = set()
@@ -126,7 +129,26 @@ def check_host() -> dict[str, object]:
     if memory["MemAvailable"] < 4 * 1024**3:
         raise RuntimeError("less than 4 GiB memory available")
     docker("image", "inspect", IMAGE, "--format", "{{.Id}}")
-    return {"docker_root_free_bytes": free, "memory_available_bytes": memory["MemAvailable"]}
+    return {
+        "docker_root_free_bytes": free,
+        "memory_available_bytes": memory["MemAvailable"],
+        "load_average_1m": os.getloadavg()[0],
+    }
+
+
+def check_semantic_capacity(preflight: dict[str, object]) -> None:
+    # Budget 2 GiB for one model copy, 768 MiB for PostgreSQL, and >2 GiB headroom.
+    if cast(int, preflight["memory_available_bytes"]) < 5 * 1024**3:
+        raise RuntimeError("semantic lab needs at least 5 GiB available RAM")
+    if cast(float, preflight["load_average_1m"]) > (os.cpu_count() or 1):
+        raise RuntimeError("host load is too high for semantic lab")
+
+
+def resident_bytes() -> int:
+    for line in Path("/proc/self/status").read_text(encoding="ascii").splitlines():
+        if line.startswith("VmRSS:"):
+            return int(line.split()[1]) * 1024
+    raise RuntimeError("cannot measure lab process resident memory")
 
 
 def owned_resource(kind: str, name: str, owner: str) -> bool:
@@ -666,7 +688,7 @@ def reset_and_verify(url: str) -> None:
         engine.dispose()
 
 
-def credentials(url: str) -> tuple[Settings, str]:
+def credentials(url: str, model_path: Path | None = None) -> tuple[Settings, str]:
     token = secrets.token_urlsafe(48)
     pepper = secrets.token_urlsafe(48)
     digest = hmac.new(pepper.encode(), token.encode(), hashlib.sha256).hexdigest()
@@ -686,7 +708,13 @@ def credentials(url: str) -> tuple[Settings, str]:
         ),
         public_base_url="http://127.0.0.1",
         auth_issuer_url="http://127.0.0.1",
-        embeddings_enabled=False,
+        embeddings_enabled=model_path is not None,
+        embedding_model=(
+            str(model_path)
+            if model_path is not None
+            else Settings.model_fields["embedding_model"].default
+        ),
+        embedding_dimensions=DIMENSIONS,
         embedding_allow_download=False,
     )
     return settings, token
@@ -803,10 +831,11 @@ class LocalServer(uvicorn.Server):
 
 
 @contextlib.asynccontextmanager
-async def serve(settings: Settings):
+async def serve(settings: Settings, embedder: SentenceTransformerProvider | None = None):
+    container = build_container(settings, embedder=embedder)
     server = LocalServer(
         uvicorn.Config(
-            create_app(build_container(settings)),
+            create_app(container),
             host="127.0.0.1",
             port=0,
             log_config=None,
@@ -823,7 +852,7 @@ async def serve(settings: Settings):
         socket = server.servers[0].sockets[0]
         if socket.getsockname()[0] != "127.0.0.1":
             raise RuntimeError("MCP endpoint is not loopback-bound")
-        yield f"http://127.0.0.1:{socket.getsockname()[1]}"
+        yield f"http://127.0.0.1:{socket.getsockname()[1]}", container
     finally:
         server.should_exit = True
         await task
@@ -897,19 +926,177 @@ async def smoke(base: str, token: str) -> dict[str, object]:
         }
 
 
-async def run(mode: str, output: Path | None, stop: asyncio.Event | None = None) -> None:
+def require_complete_index(url: str, expected: int, model: str) -> dict[str, int]:
+    if url not in ACTIVE_URLS:
+        raise RuntimeError("index check refused for a non-lab database")
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            total = int(connection.scalar(text("SELECT count(*) FROM assertions")) or 0)
+            ready = int(
+                connection.scalar(
+                    text(
+                        "SELECT count(*) FROM assertions WHERE embedding_state = 'ready' "
+                        "AND embedding_model = :model AND embedding IS NOT NULL"
+                    ).bindparams(model=model)
+                )
+                or 0
+            )
+            incomplete = int(
+                connection.scalar(
+                    text("SELECT count(*) FROM embedding_jobs WHERE state <> 'completed'")
+                )
+                or 0
+            )
+            if total != expected or ready != expected or incomplete:
+                raise RuntimeError(
+                    f"semantic indexing incomplete: assertions={total}, ready={ready}, "
+                    f"unfinished_jobs={incomplete}"
+                )
+            return {"assertions": total, "ready": ready, "unfinished_jobs": incomplete}
+    finally:
+        engine.dispose()
+
+
+def require_vector_retrieval(result: dict[str, Any], assertion_id: str, lexical: int) -> None:
+    if lexical:
+        raise RuntimeError("semantic probe unexpectedly has lexical matches")
+    ids = [hit["assertion"]["id"] for hit in result["results"]]
+    if result["embedding_degraded"] or assertion_id not in ids:
+        raise RuntimeError("semantic retrieval was degraded or did not return vector hit")
+
+
+async def semantic_smoke(
+    base: str, token: str, worker: EmbeddingWorker, url: str, model: str
+) -> dict[str, object]:
+    mcp_url = local_mcp_url(base)
+    async with (
+        local_http_client(token=token) as http,
+        streamable_http_client(mcp_url, http_client=http) as streams,
+        ClientSession(streams[0], streams[1]) as session,
+    ):
+        await session.initialize()
+
+        async def call(name: str, arguments: dict[str, object]) -> dict[str, Any]:
+            response = await session.call_tool(name, arguments)
+            if response.is_error or response.structured_content is None:
+                raise RuntimeError(f"semantic MCP tool failed: {name}")
+            return response.structured_content
+
+        batch = (
+            await call(
+                "begin_knowledge_flush",
+                {
+                    "idempotency_key": uuid4().hex,
+                    "declared_parts": 1,
+                    "declared_items": 1,
+                },
+            )
+        )["batch_id"]
+        await call(
+            "append_knowledge",
+            {
+                "batch_id": batch,
+                "part_number": 1,
+                "assertions": [
+                    {
+                        "content": "The automobile was repaired yesterday.",
+                        "kind": "user_fact",
+                        "origin": "user",
+                    }
+                ],
+            },
+        )
+        committed = await call("commit_knowledge_flush", {"batch_id": batch})
+        assertion_id = committed["assertion_ids"][0]
+        # One bounded worker pass must finish this one-item queue. Retry/dead means failure.
+        if await worker.process_once() != 1:
+            raise RuntimeError("semantic worker did not process the expected job")
+        index = require_complete_index(url, 1, model)
+        engine = create_engine(url)
+        try:
+            with engine.connect() as connection:
+                lexical = int(
+                    connection.scalar(
+                        text(
+                            "SELECT count(*) FROM assertions WHERE search_vector @@ "
+                            "websearch_to_tsquery('simple', 'car fixed')"
+                        )
+                    )
+                    or 0
+                )
+        finally:
+            engine.dispose()
+        result = await call("search_knowledge", {"query": "car fixed", "limit": 5})
+        require_vector_retrieval(result, assertion_id, lexical)
+        return {
+            "index": index,
+            "lexical_matches": lexical,
+            "vector_retrieval_verified": True,
+            "embedding_degraded": False,
+        }
+
+
+async def run(
+    mode: str,
+    output: Path | None,
+    stop: asyncio.Event | None = None,
+    model_path: Path | None = None,
+    model_manifest: Path | None = None,
+) -> None:
     stop = stop or asyncio.Event()
-    if mode == "serve" and output is None:
+    semantic = mode in {"semantic-smoke", "semantic-serve"}
+    if mode in {"serve", "semantic-serve"} and output is None:
         raise RuntimeError("serve requires an operator-local output directory")
+    if semantic != (model_path is not None and model_manifest is not None):
+        raise RuntimeError("semantic mode requires both --model-path and --model-manifest")
     preflight = check_host()
+    if semantic:
+        check_semantic_capacity(preflight)
     check_interruption(stop.is_set)
+    if semantic:
+        assert model_path is not None and model_manifest is not None
+        model_metadata = verify_snapshot(model_path, model_manifest)
+    else:
+        model_metadata = None
+    with (
+        tempfile.TemporaryDirectory(prefix="kv-m1-offline-") as temporary,
+        offline_environment(Path(temporary) / "cache") if semantic else contextlib.nullcontext(),
+    ):
+        embedder = None
+        model_rss = 0
+        if semantic:
+            assert model_path is not None
+            before = resident_bytes()
+            embedder = SentenceTransformerProvider(
+                str(model_path), DIMENSIONS, allow_download=False, retry_after_seconds=0
+            )
+            await embedder.embed(["offline model readiness probe"])
+            model_rss = resident_bytes() - before
+            if model_rss > 2 * 1024**3:
+                raise RuntimeError("model memory exceeded the 2 GiB lab budget")
+        await run_database(
+            mode, output, stop, preflight, model_path, model_metadata, embedder, model_rss
+        )
+
+
+async def run_database(
+    mode: str,
+    output: Path | None,
+    stop: asyncio.Event,
+    preflight: dict[str, object],
+    model_path: Path | None,
+    model_metadata: dict[str, object] | None,
+    embedder: SentenceTransformerProvider | None,
+    model_rss: int,
+) -> None:
     with disposable_postgres(stop.is_set, output) as (url, owner, _container, socket_dir):
         migrate(url)
         check_interruption(stop.is_set)
         reset_and_verify(url)
         check_interruption(stop.is_set)
-        settings, token = credentials(url)
-        async with serve(settings) as base:
+        settings, token = credentials(url, model_path)
+        async with serve(settings, embedder) as (base, container):
             check_interruption(stop.is_set)
             manifest = {
                 "created_utc": datetime.now(UTC).isoformat(),
@@ -919,16 +1106,34 @@ async def run(mode: str, output: Path | None, stop: asyncio.Event | None = None)
                 **database_versions(url),
                 "postgres_image": IMAGE,
                 "embedding_model": settings.embedding_model,
-                "embedding_revision": None,
-                "embedding_mode": "disabled infrastructure smoke",
+                "embedding_revision": model_metadata["revision"] if model_metadata else None,
+                "embedding_manifest_sha256": model_metadata["manifest_sha256"]
+                if model_metadata
+                else None,
+                "embedding_mode": "offline semantic"
+                if model_metadata
+                else "disabled infrastructure smoke",
+                "embedding_model_rss_increment_bytes": model_rss,
                 "endpoint": base,
                 "cpu_count": os.cpu_count(),
                 "host_platform": platform.platform(),
                 "docker_root_free_bytes": preflight["docker_root_free_bytes"],
                 "memory_available_bytes": preflight["memory_available_bytes"],
             }
-            if mode == "smoke":
-                result = await smoke(base, token)
+            if mode in {"smoke", "semantic-smoke"}:
+                if mode == "semantic-smoke":
+                    assert container.embedder is not None
+                    worker = EmbeddingWorker(
+                        container.database.sessions,
+                        settings,
+                        container.embedder,
+                        worker_id=f"m1-{owner}",
+                    )
+                    result = await semantic_smoke(
+                        base, token, worker, url, settings.embedding_model
+                    )
+                else:
+                    result = await smoke(base, token)
                 check_interruption(stop.is_set)
                 reset_and_verify(url)
                 print(json.dumps({"manifest": manifest, "smoke": result, "reset_verified": True}))
@@ -944,7 +1149,29 @@ async def run(mode: str, output: Path | None, stop: asyncio.Event | None = None)
                         "Press Ctrl-C to end this run.",
                         flush=True,
                     )
-                    await stop.wait()
+                    if mode == "semantic-serve":
+                        assert container.embedder is not None
+                        worker = EmbeddingWorker(
+                            container.database.sessions,
+                            settings,
+                            container.embedder,
+                            worker_id=f"m1-{owner}",
+                        )
+                        while not stop.is_set():
+                            await worker.process_once()
+                            with contextlib.suppress(TimeoutError):
+                                await asyncio.wait_for(stop.wait(), timeout=2)
+                        engine = create_engine(url)
+                        try:
+                            with engine.connect() as connection:
+                                expected = int(
+                                    connection.scalar(text("SELECT count(*) FROM assertions")) or 0
+                                )
+                        finally:
+                            engine.dispose()
+                        require_complete_index(url, expected, settings.embedding_model)
+                    else:
+                        await stop.wait()
                 finally:
                     try:
                         token_path.unlink(missing_ok=True)
@@ -972,8 +1199,21 @@ def operator_signals(stop: asyncio.Event):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("preflight", "smoke", "serve", "cleanup", "watch"))
+    parser.add_argument(
+        "mode",
+        choices=(
+            "preflight",
+            "smoke",
+            "serve",
+            "semantic-smoke",
+            "semantic-serve",
+            "cleanup",
+            "watch",
+        ),
+    )
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--model-path", type=Path)
+    parser.add_argument("--model-manifest", type=Path)
     parser.add_argument("--owner")
     parser.add_argument("--socket-dir", type=Path)
     parser.add_argument("--confirm-daemon-settled", action="store_true")
@@ -994,7 +1234,7 @@ def main() -> None:
         stop = asyncio.Event()
         with operator_signals(stop):
             try:
-                asyncio.run(run(args.mode, args.output, stop))
+                asyncio.run(run(args.mode, args.output, stop, args.model_path, args.model_manifest))
             except LabInterrupted:
                 print("lab interrupted; owned resources cleaned", file=sys.stderr)
 
