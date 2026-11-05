@@ -59,6 +59,10 @@ stable release.
 
 ### Fixed
 
+- M1 audit validation rejects source/truth-card digests used as a completed-review artifact
+  digest. Importers must explicitly verify and seal the actual review artifact; semantic
+  decisions and original provenance remain distinct from receipt normalization.
+
 - M1 conflict gold text now attributes each location to an unverified report, preserving both
   competing records and the expected conflict outcome. Regenerate manifests for the second
   corpus digest revision and re-audit the changed card; old approvals cannot be hash-rewritten.

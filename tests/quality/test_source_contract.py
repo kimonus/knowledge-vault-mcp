@@ -122,3 +122,13 @@ def test_categorical_conflict_approval_is_invalid_after_attribution_repair():
     assert corrected.source == old.source
     with pytest.raises(ValueError, match="card digest"):
         validate_truth_audits((corrected,), [stale], "solo_operator")
+
+
+@pytest.mark.parametrize("field", ["source_sha256", "truth_card_sha256"])
+def test_source_or_gold_hash_cannot_masquerade_as_completed_review(field):
+    from .test_evaluation_modes import CASE, audit
+
+    receipt = audit()
+    receipt["artifact_sha256"] = receipt[field]
+    with pytest.raises(ValueError, match="completed review"):
+        validate_truth_audits((CASE,), [receipt], "solo_operator")

@@ -100,7 +100,10 @@ One `TruthAudit` receipt records `case_id`, opaque `audit_id`, `reviewer_id`, so
 `truth_card_sha256` (the canonical case including expected labels),
 `artifact_sha256`, provenance, `verdict`, `independent`, `before_client_output`, and optional notes.
 Hash the separately completed review artifact (for example the evaluator's dated Markdown
-decisions), not the receipt JSON containing its own digest. An accepted source audit requires
+decisions), not the receipt JSON containing its own digest. The completed review artifact must
+be distinct from the source/truth-card bytes; those two input digests
+are rejected in `artifact_sha256`. Verify the actual artifact file separately: schema validity
+alone cannot prove a claimed hash belongs to a review. An accepted source audit requires
 a human or model evaluation: a mechanical hash/schema check cannot certify semantic truth.
 Retrospective solo audits are allowed but their timing is reported; never relabel them as blind
 prospective validation. Model-assisted reviews remain `kind=model` unless a real person performs

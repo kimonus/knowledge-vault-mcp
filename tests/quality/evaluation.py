@@ -64,6 +64,10 @@ class TruthAudit(BaseModel):
 
     @model_validator(mode="after")
     def honest_independence(self) -> "TruthAudit":
+        if self.artifact_sha256 in {self.source_sha256, self.truth_card_sha256}:
+            raise ValueError(
+                "truth audit artifact must seal a completed review, not source or gold"
+            )
         if self.provenance.kind == "deterministic" and self.verdict == "accepted":
             raise ValueError("mechanical checks cannot accept a semantic truth card")
         if self.independent and self.provenance.kind != "human":
