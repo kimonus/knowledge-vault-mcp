@@ -24,7 +24,7 @@ jobs:
       github.repository == 'kimonus/knowledge-vault-mcp' &&
       github.event.repository.private == false &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.head_ref == 'diag/task-0014-runtime-retry'
+      github.head_ref == 'diag/task-0014-cleanup-v2-retry'
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
@@ -119,17 +119,96 @@ jobs:
         run: |
           set -euo pipefail
           if test -n "${TASK_0014_UNIT:-}"; then
-            sudo systemctl stop "$TASK_0014_UNIT"
-            cg="$(systemctl show "$TASK_0014_UNIT" -p ControlGroup --value)"
-            if test -n "$cg" && test -e "/sys/fs/cgroup$cg/cgroup.procs"; then
-              test -z "$(cat "/sys/fs/cgroup$cg/cgroup.procs")"
-            fi
-            echo 'unfinished_service_descendants=0 private_tmpfs_released=true'
+            [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+            test "$TASK_0014_UNIT" = "task-0014-${GITHUB_RUN_ID}.service"
+            stopped=0
+            sudo systemctl stop "$TASK_0014_UNIT" 2>/dev/null || stopped=$?
+            state="$(systemctl show "$TASK_0014_UNIT" -p LoadState -p ActiveState -p ControlGroup 2>/dev/null)"
+            declare -A properties=()
+            while IFS='=' read -r key value; do
+              case "$key" in LoadState|ActiveState|ControlGroup) ;; *) exit 1 ;; esac
+              test -z "${properties[$key]+present}"
+              properties[$key]="$value"
+            done <<< "$state"
+            test "${#properties[@]}" = 3
+            test -z "${properties[ControlGroup]}"
+            case "${properties[LoadState]}:${properties[ActiveState]}" in
+              not-found:inactive) test "$stopped" = 0 || test "$stopped" = 5 ;;
+              loaded:inactive|loaded:failed) test "$stopped" = 0 ;;
+              *) exit 1 ;;
+            esac
+            # Check the exact owned cgroup even if systemd has unloaded its unit.
+            /usr/bin/python3 - "$TASK_0014_UNIT" <<'PY'
+          import os
+          import stat
+          import sys
+          root = '/sys/fs/cgroup/system.slice/' + sys.argv[1]
+          directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+          def identity(info):
+              return info.st_dev, info.st_ino, info.st_mode
+          def inventory(fd):
+              with os.scandir(fd) as entries:
+                  rows = sorted((entry.name, identity(entry.stat(follow_symlinks=False)))
+                                for entry in entries)
+              if any(not (stat.S_ISDIR(info[2]) or stat.S_ISREG(info[2])) for _, info in rows):
+                  raise SystemExit('BLOCKED: invalid_owned_cgroup')
+              return rows
+          def empty_processes(fd, expected):
+              if expected is None or not stat.S_ISREG(expected[2]):
+                  raise SystemExit('BLOCKED: invalid_owned_cgroup')
+              procs = os.open('cgroup.procs', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+              try:
+                  if identity(os.fstat(procs)) != expected:
+                      raise SystemExit('BLOCKED: inconsistent_owned_cgroup')
+                  if os.read(procs, 1):
+                      raise SystemExit('BLOCKED: unfinished_service_descendants')
+              finally:
+                  os.close(procs)
+          def inspect(fd):
+              before = inventory(fd)
+              expected = dict(before).get('cgroup.procs')
+              empty_processes(fd, expected)
+              for name, info in before:
+                  if stat.S_ISDIR(info[2]):
+                      child = os.open(name, directory_flags, dir_fd=fd)
+                      try:
+                          if identity(os.fstat(child)) != info:
+                              raise SystemExit('BLOCKED: inconsistent_owned_cgroup')
+                          inspect(child)
+                      finally:
+                          os.close(child)
+              if inventory(fd) != before:
+                  raise SystemExit('BLOCKED: inconsistent_owned_cgroup')
+              empty_processes(fd, expected)
+          try:
+              try:
+                  initial = os.stat(root, follow_symlinks=False)
+              except FileNotFoundError:
+                  initial = None
+              if initial is not None:
+                  fd = os.open(root, directory_flags)
+                  try:
+                      if identity(os.fstat(fd)) != identity(initial):
+                          raise SystemExit('BLOCKED: inconsistent_owned_cgroup')
+                      inspect(fd)
+                      if identity(os.stat(root, follow_symlinks=False)) != identity(initial):
+                          raise SystemExit('BLOCKED: inconsistent_owned_cgroup')
+                  finally:
+                      os.close(fd)
+          except OSError:
+              raise SystemExit('BLOCKED: owned_cgroup_unreadable') from None
+          except RecursionError:
+              raise SystemExit('BLOCKED: owned_cgroup_depth') from None
+          PY
           fi
           if test -n "${TASK_0014_STAGING:-}"; then
             case "$TASK_0014_STAGING" in /var/tmp/kv-task-0014.????????) ;; *) exit 1 ;; esac
+            test ! -L "$TASK_0014_STAGING"
             test "$(stat -c %a:%u:%g "$TASK_0014_STAGING")" = 700:1000:1000
             sudo -u '#1000' -g '#1000' python -c 'import shutil,sys; shutil.rmtree(sys.argv[1])' "$TASK_0014_STAGING"
             test ! -e "$TASK_0014_STAGING"
             echo 'owner_private_staging_removed=true'
+          fi
+          if test -n "${TASK_0014_UNIT:-}"; then
+            echo 'unfinished_service_descendants=0 private_tmpfs_released=true'
           fi
