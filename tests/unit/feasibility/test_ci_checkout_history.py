@@ -536,6 +536,14 @@ def test_cleanup_patch_preserves_all_other_workflow_contracts():
     assert before.returncode == 0
     original = yaml.load(before.stdout, Loader=yaml.BaseLoader)  # noqa: S506
     revised = yaml.load((ROOT / WORKFLOW).read_text(), Loader=yaml.BaseLoader)  # noqa: S506
+    previous_branch = "github.head_ref == 'diag/task-0014-runtime-retry'"
+    current_branch = "github.head_ref == 'diag/task-0014-cleanup-v2-retry'"
+    assert guards.BRANCH == "diag/task-0014-cleanup-v2-retry"
+    original_if = original["jobs"]["smoke"]["if"]
+    assert original_if.count(previous_branch) == 1
+    expected_if = original_if.replace(previous_branch, current_branch, 1)
+    assert revised["jobs"]["smoke"]["if"] == expected_if
+    original["jobs"]["smoke"]["if"] = expected_if
     for workflow in (original, revised):
         step = workflow["jobs"]["smoke"]["steps"][-1]
         assert step["name"] == "Stop owned unit and clean only settled owner staging"
