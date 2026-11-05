@@ -5,6 +5,7 @@ FROM python:3.12.15-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a
 # The refreshed base fixes Perl and PCRE2 but still predates the OpenSSL CVE-2026-84782 fix.
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends --only-upgrade \
+      apt=2.6.2 libapt-pkg6.0=2.6.2 \
       libssl3=3.0.22-1~deb12u2 openssl=3.0.22-1~deb12u2 \
     && rm -rf /var/lib/apt/lists/*
 
