@@ -1,4 +1,4 @@
-# M1 — Independent knowledge quality baseline
+# M1 — Reproducible personal knowledge quality baseline
 
 **Priority:** first new implementation milestone after T0. **Effort:** M–L (roughly 2–4 weeks for fixtures, harness and adjudication), medium confidence. **Dependencies:** T0 completed; independent branch/worktree. **Owner:** quality/evaluation agent.
 
@@ -8,7 +8,13 @@ Current contract and invariant tests verify storage and adapter behavior; they d
 
 ## Scope and architectural decisions
 
-Implement [benchmark specification](../benchmark.md) with source-first, independently adjudicated gold truth. Separate extraction, retrieval on gold-seeded data, temporal resolution and assistant answer evaluation. Commit synthetic fixtures; store real private cases outside Git. Do not change production schemas, ranking or prompts to make a baseline look good. Avoid using vault output to author labels.
+Implement [benchmark specification](../benchmark.md) with source-first truth auditing. The approved
+default for this single-user deployment is `solo_operator`: one recorded evaluator, deterministic
+checks, explicitly labeled model assistance and manual review of ambiguous/failed cases.
+`independent_review` remains the optional strict two-human research protocol. Separate extraction,
+gold-seeded retrieval, temporal resolution and assistant answer evaluation. Commit synthetic
+fixtures; keep real private cases outside Git. Do not change production schemas, ranking or prompts
+to make a baseline look good. Avoid using vault output to author truth labels.
 
 ## Implementation requirements
 
@@ -16,7 +22,18 @@ Add `tests/quality/` case schema, at least 60 synthetic packs spanning ten bench
 
 ## Acceptance and testing
 
-Two reviewers can label a case before ingestion and resolve disagreement without seeing system results. Gold-seeded retrieval scores are unaffected by extractor omissions. Include import permutations, alternate query languages, 200 distractors, deletion-index checks, missing evidence, conflicts, and proposal-vs-purchase. Run on real disposable PostgreSQL 17/pgvector; no model download in tests. Existing lint, type, unit/property/contract/integration/e2e and chart gates pass where applicable. Publish baseline denominators and confidence intervals, not an unsupported single quality score. If a hosted-client harness is inaccessible, clearly label answer evaluation manual and still deliver backend baseline.
+Solo acceptance requires a frozen 41-case/123-packet development experiment, auditable source
+truth decisions, actual isolated assistant-client traces and scored judgments with explicit
+missing labels and machine/human provenance. The operator records an acceptance decision against
+the benchmark thresholds after reviewing failures. Complete packets or passing infrastructure
+checks alone never pass M1. No independent-human-validation claim follows from solo acceptance.
+Optional `independent_review` retains two blinded human first passes and adjudication; copied audit
+files cannot satisfy independence. Both modes report lexical-only and hybrid results separately.
+Gold-seeded retrieval scores remain independent of extractor omissions. Include import permutations,
+alternate languages, 200 distractors, deletion checks, conflicts and proposal-vs-purchase cases.
+Use disposable PostgreSQL/pgvector without model downloads. Required repository gates still apply.
+Publish denominators and uncertainty, not a blended quality score. Unavailable clients remain an
+explicit blocker to client acceptance; backend results can still be delivered separately.
 
 ## Migration, compatibility, risk and rollback
 
