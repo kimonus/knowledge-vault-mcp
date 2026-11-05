@@ -14,8 +14,9 @@ stable release.
 - Synthetic-only isolated retrieval feasibility prototype with a read-scoped MCP client, bounded
   gateway, local mock client and owner-checked workspace. It does not enable a hosted client study.
 - Isolated M1 client evaluation lab runbook and bounded, network-disabled PostgreSQL/MCP harness
-  for synthetic infrastructure checks. Genuine evaluation still requires an independent offline
-  embedding cache, a separately configured assistant client, and independent reviewers.
+  for synthetic infrastructure checks. Lexical-only client evaluation needs no embedding cache;
+  semantic evaluation needs an independent snapshot. Both require a separately configured
+  assistant client and independent reviewers.
 - Admin-only, idempotent attachment of reviewed source-backed temporal evidence to an existing
   assertion UUID without changing its row, source rows, embeddings or supersession links.
 - Bounded historical resolution for a superseded legacy assertion only when reviewed evidence
@@ -28,6 +29,9 @@ stable release.
 
 ### Changed
 
+- M1 client evaluation now records explicit `lexical_only` versus `hybrid` retrieval provenance;
+  disabled runs do not misleadingly report an embedding model. The operator protocol supports
+  independent no-model client studies without presenting them as semantic quality evidence.
 - M1 client scoring distinguishes unresolved conflict explanations from definitive answers and
   validates planned case/run pairs when the operator supplies the generated packet manifest with
   `--packets`. Reports retain partial and legacy scores but mark unchecked or missing runs; an

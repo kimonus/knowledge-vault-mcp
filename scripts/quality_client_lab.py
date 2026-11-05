@@ -1080,6 +1080,33 @@ async def run(
         )
 
 
+def embedding_provenance(
+    mode: str, configured_model: str, snapshot: dict[str, object] | None, rss: int
+) -> dict[str, object]:
+    """Distinguish no-model client evaluation from offline semantic retrieval."""
+    if snapshot is None:
+        return {
+            "embedding_model": None,
+            "embedding_revision": None,
+            "embedding_manifest_sha256": None,
+            "embedding_mode": (
+                "disabled lexical-only client evaluation"
+                if mode == "serve"
+                else "disabled infrastructure smoke"
+            ),
+            "retrieval_mode": "lexical_only",
+            "embedding_model_rss_increment_bytes": 0,
+        }
+    return {
+        "embedding_model": configured_model,
+        "embedding_revision": snapshot["revision"],
+        "embedding_manifest_sha256": snapshot["manifest_sha256"],
+        "embedding_mode": "offline semantic",
+        "retrieval_mode": "hybrid",
+        "embedding_model_rss_increment_bytes": rss,
+    }
+
+
 async def run_database(
     mode: str,
     output: Path | None,
@@ -1105,15 +1132,7 @@ async def run_database(
                 "server_commit": await asyncio.to_thread(server_commit),
                 **database_versions(url),
                 "postgres_image": IMAGE,
-                "embedding_model": settings.embedding_model,
-                "embedding_revision": model_metadata["revision"] if model_metadata else None,
-                "embedding_manifest_sha256": model_metadata["manifest_sha256"]
-                if model_metadata
-                else None,
-                "embedding_mode": "offline semantic"
-                if model_metadata
-                else "disabled infrastructure smoke",
-                "embedding_model_rss_increment_bytes": model_rss,
+                **embedding_provenance(mode, settings.embedding_model, model_metadata, model_rss),
                 "endpoint": base,
                 "cpu_count": os.cpu_count(),
                 "host_platform": platform.platform(),

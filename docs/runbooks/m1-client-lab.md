@@ -1,6 +1,24 @@
 # Isolated M1 client evaluation lab
 
-This lab supports the [independent client protocol](../architecture/knowledge-vault/client-evaluation-protocol.md). It is an infrastructure harness, not an assistant or scorer. It never connects to the production vault. The default smoke mode disables embeddings and therefore cannot measure multilingual retrieval quality. The separately selected semantic modes require an independently stored, verified offline snapshot.
+This lab supports the [independent client protocol](../architecture/knowledge-vault/client-evaluation-protocol.md). It is an infrastructure harness, not an assistant or scorer. It never connects to the production vault. The default smoke mode disables embeddings and therefore cannot measure multilingual retrieval quality. An independent lexical-only client study can run without server-side model weights. The separately selected semantic modes require an independently stored, verified offline snapshot.
+
+## Lexical-only client evaluation (no local model)
+
+The existing `serve` command supports a real assistant-client study using PostgreSQL full-text
+retrieval with embeddings disabled; no neural weights are downloaded or loaded:
+
+```bash
+/tmp/uv-x86_64-unknown-linux-gnu/uv run --offline python scripts/quality_client_lab.py serve \
+  --output /operator-local/m1/lexical-run-0001
+```
+
+Each blinded client run needs a fresh instance and isolated client context. Its environment
+manifest labels `retrieval_mode=lexical_only` and records a null embedding model, revision and
+digest. This is different from an infrastructure-only `smoke` and a `hybrid` semantic study.
+It can evaluate observed client extraction, source processing, temporal results, grounded
+answers, citations and abstention with two independent reviewers. It cannot establish the
+quality of embedding-based retrieval; do not pool quality scores across retrieval modes. No
+real assistant or reviewer result has yet been recorded.
 
 ## Offline semantic readiness (2026-11-04)
 
@@ -70,7 +88,7 @@ Run from the feature worktree after checking no `KNOWLEDGE_VAULT_*`, `PG*`, `HF_
 
 Smoke creates a fresh database, applies existing Alembic migrations, verifies zero assertions and zero temporal evidence, starts the existing FastAPI/MCP application on loopback with a random evaluation-only scoped token, and connects over real Streamable HTTP. Both the anonymous probe and authenticated MCP client explicitly disable environment-derived HTTP configuration (`trust_env=False`), proxies and redirects. The client URL is required to be plain HTTP on `127.0.0.1`; no inherited `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, altered `NO_PROXY`, netrc or certificate environment can reroute its token or payload. It checks initialization, tool discovery, begin/append/commit, duplicate commit, readback and search. Its trace is a list of tool names only; no source text or token is printed. It resets and verifies the database again before owner-checked teardown. On a failed run, inspect the error and rerun; do not reuse the failed instance. Every smoke run creates a private recovery directory under `~/.local/state/knowledge-vault/client-lab/smoke-<owner>` before Docker startup and prints its path. An explicit `--output` can select another private operator-local directory. The manifest and lifecycle record contain no password or token. `preflight` creates no recovery directory.
 
-For a supervised assistant run, use a **new isolated client home and profile** with no existing MCP config or auth store, and one new lab invocation per packet. The local operator output directory must be outside Git and access controlled:
+For any supervised assistant run, use a **new isolated client home and profile** with no existing MCP config or auth store, and one new lab invocation per packet. The operator output directory must be outside Git and access controlled. For the optional **hybrid semantic** arm only, use:
 
 ```bash
 /tmp/uv-x86_64-unknown-linux-gnu/uv run --offline python scripts/quality_client_lab.py semantic-serve \
@@ -96,10 +114,10 @@ The synthetic smoke used PostgreSQL 17.8 and schema `0006_temporal_evidence`. Th
 
 ## Genuine study operator workflow
 
-1. Obtain an **independent offline model snapshot** and verify its exact revision, file digests, offline load, 384-dimensional output, and memory on the lab host. Do not mount the production model volume. Run `semantic-smoke` successfully before any quality measurements. The default disabled mode remains only an infrastructure smoke.
+1. Select one frozen evaluation arm: **lexical-only** uses `serve` without a model or snapshot; **hybrid semantic** requires an independently acquired and verified offline snapshot, successful `semantic-smoke`, and `semantic-serve`. Never read the production model volume. The separate `smoke` command proves infrastructure behavior only. Do not pool `lexical_only` and `hybrid` study metrics.
 2. Generate `41 × 3 = 123` blinded development packets with `scripts/quality_client_packets.py --split dev --repetitions 3 --output /operator-local/m1/packets.json`. Keep the packet file and its SHA-256 outside Git. Do not run all packets as part of lab setup.
-3. Freeze client name/version, model/settings, fresh isolated profile, skill file path/digest, server commit, schema revision, PostgreSQL version, embedding revision/digest, host information, timing rules, run order and seed in a protected manifest. The harness writes `environment.json` with server and host facts and no credentials; add the client and reviewer process fields yourself.
-4. For each packet and repetition, start a new `semantic-serve` instance with the verified model path and manifest, confirm its fresh zero-count database, use a fresh client conversation, submit only the blinded source, ask the assistant to flush to **this lab MCP**, then ask the packet question or state request. Capture the complete client tool trace, emitted items, commit receipts, readback IDs, indexing status, retrieved context, answer, citations and abstention in an access-controlled local directory. Do not check raw traces into Git.
+3. Freeze client name/version, model/settings, fresh isolated profile, skill path/digest, server commit, schema revision, PostgreSQL version, `retrieval_mode`, embedding revision/digest (null for lexical-only), host information, timing rules, run order and seed in a protected manifest. The harness writes `environment.json` with server and host facts and no credentials; add the client and reviewer process fields yourself.
+4. For each packet and repetition, start a new `serve` instance for lexical-only evaluation or a new `semantic-serve` instance with a verified snapshot for hybrid evaluation. Confirm its fresh zero-count database, use a fresh client conversation, submit only the blinded source, ask the assistant to flush to **this lab MCP**, then ask the packet question or state request. Capture the complete client tool trace, emitted items, commit receipts, readback IDs, indexing status, retrieved context, answer, citations and abstention in an access-controlled local directory. Do not check raw traces into Git.
 5. Mark each planned run as `missing`, `failed`, or `completed`. A timeout, interruption, rejected item or missing readback remains visible; preserve the original trace. For a failed run, use a new run attempt identifier and fresh database. The manifest-aware scorer distinguishes missing judgments from observed zero outcomes.
 6. Arrange two independent source-truth audits before either reviewer sees outputs. Seal two dated first-pass output judgments before adjudication. Record real reviewer identities and disagreements in protected local storage; do not invent labels.
 7. Run `scripts/quality_score_judgments.py JUDGMENTS --packets PACKETS --report REPORT`. Publish only redacted aggregates, report missing labels and runs, and keep the scorer's backend metrics separate from actual client extraction and answer quality.
