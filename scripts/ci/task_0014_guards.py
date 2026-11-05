@@ -113,6 +113,8 @@ def main(root: Path) -> None:
     assert len(checkouts) == 2
     assert checkouts[0]["with"]["ref"] == "${{ github.event.pull_request.head.sha }}"
     assert checkouts[1]["with"]["ref"] == SOURCE
+    assert checkouts[0]["with"]["fetch-depth"] == "0"
+    assert checkouts[1]["with"]["fetch-depth"] == "3"
     assert all(step["with"]["persist-credentials"] == "false" for step in checkouts)
     for step in steps:
         if "uses" in step:
@@ -142,6 +144,7 @@ def checkouts(orchestration: Path, source: Path) -> None:
         ".github/workflows/ci.yml",
         ".github/workflows/task-0014-synthetic-smoke.yml",
         "tests/unit/feasibility/test_ci_evidence_gate.py",
+        "tests/unit/feasibility/test_ci_checkout_history.py",
         *(
             "scripts/ci/task_0014_" + name
             for name in ("bwrap.sh", "ci_gate.py", "guards.py", "offline.py", "run.sh", "verify.py")

@@ -75,6 +75,11 @@ print(json.dumps({'python_version': sys.version, 'base_executable': sys._base_ex
 PY
 stage=focused_tests
 timeout -k 5s 120s .venv/bin/python -m pytest tests/unit/feasibility -q
+stage=orchestration_tests
+PYTHONPATH="$staging/orchestration:$staging/source/src" \
+  timeout -k 5s 120s .venv/bin/python -m pytest \
+  "$staging/orchestration/tests/unit/feasibility/test_ci_evidence_gate.py" \
+  "$staging/orchestration/tests/unit/feasibility/test_ci_checkout_history.py" -q
 stage=offline_guards
 timeout -k 5s 30s .venv/bin/python "$staging/orchestration/scripts/ci/task_0014_guards.py" "$staging/orchestration"
 timeout -k 5s 30s .venv/bin/python "$staging/orchestration/scripts/ci/task_0014_offline.py"
