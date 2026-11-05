@@ -1,17 +1,27 @@
-"""Score human judgments without treating absent labels as observed failures.
+"""Score recorded solo or independent judgments without inventing missing labels.
 
 The scorer validates card shape, not reviewer independence or the truth of a label.
-Only adjudicated labels enter outcome metrics; initial reviews enter agreement metrics.
+Only effective solo or adjudicated independent labels enter outcome metrics.
 """
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .client_packets import build_client_packets
 from .corpus import Case
+from .evaluation import (
+    AutomatedCheck,
+    ClientRun,
+    EvaluationMode,
+    Identifier,
+    Provenance,
+    RetrievalMode,
+    validate_truth_audits,
+)
 
 ResponseExpectation = Literal["definitive", "abstention", "unresolved"]
 
@@ -28,7 +38,8 @@ def response_expectation(case: Case) -> ResponseExpectation:
 class Review(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    reviewer_id: str = Field(min_length=1, max_length=80)
+    reviewer_id: Identifier
+    provenance: Provenance | None = None
     source_outcome: Literal["reviewed", "partial", "unprocessed", "unavailable"] | None = None
     matched_gold_keys: list[str] | None = None
     unsupported_claims: int | None = Field(default=None, ge=0)
@@ -52,9 +63,59 @@ class CaseJudgment(BaseModel):
 
     @model_validator(mode="after")
     def distinct_reviewers(self) -> "CaseJudgment":
-        if self.reviewers[0].reviewer_id == self.reviewers[1].reviewer_id:
+        if self.reviewers[0].reviewer_id.casefold() == self.reviewers[1].reviewer_id.casefold():
             raise ValueError("two distinct reviewers are required")
+        if any(
+            r.provenance is not None and r.provenance.kind != "human"
+            for r in [*self.reviewers, self.adjudicated]
+        ):
+            raise ValueError("independent review cannot substitute machine judgments for humans")
         return self
+
+
+class RecordedReview(Review):
+    provenance: Provenance
+
+    @model_validator(mode="after")
+    def mechanical_labels_only(self) -> "RecordedReview":
+        if self.provenance.kind == "deterministic" and any(
+            getattr(self, field) is not None
+            for field in (
+                "source_outcome",
+                "matched_gold_keys",
+                "unsupported_claims",
+                "extracted_claims_count",
+                "answer_correct",
+                "grounded",
+                "citations_correct",
+                "abstained",
+                "unresolved_handling_correct",
+            )
+        ):
+            raise ValueError("deterministic checks cannot certify semantic review labels")
+        return self
+
+
+class SoloCaseJudgment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    case_id: str
+    run_id: str = Field(default="default", min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    review: RecordedReview
+    checks: list[AutomatedCheck] = Field(default_factory=list, max_length=100)
+    needs_manual_review: bool = False
+    manual_review: RecordedReview | None = None
+
+    @model_validator(mode="after")
+    def human_override(self) -> "SoloCaseJudgment":
+        if self.manual_review is not None and self.manual_review.provenance.kind != "human":
+            raise ValueError("manual review must record a human evaluator")
+        if len({check.name for check in self.checks}) != len(self.checks):
+            raise ValueError("automated check names must be unique within a run")
+        return self
+
+    def final_review(self) -> RecordedReview:
+        return self.manual_review or self.review
 
 
 @dataclass
@@ -116,12 +177,24 @@ def score_judgments(
     raw: list[dict[str, Any]],
     *,
     packet_manifest: dict[str, Any] | None = None,
+    evaluation_mode: EvaluationMode = "independent_review",
+    retrieval_mode: RetrievalMode = "lexical_only",
+    truth_audits: list[dict[str, Any]] | None = None,
+    client_runs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    if evaluation_mode not in {"solo_operator", "independent_review"}:
+        raise ValueError("unknown evaluation mode")
+    if retrieval_mode not in {"lexical_only", "hybrid"}:
+        raise ValueError("unknown retrieval mode")
     by_id = {case.id: case for case in cases}
     observed: set[tuple[str, str]] = set()
-    parsed: list[CaseJudgment] = []
+    parsed: list[CaseJudgment | SoloCaseJudgment] = []
     for raw_item in raw:
-        item = CaseJudgment.model_validate(raw_item)
+        item = (
+            SoloCaseJudgment.model_validate(raw_item)
+            if evaluation_mode == "solo_operator"
+            else CaseJudgment.model_validate(raw_item)
+        )
         pair = (item.case_id, item.run_id)
         if pair in observed:
             raise ValueError("repeated case/run ID")
@@ -152,6 +225,12 @@ def score_judgments(
     runs_per_case: Counter[str] = Counter()
     metrics: dict[str, Metric] = defaultdict(Metric)
     split_metrics: dict[str, dict[str, Metric]] = defaultdict(lambda: defaultdict(Metric))
+    kind_metrics: dict[str, dict[str, Metric]] = defaultdict(lambda: defaultdict(Metric))
+    provenance_counts: Counter[str] = Counter()
+    effective_kinds: Counter[str] = Counter()
+    pending_manual = 0
+    checks_passed = checks_failed = manual_reviews = 0
+    active_kind = "unrecorded"
     # Old flat fields retain their earlier per-run-average meaning.
     legacy: dict[str, list[float]] = defaultdict(list)
     legacy_by_split: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
@@ -168,6 +247,7 @@ def score_judgments(
     def record(split: str, name: str, numerator: int | None, denominator: int = 1) -> None:
         metrics[name].add(numerator, denominator)
         split_metrics[split][name].add(numerator, denominator)
+        kind_metrics[active_kind][name].add(numerator, denominator)
 
     def old_record(split: str, name: str, value: float) -> None:
         legacy[name].append(value)
@@ -178,7 +258,13 @@ def score_judgments(
         case = by_id[item.case_id]
         expected = {claim.key for claim in case.claims}
         relevant = set(case.relevant)
-        for review in [*item.reviewers, item.adjudicated]:
+        reviews: list[Review] = (
+            [*item.reviewers, item.adjudicated]
+            if isinstance(item, CaseJudgment)
+            else [item.review, *([item.manual_review] if item.manual_review else [])]
+        )
+        for review in reviews:
+            provenance_counts[review.provenance.kind if review.provenance else "unrecorded"] += 1
             if review.matched_gold_keys is not None:
                 if len(review.matched_gold_keys) != len(set(review.matched_gold_keys)):
                     raise ValueError("matched gold keys must be unique")
@@ -213,12 +299,23 @@ def score_judgments(
             ):
                 raise ValueError("an answerable case cannot be correct and abstained")
 
-        first, second = item.reviewers
+        if isinstance(item, CaseJudgment):
+            first, second = item.reviewers
+        else:
+            first = second = None
+            checks_passed += sum(check.passed for check in item.checks)
+            checks_failed += sum(not check.passed for check in item.checks)
+            manual_reviews += item.manual_review is not None
+            pending_manual += item.needs_manual_review and item.manual_review is None
         if (
-            first.matched_gold_keys is not None
-            and second.matched_gold_keys is not None
-            and first.answer_correct is not None
-            and second.answer_correct is not None
+            first is not None
+            and second is not None
+            and (
+                first.matched_gold_keys is not None
+                and second.matched_gold_keys is not None
+                and first.answer_correct is not None
+                and second.answer_correct is not None
+            )
         ):
             agreement.append(
                 float(
@@ -226,10 +323,17 @@ def score_judgments(
                     and first.answer_correct == second.answer_correct
                 )
             )
-        if first.source_outcome is not None and second.source_outcome is not None:
+        if (
+            first is not None
+            and second is not None
+            and first.source_outcome is not None
+            and second.source_outcome is not None
+        ):
             source_agreement.append(float(first.source_outcome == second.source_outcome))
 
-        final = item.adjudicated
+        final = item.adjudicated if isinstance(item, CaseJudgment) else item.final_review()
+        active_kind = final.provenance.kind if final.provenance else "unrecorded"
+        effective_kinds[active_kind] += 1
         split = case.split
         if final.source_outcome is None:
             record(split, "source_processing_coverage", None)
@@ -342,8 +446,89 @@ def score_judgments(
         unsupported_by_split[split]
     missing_metric_labels = sum(metric.missing_labels for metric in metrics.values())
 
+    selected_cases = tuple(
+        case for case in cases if manifest_split is None or case.split == manifest_split
+    )
+    audits = validate_truth_audits(selected_cases, truth_audits or [], evaluation_mode)
+    evidence: dict[tuple[str, str], ClientRun] = {}
+    trace_digests: set[str] = set()
+    for value in client_runs or []:
+        receipt = ClientRun.model_validate(value)
+        pair = (receipt.case_id, receipt.run_id)
+        if pair in evidence:
+            raise ValueError("duplicate client run receipt")
+        if receipt.trace_sha256 in trace_digests:
+            raise ValueError("a client trace cannot be reused as a different execution")
+        if receipt.case_id not in by_id:
+            raise ValueError("unknown client run case")
+        if receipt.retrieval_mode != retrieval_mode:
+            raise ValueError("cannot pool lexical-only and hybrid client evidence")
+        if receipt.source_sha256 != sha256(by_id[receipt.case_id].source.encode()).hexdigest():
+            raise ValueError("client source digest differs from the frozen corpus")
+        if (
+            packet_manifest is not None
+            and receipt.corpus_sha256 != packet_manifest["corpus_sha256"]
+        ):
+            raise ValueError("client corpus digest differs from the packet manifest")
+        evidence[pair] = receipt
+        trace_digests.add(receipt.trace_sha256)
+    verified_runs = 0
+    for item in scored:
+        receipt = evidence.get((item.case_id, item.run_id))
+        recorded = (
+            [*item.reviewers, item.adjudicated]
+            if isinstance(item, CaseJudgment)
+            else [item.review, *([item.manual_review] if item.manual_review else [])]
+        )
+        if receipt is not None:
+            for review in recorded:
+                if review.provenance and review.provenance.evidence_sha256 != receipt.trace_sha256:
+                    raise ValueError("judgment provenance does not match its client trace")
+            if isinstance(item, SoloCaseJudgment) and any(
+                check.provenance.evidence_sha256 != receipt.trace_sha256 for check in item.checks
+            ):
+                raise ValueError("automated check provenance does not match its client trace")
+            verified_runs += all(review.provenance is not None for review in recorded)
+    expected_evidence = expected_pairs or set()
+    evidence_complete = expected_pairs is not None and set(evidence) == expected_evidence
+    labels_complete = run_status == "complete" and missing_metric_labels == 0
+
     return {
-        "schema_version": 2,
+        "schema_version": 3,
+        "evaluation_mode": evaluation_mode,
+        "retrieval_mode": retrieval_mode,
+        "validation_scope": "personal engineering"
+        if evaluation_mode == "solo_operator"
+        else "research protocol",
+        "provenance": {
+            "submitted_reviews_by_kind": dict(sorted(provenance_counts.items())),
+            "effective_reviews_by_kind": dict(sorted(effective_kinds.items())),
+            "manual_reviews": manual_reviews,
+            "pending_manual_reviews": pending_manual,
+            "independence_verified_by_scorer": False,
+        },
+        "automated_checks": {"passed": checks_passed, "failed": checks_failed},
+        "truth_audit": audits,
+        "client_evidence": {
+            "observed_runs": len(evidence),
+            "missing_runs": len(expected_evidence - evidence.keys())
+            if expected_pairs is not None
+            else None,
+            "unexpected_runs": len(evidence.keys() - expected_evidence)
+            if expected_pairs is not None
+            else None,
+            "trace_bound_judgments": verified_runs,
+            "complete": evidence_complete,
+            "authenticity": "operator_recorded_not_proven_by_schema",
+        },
+        "acceptance_evidence_complete": (
+            labels_complete
+            and audits["complete"]
+            and evidence_complete
+            and verified_runs == len(scored)
+            and pending_manual == 0
+        ),
+        "quality_gate_status": "not_decided_by_scorer",
         "run_completeness": {
             "status": run_status,
             "manifest_split": manifest_split,
@@ -356,7 +541,7 @@ def score_judgments(
                 index for index, pair in enumerate(ordered_pairs) if pair in missing_pairs
             ],
         },
-        "study_complete": run_status == "complete" and missing_metric_labels == 0,
+        "study_complete": labels_complete,
         "missing_metric_labels_total": missing_metric_labels,
         "judged_cases": len(runs_per_case),
         "judged_runs": len(scored),
@@ -386,6 +571,10 @@ def score_judgments(
         "full_agreement_cases": len(agreement),
         "full_agreement": average(agreement),
         "metrics": {name: metric.report() for name, metric in sorted(metrics.items())},
+        "metrics_by_judgment_kind": {
+            kind: {name: metric.report() for name, metric in sorted(group.items())}
+            for kind, group in sorted(kind_metrics.items())
+        },
         "metrics_by_split": {
             split: {name: metric.report() for name, metric in sorted(group.items())}
             for split, group in sorted(split_metrics.items())

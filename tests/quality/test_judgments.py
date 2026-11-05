@@ -229,7 +229,7 @@ def test_pilot_metrics_separate_abstention_and_missing_labels_by_split():
         card("no-record-1", {}),
     ]
     result = score_judgments(selected, raw)
-    assert result["schema_version"] == 2
+    assert result["schema_version"] == 3
     assert result["metrics"]["correct_abstention"] == {
         "numerator": 1,
         "denominator": 1,

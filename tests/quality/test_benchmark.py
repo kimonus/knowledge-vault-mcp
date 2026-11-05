@@ -45,6 +45,7 @@ async def test_source_first_quality_baseline(integration_container):
             Path(path).write_text, json.dumps(report, indent=2, ensure_ascii=False) + "\n"
         )
     assert report["metadata"]["case_count"] == len(selected)
+    assert report["evaluation_mode"] == "backend_only"
     assert report["summary"]["temporal_correct"] == 1.0
     assert report["summary"]["retrieval_case_count"] > 0
     assert report["metadata"]["extraction"].startswith("unmeasured")

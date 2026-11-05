@@ -19,7 +19,15 @@ Each package owns a bounded subsystem and can be assigned to a separate coding a
 
 **Deliverables:** a versioned fixture format with original source, independently authored truth card, expected relevant IDs or stable fixture keys, allowed/required abstention, time semantics and privacy classification; at least 60 synthetic scenarios distributed across the [benchmark matrix](benchmark.md); deterministic seeding and extraction replay; separate retrieval, temporal and answer scoring; a CLI producing JSON and Markdown reports with version/machine/model metadata and redacted failures; a small CI smoke suite and instructions for an operator-local private suite. Keep quality labels out of the data presented to the system under test.
 
-**Acceptance:** two reviewers can annotate/adjudicate a case without seeing system output; no score uses vault output as ground truth; run order and query language metamorphic cases; deletion, distractor, proposal/purchase and missing-evidence negatives; run on a real disposable pgvector PostgreSQL instance; calculate Recall@10, nDCG@10, temporal correctness, extraction claim coverage, grounded answer/citation correctness and abstention separately. Report numerator/denominator and uncertainty. The baseline must be reproducible from pinned fixture, code, client, model and database versions. The full existing quality/security gates remain green; document any unavailable client harness explicitly.
+**Acceptance:** default `solo_operator` uses one recorded evaluator, source-truth audits,
+deterministic checks and separately identified model/human judgments; ambiguous failures can
+receive manual review. Optional `independent_review` retains two blinded human first passes and
+adjudication, with distinct sealed truth-audit artifacts. No score uses vault output as source
+truth. Actual MCP-client traces must be collected and scored before an operator acceptance decision.
+Preserve the 41 dev cases and 123 planned repetitions, source/run provenance, missing labels,
+lexical-only/hybrid separation, and the existing negative/metamorphic checks. Calculate retrieval,
+temporal, extraction, grounded-answer/citation and abstention metrics separately with denominators
+and uncertainty. Pin fixture/code/client/model/database versions; repository gates still apply.
 
 **Risks and limits:** gold labels are labor intensive; private cases cannot be committed; an assistant harness may be nondeterministic. Fix seed/configuration and rerun repeated samples for answer metrics. If the hosted client cannot be automated, measure server retrieval separately and conduct a documented manual client study. Do not claim end-to-end correctness from backend tests alone. Rollback is removal of this additive evaluation package; no migration or knowledge rollback exists.
 

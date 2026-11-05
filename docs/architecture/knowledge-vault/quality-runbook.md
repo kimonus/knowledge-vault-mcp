@@ -39,13 +39,16 @@ are not population confidence intervals. Index readiness is reported as ready as
 the configured model out of all seeded assertions. The report includes no temporal values.
 
 **Not yet measured:** source-to-assertion extraction, answer correctness, citation correctness and
-client abstention. Those require independently judged outputs from a real assistant/client; no
+client abstention. Those require scored outputs from a real assistant/client; no
 backend test can certify them. Do not report the synthetic baseline as end-to-end quality. For a
 private extension, keep original source packs and reviewer labels in an encrypted operator-local
-store outside Git/CI, adjudicate before running the system, and publish only aggregate counts.
+store outside Git/CI, audit source truth and publish only aggregate counts. The default
+`solo_operator` workflow needs one recorded evaluator; optional `independent_review` retains the
+strict two-human blinded procedure. Neither generated packets nor backend results pass M1.
 
 To score such a client run, create an operator-local JSON list with one entry per case/run. Each entry
-has `case_id`, optional `run_id`, two `reviewers` with distinct `reviewer_id` values, and an
+has `case_id`, optional `run_id`, a provenance-bearing `review`, optional deterministic `checks`
+and optional human `manual_review`. The independent mode keeps two distinct `reviewers` and an
 `adjudicated` review. Different `run_id` values allow repeated samples of one case; duplicate
 case/run pairs are rejected. See the [client evaluation protocol](client-evaluation-protocol.md)
 for blinded input packets and fresh-vault isolation.
@@ -58,7 +61,7 @@ the case's source pack, judged from the original source and the client's coverag
 processing coverage is `reviewed / (reviewed + partial + unprocessed)`; unavailable source packs
 are counted separately. It measures whether accessible material was reviewed, **not** whether
 every useful claim was extracted. Claim coverage remains a separate metric.
-The v2 report gives numerator, denominator, eligible/labeled run counts and missing-label count
+The v3 report gives numerator, denominator, eligible/labeled run counts and missing-label count
 for each metric and split. It separates correct abstention on evidence-insufficient cases from
 incorrect abstention on definitive-value cases. Temporal conflict, ambiguity and unknown cases
 require an accurate unresolved explanation, scored separately from abstention rates; a generic
@@ -68,14 +71,27 @@ Annotators must read the original source and client output,
 without viewing the backend benchmark result or each other's initial labels. Run:
 
 ```bash
+uv run python scripts/quality_truth_audit.py --output /operator-local/new-truth-audit
 uv run python scripts/quality_score_judgments.py /operator-local/judgments.json \
+  --evaluation-mode solo_operator --retrieval-mode lexical_only \
   --packets /operator-local/kv-client-dev-packets.json \
+  --truth-audits /operator-local/truth-audits.json \
+  --client-runs /operator-local/client-runs.json \
   --report /tmp/kv-quality-judgments.json
 ```
 
 The scorer validates gold keys, rejects repeated case/run pairs, reports agreement and split-level metrics,
 and emits no source, assertion or answer text. It cannot verify that reviewers were truly
-independent; the operator must preserve that review process.
+independent; the operator must preserve that optional research review process. The CLI's default
+is solo; use `--evaluation-mode independent_review` for legacy dual-reviewer files. Schemas are
+exported with `--schema judgments|truth-audits|client-runs`. Truth-audit copies, duplicate reviewer
+IDs and identical same-case sealed-artifact digests are rejected. Blank templates are unjudged.
+Mechanical checks cannot certify semantic answer/grounding labels, and model labels never become
+human labels automatically. JSON/Markdown reports name both evaluation/retrieval modes and
+separate judgment kinds; `acceptance_evidence_complete` also needs trace-bound execution receipts,
+accepted source audits and no explicitly pending manual reviews. Failed check results remain
+visible rather than becoming missing data or an automatic human-review requirement. An operator acceptance decision remains
+separate from completeness. See the full protocol for provenance and source-audit details.
 With `--packets`, it also checks every planned case/run pair and reports expected, observed,
 missing and extra runs. `study_complete` requires this manifest check and all eligible labels;
 without a manifest, status is `unchecked` even if `balanced_runs=true`. Legacy judgment files

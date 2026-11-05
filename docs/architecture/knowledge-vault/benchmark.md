@@ -2,6 +2,14 @@
 
 ## Purpose and independent ground truth
 
+For this single-user deployment, M1 defaults to `solo_operator` engineering validation: one
+recorded evaluator, auditable source-truth decisions, deterministic checks and explicitly labeled
+model/human judgments. Manual review can resolve ambiguous or failed cases without inventing a
+second reviewer. The two-human annotation/adjudication procedure below is preserved as optional
+`independent_review` research validation. Every client report names its evaluation mode and its
+separate `lexical_only` or `hybrid` arm. Actual client results must be collected and scored before
+the operator can accept M1; generated packets and backend smoke tests are insufficient.
+
 The benchmark must answer four different questions: **Was useful knowledge extracted? Was the right stored record retrieved? Was temporal state resolved correctly? Did the assistant answer from evidence?** A vault search result is never its own truth label.
 
 Create 60–100 synthetic, realistic source packs and 20–30 separately consented, access-controlled real cases if feasible. Each synthetic pack contains original dated statements, corrections, documents, and explicit operator-authored truth cards prepared **before** ingestion. Two reviewers independently annotate (a) atomic claims and required rationale/detail, (b) source reference, origin and evidence state, (c) entity/scope, (d) valid/observation/known time with precision, (e) expected current and historical state, and (f) answer with permissible citations or required abstention. Adjudicate disagreements and retain both raw labels and the decision record. Reviewers must read original source material, not system output. Keep real source material and IDs outside Git in an encrypted operator-local fixture store; commit only synthetic fixtures and redacted aggregate results. Split train/dev/held-out by **source scenario**, not by query, to prevent paraphrase leakage. Freeze the held-out set before tuning.
@@ -34,7 +42,12 @@ Include negative cases with common lexical overlap but wrong subject, a long pro
 | Temporal resolution | **State correctness** across current, `as_of`, `known_at`, ambiguity/conflict and abstention cases | Import permutation consistency, correction-vs-change, precision-window cases, overflow behavior. |
 | Answer | **Grounded answer correctness** and **citation correctness** against source truth cards | Correct abstention when evidence is insufficient; incorrect abstention on definitive-value cases; correctness of evidence-backed conflict/unknown explanations; definitive-value answer correctness, unsupported statement count, context loss and missed-retrieval rate. Report each with labeled and missing-label denominators. |
 
-Avoid a single blended score. Report numerator/denominator, Wilson or bootstrap intervals, category slices, and the exact corpus/fixture/model/client versions. Use blinded human adjudication for ambiguous answer judgments; an LLM judge may triage but cannot supply ground truth. No production query log or private assertion contents enter CI.
+Avoid a single blended score. Report numerator/denominator, uncertainty, category slices and exact
+versions. Solo evaluation can use an LLM-assisted source audit and answer judge with recorded
+model/method/trace provenance; distinguish those labels from human review and deterministic checks.
+Do not derive source truth from vault output or claim independent validation from a model judge.
+Flag ambiguous/failed cases for optional manual review. Research mode retains blinded human
+adjudication. No production query log or private assertion contents enter CI.
 Compare judged case/run pairs with the generated packet manifest before calling a client study complete. Equal repetition counts among the observed cases do not establish that every planned case ran. Publish missing/extra counts without source text, private trace or answer content.
 
 ## Baseline and decision procedure

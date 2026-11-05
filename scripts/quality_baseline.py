@@ -45,7 +45,16 @@ def main() -> int:
         if result.returncode:
             return result.returncode
         report = json.loads(report_path.read_text(encoding="utf-8"))
-        print(json.dumps({"metadata": report["metadata"], "summary": report["summary"]}, indent=2))
+        print(
+            json.dumps(
+                {
+                    "evaluation_mode": report["evaluation_mode"],
+                    "metadata": report["metadata"],
+                    "summary": report["summary"],
+                },
+                indent=2,
+            )
+        )
     return 0
 
 

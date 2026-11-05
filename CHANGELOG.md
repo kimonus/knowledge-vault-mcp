@@ -7,6 +7,11 @@ stable release.
 
 ### Added
 
+- Auditable M1 `solo_operator` scoring with one evaluator, explicit human/model/deterministic
+  provenance, optional manual review, trace-bound client receipts and missing-judgment reporting.
+  Readable source/truth cards and exported audit/judgment/receipt JSON Schemas support operator
+  review without hand-reading the corpus. Duplicate truth-audit artifacts cannot count twice.
+
 - Separate offline semantic mode for the isolated M1 client lab. It requires an independent
   full-revision model snapshot and SHA-256 manifest, verifies dimensions, complete indexing,
   and vector-only retrieval, and records model and memory provenance. The existing disabled
@@ -16,7 +21,7 @@ stable release.
 - Isolated M1 client evaluation lab runbook and bounded, network-disabled PostgreSQL/MCP harness
   for synthetic infrastructure checks. Lexical-only client evaluation needs no embedding cache;
   semantic evaluation needs an independent snapshot. Both require a separately configured
-  assistant client and independent reviewers.
+  assistant client; independent human reviewers are required only by the optional research mode.
 - Admin-only, idempotent attachment of reviewed source-backed temporal evidence to an existing
   assertion UUID without changing its row, source rows, embeddings or supersession links.
 - Bounded historical resolution for a superseded legacy assertion only when reviewed evidence
@@ -28,6 +33,14 @@ stable release.
   identical retries remain valid after referenced metadata changes.
 
 ### Changed
+
+- Personal M1 acceptance now defaults to `solo_operator`; the strict two-human protocol remains
+  available as `independent_review`. Judgment reports use schema v3 and name evaluation and
+  retrieval modes, with separate metrics by judgment kind. Existing dual-reviewer CLI users must
+  pass `--evaluation-mode independent_review`; legacy Python callers keep their strict default.
+  No migration, production configuration or corpus/packet change is needed. Complete evidence
+  does not automatically pass the M1 quality gate; real client results must be collected/scored
+  and an operator acceptance decision recorded.
 
 - M1 client evaluation now records explicit `lexical_only` versus `hybrid` retrieval provenance;
   disabled runs do not misleadingly report an embedding model. The operator protocol supports

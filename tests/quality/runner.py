@@ -212,6 +212,7 @@ async def run_benchmark(
     latencies = [r["latency_ms"] for r in retrievals]
     return {
         "schema_version": 1,
+        "evaluation_mode": "backend_only",
         "metadata": {
             "run_at": datetime.now(UTC).isoformat(),
             "git_revision": os.environ.get("KNOWLEDGE_VAULT_QUALITY_REVISION", "unavailable"),
