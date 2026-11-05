@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-BRANCH = "diag/task-0014-ci-gate-retry"
+BRANCH = "diag/task-0014-bootstrap-retry"
 SOURCE = "14f9517e51e5221a00ae53833cf03360298f0e7c"
 BASE_CI = "ea25e70a377c4844119d8a681d032177f6ab4a86574a1a27d07201716b751fa6"
 BASE_RELEASE = "efd61c675a3b9fdb4f6d00f5529d89e6a53ca97075e3eefd08eaf7eb071eaf1b"

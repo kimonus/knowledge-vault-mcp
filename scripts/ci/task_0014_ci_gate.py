@@ -10,7 +10,7 @@ import urllib.request
 
 REPOSITORY = "kimonus/knowledge-vault-mcp"
 base = "https://api.github.com/repos/" + REPOSITORY
-BRANCH = "diag/task-0014-ci-gate-retry"
+BRANCH = "diag/task-0014-bootstrap-retry"
 JOBS = {"quality", "supply-chain", "kubernetes", "inspector"}
 
 
