@@ -1,5 +1,9 @@
 # Isolated M1 client evaluation lab
 
+The [source-truth contract](../architecture/knowledge-vault/source-truth-contract.md) records the
+2026-11-05 corpus correction. Regenerate packets and source audits; old digests cannot certify
+this revision. The 41 development case IDs and 123 planned repetitions remain stable.
+
 This lab supports the [independent client protocol](../architecture/knowledge-vault/client-evaluation-protocol.md). It is an infrastructure harness, not an assistant or scorer. It never connects to the production vault. The default smoke mode disables embeddings and therefore cannot measure multilingual retrieval quality. An independent lexical-only client study can run without server-side model weights. The separately selected semantic modes require an independently stored, verified offline snapshot.
 
 ## Lexical-only client evaluation (no local model)

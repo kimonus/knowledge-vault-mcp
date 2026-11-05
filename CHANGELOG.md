@@ -56,6 +56,12 @@ stable release.
 
 ### Fixed
 
+- Synthetic M1 sources now explicitly support gold observation timestamps and multilingual
+  preference attribution; fixture identity aliases are documented separately from source facts.
+  Case IDs and gold payloads are preserved. **Evaluation operator action:** regenerate packets
+  and truth-audit templates for the corrected corpus digest; historical client evaluations
+  cannot be reused as corrected-corpus acceptance evidence. No production migration is needed.
+
 - Feasibility Python launches use the relocated read-only runtime's own library directory;
   the server scopes this loader path to Python so PostgreSQL keeps the image's library search.
 - M1 lab MCP probes ignore inherited proxies and other HTTP environment settings. An owned,

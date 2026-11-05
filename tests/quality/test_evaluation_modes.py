@@ -389,5 +389,5 @@ def test_existing_dev_corpus_and_packet_totals_are_preserved():
     assert manifest["run_count"] == 123
     assert (
         manifest["corpus_sha256"]
-        == "1afc3456c9f47938e45b33c1d5497c5861d961c219dd91a5a78081bb5d8a279a"
+        == "2764de846bffe48b769e0f4b1d92386018936ca7f3941d81898229a084387128"
     )
