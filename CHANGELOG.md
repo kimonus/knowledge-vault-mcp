@@ -5,7 +5,17 @@ stable release.
 
 ## [Unreleased]
 
+### Fixed
+
+- The disposable M1 lab waits for PostgreSQL to become PID 1 before accepting `pg_isready`.
+  The image's temporary initialization server could otherwise appear ready and remove its
+  socket just before migrations. Interrupted attempts must remain in evaluation evidence;
+  retry them in fresh resources without reusing incomplete receipts. No production change.
+
 ### Added
+
+- Bounded, blinded lexical M1 pilot preparation using six existing development cases, a seeded
+  execution order, private artifacts and explicit missing evidence; no assistant is simulated.
 
 - Auditable M1 `solo_operator` scoring with one evaluator, explicit human/model/deterministic
   provenance, optional manual review, trace-bound client receipts and missing-judgment reporting.
@@ -55,6 +65,26 @@ stable release.
   revision 0006. Application rollback retains attached evidence in the additive table.
 
 ### Fixed
+
+- MCP clients receive a minimal valid assertion example and explicit metadata dependencies in
+  initialization/tool schemas: provenance locators, kind/state matching, active conflicting
+  reports, historical roles, ASCII identities and UUID usage events. This addresses actual M1
+  ingestion losses without relaxing server validation or changing source truth. After upgrade,
+  reconnect clients to refresh instructions/tool schemas; no database/configuration change.
+
+- M1 audit validation rejects source/truth-card digests used as a completed-review artifact
+  digest. Importers must explicitly verify and seal the actual review artifact; semantic
+  decisions and original provenance remain distinct from receipt normalization.
+
+- M1 conflict gold text now attributes each location to an unverified report, preserving both
+  competing records and the expected conflict outcome. Regenerate manifests for the second
+  corpus digest revision and re-audit the changed card; old approvals cannot be hash-rewritten.
+
+- Synthetic M1 sources now explicitly support gold observation timestamps and multilingual
+  preference attribution; fixture identity aliases are documented separately from source facts.
+  Case IDs and gold payloads are preserved. **Evaluation operator action:** regenerate packets
+  and truth-audit templates for the corrected corpus digest; historical client evaluations
+  cannot be reused as corrected-corpus acceptance evidence. No production migration is needed.
 
 - Feasibility Python launches use the relocated read-only runtime's own library directory;
   the server scopes this loader path to Python so PostgreSQL keeps the image's library search.
