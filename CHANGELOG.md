@@ -5,6 +5,13 @@ stable release.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-06
+
+### Security
+
+- Upgrade apt and libapt-pkg in both images to address CVE-2026-109518. Rebuild both images to
+  pick up the fix.
+
 ### Fixed
 
 - The disposable M1 lab waits for PostgreSQL to become PID 1 before accepting `pg_isready`.
@@ -13,6 +20,9 @@ stable release.
   retry them in fresh resources without reusing incomplete receipts. No production change.
 
 ### Added
+
+- The M1 lab, pilot and synthetic feasibility tools below are experimental evaluation tooling;
+  they do not enable a hosted client study or establish production retrieval quality.
 
 - Bounded, blinded lexical M1 pilot preparation using six existing development cases, a seeded
   execution order, private artifacts and explicit missing evidence; no assistant is simulated.
@@ -43,6 +53,8 @@ stable release.
   identical retries remain valid after referenced metadata changes.
 
 ### Changed
+
+- Refresh locked Python dependencies and the application build's pinned uv image.
 
 - When strict and subject-question lexical search are empty, a plain non-ASCII question with
   one remaining subject can use a five-character prefix to discover inflected word forms.
