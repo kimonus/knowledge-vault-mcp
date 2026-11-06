@@ -5,6 +5,13 @@ stable release.
 
 ## [Unreleased]
 
+### Fixed
+
+- The disposable M1 lab waits for PostgreSQL to become PID 1 before accepting `pg_isready`.
+  The image's temporary initialization server could otherwise appear ready and remove its
+  socket just before migrations. Interrupted attempts must remain in evaluation evidence;
+  retry them in fresh resources without reusing incomplete receipts. No production change.
+
 ### Added
 
 - Bounded, blinded lexical M1 pilot preparation using six existing development cases, a seeded

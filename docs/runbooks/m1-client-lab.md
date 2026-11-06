@@ -87,6 +87,12 @@ Before either semantic command, check available RAM, Docker disk space, and one-
 
 ## Infrastructure smoke
 
+Readiness requires both PostgreSQL as container PID 1 and a successful socket `pg_isready`.
+The pinned image temporarily starts a different server during initialization; that socket is
+not migration readiness. Preserve any interrupted attempt and its cleanup result. After a lab
+tooling correction, freeze the new revision and record the earlier partial experiment separately;
+do not silently combine incompatible run provenance or replace failed attempts.
+
 Run from the feature worktree after checking no `KNOWLEDGE_VAULT_*`, `PG*`, `HF_*`, `HUGGINGFACE_*`, `DATABASE_URL`, `DOCKER_HOST`, `DOCKER_CONTEXT`, `CODEX_HOME`, or `MCP_CONFIG` variables are set. The script refuses them rather than adopting outside configuration. It also disables `.env` loading. The executable pins the local Docker socket and refuses an unexpected daemon, less than 10 GiB Docker space, less than 4 GiB available RAM, or a missing pinned image.
 
 ```bash
