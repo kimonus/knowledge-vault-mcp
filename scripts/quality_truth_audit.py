@@ -36,7 +36,10 @@ def main() -> None:
         f"Evaluation mode: `{args.evaluation_mode}`.",
         "",
         "Read the original source first. Is every expected claim/date/identity supported? "
-        "Record accepted, needs revision, or leave unjudged. Never infer missing dates or aliases.",
+        "Record accepted, needs revision, or leave unjudged. Never infer missing dates or aliases. "
+        "The client receives state_request.identity as a fixture namespace; it is not a "
+        "source-extracted fact. Gold evidence keys are stable scoring labels, not required "
+        "client-generated identifiers. Sources must support observation times and values.",
         "",
     ]
     template = []

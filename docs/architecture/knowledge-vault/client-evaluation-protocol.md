@@ -89,13 +89,21 @@ source against its truth card, especially entity aliases, observation dates and 
 do not invent a missing identity mapping or timestamp to match a fixture. Keep cards out of the
 assistant's context. If a source/card needs correction, record `needs_revision` with notes and
 freeze a new experiment revision before collecting replacement results; preserve the old traces.
-The 41 development cases and 123 planned packets remain unchanged by this workflow change.
+The case IDs and totals remain 41 development cases and 123 planned packets. Source corrections
+change the corpus digest; see [the source contract and revision record](source-truth-contract.md).
+The packet's `state_request.identity` supplies a canonical fixture namespace for temporal cases.
+Use it when persisting their temporal evidence; its family prefix is not a source-extracted fact.
+Gold evidence keys are scoring labels: reviewers map committed claims to them; a client need not
+guess those keys. Read the source for all values, times and correction relationships.
 
 One `TruthAudit` receipt records `case_id`, opaque `audit_id`, `reviewer_id`, source SHA-256,
 `truth_card_sha256` (the canonical case including expected labels),
 `artifact_sha256`, provenance, `verdict`, `independent`, `before_client_output`, and optional notes.
 Hash the separately completed review artifact (for example the evaluator's dated Markdown
-decisions), not the receipt JSON containing its own digest. An accepted source audit requires
+decisions), not the receipt JSON containing its own digest. The completed review artifact must
+be distinct from the source/truth-card bytes; those two input digests
+are rejected in `artifact_sha256`. Verify the actual artifact file separately: schema validity
+alone cannot prove a claimed hash belongs to a review. An accepted source audit requires
 a human or model evaluation: a mechanical hash/schema check cannot certify semantic truth.
 Retrospective solo audits are allowed but their timing is reported; never relabel them as blind
 prospective validation. Model-assisted reviews remain `kind=model` unless a real person performs

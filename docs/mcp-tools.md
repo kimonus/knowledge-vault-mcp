@@ -1,5 +1,20 @@
 # MCP tool reference
 
+## Constructing valid assertion metadata
+
+Start with `content`, `kind` and `origin`; optional metadata must be source-supported. Known
+provenance kinds require actual locators; omit provenance or use `kind=unknown` if none was
+supplied. Never invent a URL or conversation ID. Ordinary decisions/procedures/rejected options
+retain their content/rationale without a `temporal` wrapper. Observed configuration, preference
+and fact state must use the matching assertion kind; identity components use lowercase ASCII.
+
+`status=current` means active evidence, not verified truth. Two active conflicting source reports
+stay current with `evidence_state=reported`; the resolver classifies their conflict. Disputed or
+uncertain evidence is intentionally unreliable for resolution. An old observation timestamp
+alone does not imply `temporal_role=historical`; that role requires `temporal.mode=historical`.
+Usage-report event IDs are UUIDs. MCP initialization and input-schema descriptions explain these
+existing rules; per-item validation, secret rejection and persistence semantics are unchanged.
+
 ## Temporal state (additive)
 
 `attach_reviewed_temporal_evidence(request)` requires admin scope. HTTP equivalent:
