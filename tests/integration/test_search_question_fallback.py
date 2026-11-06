@@ -58,3 +58,56 @@ async def test_purchase_question_retrieves_purchases_without_considered_option(
     )
     assert missing.results == []
     assert (await search.search('"missing exact phrase"', purpose="maintenance")).results == []
+
+
+async def test_multilingual_prefix_fallback_respects_filters_and_pagination(integration_container):
+    c = integration_container
+    batch = await c.ingestion.begin("test-user", "multilingual-prefix", 1, 4)
+    await c.ingestion.append(
+        "test-user",
+        batch.id,
+        1,
+        [
+            {
+                "content": "For drukarka, the user prefers dupleks.",
+                "kind": "preference",
+                "origin": "user",
+            },
+            {
+                "content": "For drukarka, the user prefers toner.",
+                "kind": "preference",
+                "origin": "user",
+            },
+            {
+                "content": "For drukarka, the user considered leasing.",
+                "kind": "considered_option",
+                "origin": "user",
+            },
+            {"content": "Funkcja monitorowania działa.", "kind": "user_fact", "origin": "user"},
+        ],
+    )
+    committed = await c.ingestion.commit("test-user", batch.id)
+    search = SearchService(
+        c.database.sessions, c.settings.model_copy(update={"embeddings_enabled": False}), None
+    )
+    question = "Jaką funkcję drukarki preferuje użytkownik?"
+    first = await search.search(
+        question, SearchFilters(kinds=["preference"]), limit=1, purpose="maintenance"
+    )
+    assert first.next_cursor
+    second = await search.search(
+        question,
+        SearchFilters(kinds=["preference"]),
+        limit=1,
+        cursor=first.next_cursor,
+        purpose="maintenance",
+    )
+    assert {first.results[0].assertion.id, second.results[0].assertion.id} == set(
+        committed.assertion_ids[:2]
+    )
+    assert (
+        await search.search("Jaką funkcję teleskopu preferuje użytkownik?", purpose="maintenance")
+    ).results == []
+    assert (
+        await search.search('Jaką "drukarki" preferuje użytkownik?', purpose="maintenance")
+    ).results == []

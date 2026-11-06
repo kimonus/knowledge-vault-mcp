@@ -138,6 +138,23 @@ def _question_subject_query(query: str) -> str | None:
     return " ".join(_QUESTION_VERB_FORMS.get(term, term) for term in terms)
 
 
+def _multilingual_prefix_query(query: str) -> str | None:
+    """Bounded, approximate discovery for non-ASCII questions with no other text hits."""
+    if "?" not in query or not any(ord(char) > 127 for char in query):
+        return None
+    if '"' in query or re.search(r"\b(?:AND|OR|NOT)\b|(?:^|\s)-\w", query):
+        return None
+    terms = re.findall(r"[^\W_]+", query.casefold())
+    prefixes = dict.fromkeys(
+        term[:5]
+        for term in terms
+        if len(term) >= 5 and term not in _QUESTION_TERMS | {"funkcję", "środek", "важно"}
+    )
+    if len(prefixes) != 1:
+        return None
+    return " | ".join(f"{prefix}:*" for prefix in prefixes)
+
+
 def _candidate_error(candidate: object) -> CandidateError | None:
     if not isinstance(candidate, str) or not candidate.strip():
         return CandidateError(
@@ -360,6 +377,21 @@ class SearchService:
                 )
                 text_rows = list((await session.execute(question_statement)).tuples().all())
                 fallback_count = len(text_rows)
+            if not text_rows and (prefix_query := _multilingual_prefix_query(query)):
+                alternate = func.to_tsquery("simple", prefix_query)
+                statement = (
+                    base.add_columns(
+                        func.ts_rank_cd(AssertionRow.search_vector, alternate).label("rank")
+                    )
+                    .where(AssertionRow.search_vector.op("@@")(alternate))
+                    .order_by(
+                        func.ts_rank_cd(AssertionRow.search_vector, alternate).desc(),
+                        AssertionRow.id,
+                    )
+                    .limit(candidate_limit)
+                )
+                text_rows = list((await session.execute(statement)).tuples().all())
+                fallback_count += len(text_rows)
             vector_rows: list[tuple[AssertionRow, float]] = []
             if query_vector is not None:
                 distance = AssertionRow.embedding.cosine_distance(query_vector)

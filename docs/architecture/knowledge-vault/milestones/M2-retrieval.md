@@ -4,7 +4,9 @@
 
 ## Problem and evidence
 
-Current search constructs `websearch_to_tsquery('simple', query)`, takes at most 250 text and 250 vector candidates, then fuses ranks at 0.55/0.45 without a relevance threshold ([search](../../../../src/knowledge_vault/services/search.py), [ranking](../../../../src/knowledge_vault/services/ranking.py)). Four read-only diagnostics yielded vector-only top score sequences; the relevance impact is unmeasured. A result page can contain semantically remote hits even when the system operates correctly.
+The M1 baseline constructed `websearch_to_tsquery('simple', query)` and, when strict text matches were empty, already tried a bounded conjunctive question-subject fallback. It took at most 250 text and 250 vector candidates and fused ranks at 0.55/0.45 without a relevance threshold ([search](../../../../src/knowledge_vault/services/search.py), [ranking](../../../../src/knowledge_vault/services/ranking.py)). Four read-only diagnostics yielded vector-only top score sequences; their relevance impact was unmeasured. A result page can contain semantically remote hits even when the system operates correctly.
+
+The bounded M2 lexical candidate adds a single five-character subject-prefix fallback for plain non-ASCII questions only when both prior text searches return no candidates. It does not rewrite quoted, Boolean or exclusion queries. This can recover some inflected forms but can also return unrelated prefix collisions; it is not translation or a relevance confidence score. It was evaluated on frozen development cases, not held-out or private queries. Restart pagination after upgrading.
 
 ## Scope and architectural decision
 
