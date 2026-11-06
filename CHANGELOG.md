@@ -11,6 +11,7 @@ stable release.
 
 - Upgrade apt and libapt-pkg in both images to address CVE-2026-109518. Rebuild both images to
   pick up the fix.
+- Update the backup image's golang.org/x/net to v0.62.0 for CVE-2026-78661.
 
 ### Fixed
 
