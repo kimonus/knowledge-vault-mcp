@@ -111,6 +111,11 @@ they appear as response schemas in `/api/openapi.json`.
 These schemas are intentionally minimal for OpenAI deep-research compatibility. Both tools return
 the structured value and the same value as JSON text content.
 
+Lexical discovery can fall back to a subject word prefix for a plain non-ASCII question when
+other text matches are empty. A prefix may match an unrelated word: inspect the returned evidence,
+and use the temporal resolver for classified state. Quoted, Boolean, and exclusion queries retain
+their explicit syntax. Restart search pagination after a server upgrade that changes ranking.
+
 ## Ingestion
 
 The MCP initialization response includes server instructions: fixed trigger, safety, batching and

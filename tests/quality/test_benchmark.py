@@ -49,3 +49,15 @@ async def test_source_first_quality_baseline(integration_container):
     assert report["summary"]["temporal_correct"] == 1.0
     assert report["summary"]["retrieval_case_count"] > 0
     assert report["metadata"]["extraction"].startswith("unmeasured")
+    if (
+        os.environ.get("KNOWLEDGE_VAULT_QUALITY_SPLIT") == "dev"
+        and mode == "text"
+        and len(selected) == 41
+    ):
+        for row in report["cases"]:
+            if "retrieval" in row:
+                retrieval = row["retrieval"]
+                if retrieval["recall_at_10"] is not None:
+                    assert retrieval["recall_at_10"] == 1.0, row["id"]
+                if retrieval["empty_result_correct"] is not None:
+                    assert retrieval["empty_result_correct"], row["id"]

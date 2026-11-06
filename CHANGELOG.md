@@ -44,6 +44,11 @@ stable release.
 
 ### Changed
 
+- When strict and subject-question lexical search are empty, a plain non-ASCII question with
+  one remaining subject can use a five-character prefix to discover inflected word forms.
+  Prefix collisions can return unrelated candidates; search remains discovery, not an answer
+  or temporal resolution. Restart pagination after upgrading because rankings can change.
+
 - Personal M1 acceptance now defaults to `solo_operator`; the strict two-human protocol remains
   available as `independent_review`. Judgment reports use schema v3 and name evaluation and
   retrieval modes, with separate metrics by judgment kind. Existing dual-reviewer CLI users must

@@ -138,6 +138,18 @@ async def test_authenticated_mcp_tool_lifecycle(integration_container) -> None:
     with pytest.raises(ToolError, match="authentication is required"):
         await server.call_tool("search", {"query": "anything"})
 
+    denied_token = AccessToken(
+        token="synthetic", client_id="mcp-test", subject="test-user", scopes=["knowledge:write"]
+    )
+    denied_context = auth_context_var.set(AuthenticatedUser(denied_token))
+    try:
+        with pytest.raises(ToolError, match="forbidden"):
+            await server.call_tool(
+                "search", {"query": "Jaką funkcję drukarki preferuje użytkownik?"}
+            )
+    finally:
+        auth_context_var.reset(denied_context)
+
     access_token = AccessToken(
         token="synthetic",
         client_id="mcp-test",

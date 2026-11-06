@@ -1,6 +1,6 @@
 """Question-only lexical fallback preserves explicit syntax and subject terms."""
 
-from knowledge_vault.services.search import _question_subject_query
+from knowledge_vault.services.search import _multilingual_prefix_query, _question_subject_query
 
 
 def test_plain_question_keeps_subject_and_action():
@@ -27,3 +27,20 @@ def test_exact_or_ambiguous_queries_are_not_rewritten():
         "laptop, and phone?"
     )
     assert _question_subject_query(long_question) is None
+
+
+def test_multilingual_prefix_fallback_preserves_explicit_syntax_and_bounds():
+    assert _multilingual_prefix_query("Jaką funkcję drukarki preferuje użytkownik?") == ("druka:*")
+    assert _multilingual_prefix_query("Что важно пользователю для камеры?") == ("камер:*")
+    assert _multilingual_prefix_query('Jaką "drukarkę"?') is None
+    assert _multilingual_prefix_query("Jaką drukarkę OR kamerę?") is None
+    assert _multilingual_prefix_query("Jaką drukarkę -kamerę?") is None
+    assert _multilingual_prefix_query("drukarkę") is None
+    assert _multilingual_prefix_query("Which printer?") is None
+    assert _multilingual_prefix_query("Jaką? ") is None
+    assert (
+        _multilingual_prefix_query(
+            "Żółty? alpha bravo charlie delta echoo foxtrot golfi hotel india"
+        )
+        is None
+    )
