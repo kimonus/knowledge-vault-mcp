@@ -1,5 +1,9 @@
 # Running the synthetic quality baseline
 
+Before freezing M1 inputs, read the [source contract and digest revision record](source-truth-contract.md).
+The 2026-11-05 source repairs invalidate old packets/audits for the corrected client experiment;
+regenerate them while retaining their historical originals. Case IDs and gold payloads are stable.
+
 `scripts/quality_baseline.py` runs only against the disposable PostgreSQL 17/pgvector started by
 `tests/conftest.py`. It has no database URL argument. Its gold source packs and expected claims are
 in `tests/quality/corpus.py`; expected relevance and temporal state are authored there before the

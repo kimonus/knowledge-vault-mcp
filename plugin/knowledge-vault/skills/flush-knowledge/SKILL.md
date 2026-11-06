@@ -59,15 +59,28 @@ For every assertion:
 
 When supported by the connected server, use `evidence_state` to distinguish unknown, reported,
 inferred and verified claims; legacy numeric confidence is not proof. Populate observation/source
-dates only when known. Use `temporal_role` for historical observations versus ongoing state and
-`review_after` for changing information that should be rechecked. Never infer verification,
+dates only when known. An old observation date alone is not a historical recollection: leave
+`temporal_role` unspecified for dated snapshots/transitions; historical recollections require
+`temporal.mode=historical`. Use `review_after` for changing information that should be rechecked.
+Never infer verification,
 completion, freshness or missing dates from access counters or record creation time.
 
 Name a procedure's appliance/project/context in its text. If several records share a named
 context, create it explicitly and use its UUID. For necessary procedure parts, preserve complete
 prerequisites and add ordered `part_of` links after committing the records. Do not leave steps
 such as “use 190 C” without their procedure and conditions. Use typed provenance for non-web
-evidence with opaque conversation/file/observation references; never upload transcripts.
+evidence with actual conversation/file/observation locators; never upload transcripts. Every
+provenance kind except `unknown` requires a locator. If no locator was supplied, omit provenance
+or use `kind=unknown`; do not invent source IDs, URLs or paths just to fill metadata.
+
+Start with `content`, `kind` and `origin`; extra metadata is optional. Decisions, procedures and
+rejected options preserve their rationale directly and normally omit `temporal`. For observed
+configuration/preference/fact state, kind must match `identity.state_type`: configuration maps
+to configuration, preference to preference, fact to user_fact/external_fact. Canonical identity
+components use lowercase ASCII; retain source language in content/value. `status=current` means
+active evidence, not verified truth. Keep competing active reports current with
+`evidence_state=reported` and let the resolver classify conflict; disputed/uncertain deliberately
+make evidence unreliable for resolution. Usage-event IDs must be UUIDs, not prefixed text labels.
 
 Use `purpose=maintenance` on focused search/get calls made for reconciliation, audits or readback.
 Use `update_knowledge_metadata` with the fetched revision and a new idempotency key to repair

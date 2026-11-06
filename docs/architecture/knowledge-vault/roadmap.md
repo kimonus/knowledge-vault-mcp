@@ -2,6 +2,11 @@
 
 ## Order and critical path
 
+M1 source-truth remediation clarified synthetic observation times, preference attribution and
+fixture namespaces. See the [contract and digest change](source-truth-contract.md): old client
+inputs are incompatible with the corrected corpus; real client execution and scoring remain
+required before acceptance. Coordination artifacts never substitute for that evidence.
+
 M1 engineering acceptance for this personal deployment defaults to `solo_operator`: one recorded
 evaluator, reproducible checks, explicit model/human provenance and review of ambiguous failures.
 The strict `independent_review` protocol remains optional research-grade validation. Neither

@@ -1,8 +1,15 @@
 # Isolated M1 client evaluation lab
 
+The [source-truth contract](../architecture/knowledge-vault/source-truth-contract.md) records the
+2026-11-05 corpus correction. Regenerate packets and source audits; old digests cannot certify
+this revision. The 41 development case IDs and 123 planned repetitions remain stable.
+
 This lab supports the [independent client protocol](../architecture/knowledge-vault/client-evaluation-protocol.md). It is an infrastructure harness, not an assistant or scorer. It never connects to the production vault. The default smoke mode disables embeddings and therefore cannot measure multilingual retrieval quality. An independent lexical-only client study can run without server-side model weights. The separately selected semantic modes require an independently stored, verified offline snapshot.
 
 ## Lexical-only client evaluation (no local model)
+
+Use the [bounded assistant pilot](m1-client-pilot.md) before the full study. Its preparer reuses
+six existing cases and the existing packet builder; a prepared bundle executes zero client runs.
 
 The existing `serve` command supports a real assistant-client study using PostgreSQL full-text
 retrieval with embeddings disabled; no neural weights are downloaded or loaded:
@@ -79,6 +86,12 @@ Before either semantic command, check available RAM, Docker disk space, and one-
 - The official MCP Python SDK supplies a scripted transport client. A separately configured real assistant client and its evaluation-only credentials have not yet been verified. Do not use any personal client profile or credential store.
 
 ## Infrastructure smoke
+
+Readiness requires both PostgreSQL as container PID 1 and a successful socket `pg_isready`.
+The pinned image temporarily starts a different server during initialization; that socket is
+not migration readiness. Preserve any interrupted attempt and its cleanup result. After a lab
+tooling correction, freeze the new revision and record the earlier partial experiment separately;
+do not silently combine incompatible run provenance or replace failed attempts.
 
 Run from the feature worktree after checking no `KNOWLEDGE_VAULT_*`, `PG*`, `HF_*`, `HUGGINGFACE_*`, `DATABASE_URL`, `DOCKER_HOST`, `DOCKER_CONTEXT`, `CODEX_HOME`, or `MCP_CONFIG` variables are set. The script refuses them rather than adopting outside configuration. It also disables `.env` loading. The executable pins the local Docker socket and refuses an unexpected daemon, less than 10 GiB Docker space, less than 4 GiB available RAM, or a missing pinned image.
 

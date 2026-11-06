@@ -344,9 +344,13 @@ def test_cleanup_only_owned_resources(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("cancelled", [False, True])
-def test_disposable_postgres_waits_for_launcher_cleanup(tmp_path: Path, cancelled: bool) -> None:
+@pytest.mark.parametrize("initializing", [False, True])
+def test_disposable_postgres_waits_for_launcher_cleanup(
+    tmp_path: Path, cancelled: bool, initializing: bool
+) -> None:
     socket_dir: Path | None = None
     waited = False
+    entrypoint_active = initializing
 
     def fake_docker(*args: str) -> str:
         if args[0] == "inspect" and "{{.HostConfig.NetworkMode}}" in args:
@@ -357,6 +361,15 @@ def test_disposable_postgres_waits_for_launcher_cleanup(tmp_path: Path, cancelle
 
     class Ready:
         returncode = 0
+
+    def fake_probe(args: list[str], **_kwargs: object):
+        result = Ready()
+        result.stdout = "bash\n" if entrypoint_active else "postgres\n"
+        return result
+
+    def finish_initialization(_seconds: float) -> None:
+        nonlocal entrypoint_active
+        entrypoint_active = False
 
     class FakeWatcher:
         def __init__(self, owner: str, socket: Path) -> None:
@@ -379,19 +392,44 @@ def test_disposable_postgres_waits_for_launcher_cleanup(tmp_path: Path, cancelle
     with (
         patch.object(lab, "docker", fake_docker),
         patch.object(lab, "default_smoke_output", side_effect=lambda owner: tmp_path / owner),
-        patch.object(lab.subprocess, "run", return_value=Ready()),
+        patch.object(lab.subprocess, "run", side_effect=fake_probe),
+        patch.object(lab.time, "sleep", side_effect=finish_initialization),
         patch.object(lab, "start_watcher", side_effect=fake_start),
         patch.object(lab, "wait_for_launch"),
     ):
         if cancelled:
             with pytest.raises(asyncio.CancelledError), lab.disposable_postgres() as (url, *_rest):
+                assert not entrypoint_active
                 assert url in lab.ACTIVE_URLS
                 raise asyncio.CancelledError
         else:
             with lab.disposable_postgres() as (url, *_rest):
+                assert not entrypoint_active
                 assert url in lab.ACTIVE_URLS
     assert socket_dir is not None and not socket_dir.exists()
     assert waited
+
+
+@pytest.mark.parametrize(
+    ("pid_one", "ready_exit", "expected"),
+    [("bash\n", 0, False), ("postgres\n", 1, False), ("postgres\n", 0, True)],
+)
+def test_postgres_readiness_excludes_entrypoint_temporary_server(
+    pid_one: str, ready_exit: int, expected: bool
+) -> None:
+    # The official image's temporary init server accepts pg_isready while PID 1 is still
+    # the entrypoint shell. It stops/removes the socket before exec'ing the final server.
+    process = subprocess.CompletedProcess([], 0, stdout=pid_one)
+    readiness = subprocess.CompletedProcess([], ready_exit)
+    with patch.object(lab.subprocess, "run", side_effect=[process, readiness]) as run:
+        assert lab.postgres_ready("owned-test-container") is expected
+    assert run.call_args_list[0].args[0][-2:] == ["cat", "/proc/1/comm"]
+    if pid_one.strip() != "postgres":
+        assert run.call_count == 1  # Never accept the temporary server's ready socket.
+    else:
+        assert run.call_count == 2
+        assert "pg_isready" in run.call_args_list[1].args[0]
+    assert all(call.kwargs["timeout"] == 5 for call in run.call_args_list)
 
 
 def test_startup_signal_waits_for_launcher_cleanup(tmp_path: Path) -> None:

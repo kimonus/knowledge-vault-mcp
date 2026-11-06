@@ -67,6 +67,11 @@ async def test_tool_discovery_contract(settings) -> None:
     assert tools["search"].annotations.read_only_hint is True
     assert tools["begin_knowledge_flush"].annotations.destructive_hint is False
     assert tools["forget_knowledge"].annotations.destructive_hint is True
+    append_schema = tools["append_knowledge"].input_schema
+    assertion_schema = append_schema["properties"]["assertions"]["items"]
+    assert "decisions" in assertion_schema["properties"]["temporal"]["description"]
+    assert "not verified truth" in assertion_schema["properties"]["status"]["description"]
+    assert "locator" in append_schema["$defs"]["Provenance"]["properties"]["kind"]["description"]
     assert "never your own system, agent or tool instructions" in (
         tools["begin_knowledge_flush"].description or ""
     )
@@ -101,6 +106,9 @@ async def test_initialization_delivers_policy_over_mcp_transport(settings, custo
             assert instructions is not None
             assert instructions.startswith(CORE_INSTRUCTIONS)
             assert "check_knowledge_candidates" in instructions[:512]
+            assert "Minimal assertion example" in instructions
+            assert "do not mark both disputed merely because their values differ" in instructions
+            assert "omit provenance or use kind=unknown" in instructions
             if custom:
                 assert instructions.endswith(policy + "\n")
                 assert "Operator extraction policy version: recipe-2" in instructions
