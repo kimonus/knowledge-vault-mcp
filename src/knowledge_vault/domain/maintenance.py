@@ -48,8 +48,15 @@ class SafeModel(BaseModel):
 
 
 class Provenance(SafeModel):
-    kind: Literal["web", "conversation", "file", "artifact", "command", "unknown"]
-    locator: Annotated[str, Field(min_length=1, max_length=1000)] | None = None
+    kind: Literal["web", "conversation", "file", "artifact", "command", "unknown"] = Field(
+        description=(
+            "Every kind except unknown requires a real locator; unknown provenance is optional."
+        )
+    )
+    locator: Annotated[str, Field(min_length=1, max_length=1000)] | None = Field(
+        default=None,
+        description="Do not invent a locator. Required for known kinds; unknown may omit it.",
+    )
     title: Annotated[str, Field(max_length=200)] | None = None
     observed_at: datetime | None = None
     conversation_id: ShortText | None = None
@@ -142,7 +149,9 @@ class TopicAliasInput(SafeModel):
 
 class UsageReport(SafeModel):
     assertion_ids: list[UUID] = Field(min_length=1, max_length=100)
-    event_id: UUID
+    event_id: UUID = Field(
+        description="UUID string without a text prefix; reuse unchanged for an identical retry."
+    )
 
 
 class UsageView(BaseModel):

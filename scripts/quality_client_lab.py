@@ -568,6 +568,26 @@ def watch_parent(owner: str, socket_dir: Path, output: Path | None) -> None:
         os.close(descriptor)
 
 
+def postgres_ready(container: str) -> bool:
+    # The image entrypoint starts a temporary socket-only server during initdb, then stops it.
+    # Only its final exec makes postgres PID 1; accepting the temporary server races migration.
+    command = ["/usr/bin/docker", "-H", "unix:///var/run/docker.sock", "exec", container]
+    options: dict[str, Any] = {
+        "capture_output": True,
+        "text": True,
+        "env": {"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+        "timeout": 5,
+    }
+    process = subprocess.run([*command, "cat", "/proc/1/comm"], **options)  # noqa: S603
+    if process.returncode != 0 or process.stdout.strip() != "postgres":
+        return False
+    probe = subprocess.run(  # noqa: S603  # Fixed executable, owned container.
+        [*command, "pg_isready", "-h", "/var/run/postgresql", "-U", "lab", "-d", "lab"],
+        **options,
+    )
+    return probe.returncode == 0
+
+
 @contextlib.contextmanager
 def disposable_postgres(
     stop_requested: Callable[[], bool] | None = None, output: Path | None = None
@@ -592,29 +612,11 @@ def disposable_postgres(
         for _ in range(60):
             check_interruption(stop_requested)
             try:
-                probe = subprocess.run(  # noqa: S603  # Fixed executable, owned container.
-                    [
-                        "/usr/bin/docker",
-                        "-H",
-                        "unix:///var/run/docker.sock",
-                        "exec",
-                        container,
-                        "pg_isready",
-                        "-h",
-                        "/var/run/postgresql",
-                        "-U",
-                        "lab",
-                        "-d",
-                        "lab",
-                    ],
-                    capture_output=True,
-                    env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
-                    timeout=5,
-                )
+                ready = postgres_ready(container)
             except subprocess.TimeoutExpired:
                 check_interruption(stop_requested)
             else:
-                if probe.returncode == 0:
+                if ready:
                     break
             check_interruption(stop_requested)
             time.sleep(0.5)

@@ -12,7 +12,15 @@ from pydantic import Field, model_validator
 from knowledge_vault.domain.maintenance import SafeModel
 
 Precision = Literal["instant", "day", "month", "year", "unknown"]
-Identifier = Annotated[str, Field(min_length=1, max_length=200, pattern=r"^[a-z0-9_.:/-]+$")]
+Identifier = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=200,
+        pattern=r"^[a-z0-9_.:/-]+$",
+        description="Lowercase ASCII identity; preserve source language in content/value.",
+    ),
+]
 EvidenceKey = Annotated[str, Field(min_length=1, max_length=200)]
 
 
@@ -20,7 +28,12 @@ class StateIdentity(SafeModel):
     subject: Identifier
     property: Identifier
     scope: Identifier
-    state_type: Literal["configuration", "preference", "fact"]
+    state_type: Literal["configuration", "preference", "fact"] = Field(
+        description=(
+            "For snapshot/change/historical/correction, assertion kind must match: "
+            "configuration->configuration, preference->preference, fact->user_fact/external_fact."
+        )
+    )
 
     @builtins.property
     def digest(self) -> str:

@@ -72,7 +72,10 @@ def cases() -> tuple[Case, ...]:
         old_key, new_key = f"{prefix}-old", f"{prefix}-new"
         source = (
             f"From 2026-01-01 through 2026-01-31 the home {subject} {prop} was {old}. "
-            f"From 2026-02-01 it was {new}; the change was implemented."
+            f"From 2026-02-01 it was {new}; the change was implemented. "
+            "These validity dates use UTC midnight boundaries. "
+            "The first observation was at 2026-01-01T00:00:00Z; "
+            "the second observation was at 2026-02-01T00:00:00Z."
         )
         claims = (
             _claim(
@@ -274,8 +277,10 @@ def cases() -> tuple[Case, ...]:
                 "user_correction",
                 splits[index],
                 (
-                    f"I first reported {subject} {prop} as {wrong}; that was a mistake. "
-                    f"The correct value is {right}."
+                    f"At 2026-01-01T00:00:00Z I reported {subject} {prop} as {wrong}. "
+                    f"At 2026-02-01T00:00:00Z I corrected that report: it was a mistake. "
+                    f"The correct value is {right}. "
+                    "These are observation times, not validity dates."
                 ),
                 (
                     _claim(
@@ -346,7 +351,11 @@ def cases() -> tuple[Case, ...]:
                 f"multilingual-{index}",
                 "multilingual",
                 splits[index],
-                f"Użytkownik / пользователь: {item} — {feature}.",
+                (
+                    f"Użytkownik wyraźnie deklaruje preferencję: {item} — {feature}."
+                    if index < 3
+                    else f"Пользователь явно выражает предпочтение: {item} — {feature}."
+                ),
                 (_claim(key, f"For {item}, the user prefers {feature}.", "preference"),),
                 query=query,
                 relevant=(key,),
@@ -385,11 +394,15 @@ def cases() -> tuple[Case, ...]:
                 prefix,
                 "missing_or_conflicting",
                 splits[index],
-                f"Two equally dated notes disagree: {subject} is in room-a; another says room-b.",
+                (
+                    "Two notes, both observed at 2026-01-01T00:00:00Z, disagree: "
+                    f"one reports {subject} is in room-a; another reports room-b. "
+                    "Neither report has been verified or selected as authoritative."
+                ),
                 (
                     _claim(
                         left,
-                        f"The {subject} is installed in room-a.",
+                        f"One unverified note reports that the {subject} is installed in room-a.",
                         "configuration",
                         evidence_state="reported",
                         observed_at="2026-01-01T00:00:00Z",
@@ -397,7 +410,8 @@ def cases() -> tuple[Case, ...]:
                     ),
                     _claim(
                         right,
-                        f"The {subject} is installed in room-b.",
+                        "Another unverified note reports that "
+                        f"the {subject} is installed in room-b.",
                         "configuration",
                         evidence_state="reported",
                         observed_at="2026-01-01T00:00:00Z",
