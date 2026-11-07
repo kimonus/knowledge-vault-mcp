@@ -15,9 +15,11 @@ FIELDS = {"id", "kind", "state", "scope", "effective_date", "question", "answera
 
 
 def read_json(path):
-    if path.stat().st_size > 100_000:
+    with path.open("rb") as stream:
+        data = stream.read(100_001)
+    if len(data) > 100_000:
         raise ValueError("input too large")
-    text = path.read_text(encoding="utf-8")
+    text = data.decode("utf-8")
     if detect_secret(text) or re.search(r"\b(?:https?|postgres(?:ql)?)://", text, re.I):
         raise ValueError("input refused by safety filter")
     return json.loads(text)
@@ -60,7 +62,8 @@ def freeze(source_path, gold_path, output_path):
     if not isinstance(gold, dict) or set(gold) != {"claims"}:
         raise ValueError("invalid gold")
     validate_claims(gold["claims"])
-    output = output_path.resolve()
+    # Resolve the parent, not the leaf: O_NOFOLLOW must see a final symlink.
+    output = output_path.parent.resolve() / output_path.name
     if output.is_relative_to(ROOT):
         raise ValueError("output must be outside repository")
     record = {

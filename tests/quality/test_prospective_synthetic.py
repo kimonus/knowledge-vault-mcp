@@ -117,3 +117,59 @@ def test_no_network_and_no_repository_output(tmp_path, inputs, monkeypatch):
     score(frozen, write(tmp_path / "result.json", {"claims": [claim]}))
     with pytest.raises(ValueError, match="outside repository"):
         freeze(source, gold, Path(__file__).parent / "forbidden.jsonl")
+
+
+def test_id_drift_and_unsupported_gold_are_not_semantic_evaluation(tmp_path, inputs):
+    source, gold, claim = inputs
+    frozen = tmp_path / "gold.jsonl"
+    # The source only says a toy was considered; this gold invents a purchase.
+    unsupported = dict(claim, state="purchased")
+    write(gold, {"claims": [unsupported]})
+    freeze(source, gold, frozen)
+    result = write(tmp_path / "result.json", {"claims": [unsupported]})
+    assert not any(score(frozen, result)["errors"].values())
+    # Identical fields under another ID are counted missing, not semantically matched.
+    write(result, {"claims": [dict(unsupported, id="different-id")]})
+    report = score(frozen, result)
+    assert report["errors"]["missing"] == 1
+    assert report["matched_ids"] == 0
+
+
+@pytest.mark.parametrize("payload", [b"\xff", b" " * 100_001])
+def test_invalid_utf8_and_oversize_refused_without_output(
+    tmp_path, inputs, payload, monkeypatch, capsys
+):
+    source, gold, _ = inputs
+    source.write_bytes(payload)
+    output = tmp_path / "gold.jsonl"
+    monkeypatch.setattr(
+        "sys.argv", ["prospective_synthetic.py", "freeze", str(source), str(gold), str(output)]
+    )
+    with pytest.raises(SystemExit) as exit_info:
+        module.main()
+    assert exit_info.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "Input refused or local file operation failed.\n"
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("target_exists", [False, True])
+def test_refuses_output_symlink_without_writing_target(tmp_path, inputs, target_exists):
+    source, gold, _ = inputs
+    target = tmp_path / "target"
+    if target_exists:
+        target.write_text("unchanged", encoding="utf-8")
+    link = tmp_path / "link"
+    link.symlink_to(target)
+    with pytest.raises(OSError):
+        freeze(source, gold, link)
+    assert target.read_text() == "unchanged" if target_exists else not target.exists()
+
+
+def test_refuses_symlinked_parent_into_repository(tmp_path, inputs):
+    source, gold, _ = inputs
+    link = tmp_path / "repo-link"
+    link.symlink_to(Path(__file__).parent, target_is_directory=True)
+    with pytest.raises(ValueError, match="outside repository"):
+        freeze(source, gold, link / "forbidden.jsonl")
