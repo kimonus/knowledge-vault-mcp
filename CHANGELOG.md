@@ -1,5 +1,8 @@
 # Changelog
 
+An offline synthetic-only prospective evaluation prototype is available in
+`docs/runbooks/prospective-synthetic.md`; it does not connect to or modify the vault.
+
 All notable changes follow Keep a Changelog. This project uses semantic versioning after its first
 stable release.
 
