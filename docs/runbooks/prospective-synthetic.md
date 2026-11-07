@@ -32,7 +32,9 @@ can alter the file can recompute it. The timestamp and commands cannot prove tha
 actually authored gold before seeing a result. Input filtering refuses common secret patterns
 and network URLs without printing their contents. Paths must be chosen by the operator; the
 output must be outside this checkout.
-Input files are limited to 100,000 bytes and must be valid UTF-8. Output creation refuses a
+Input files and the complete serialized freeze, including the newline, are limited to 100,000
+bytes and must be valid UTF-8. Freeze refuses an oversized record before creating the output,
+even if the input files fit individually. Output creation refuses a
 final symlink, including a dangling one. Parent directories are resolved for the checkout check;
 use a private directory controlled by the operator, not one shared with an adversary.
 

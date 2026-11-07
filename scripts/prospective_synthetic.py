@@ -11,13 +11,14 @@ from pathlib import Path
 from knowledge_vault.domain.secrets import detect_secret
 
 ROOT = Path(__file__).resolve().parents[1]
+MAX_FILE_BYTES = 100_000
 FIELDS = {"id", "kind", "state", "scope", "effective_date", "question", "answerable"}
 
 
 def read_json(path):
     with path.open("rb") as stream:
-        data = stream.read(100_001)
-    if len(data) > 100_000:
+        data = stream.read(MAX_FILE_BYTES + 1)
+    if len(data) > MAX_FILE_BYTES:
         raise ValueError("input too large")
     text = data.decode("utf-8")
     if detect_secret(text) or re.search(r"\b(?:https?|postgres(?:ql)?)://", text, re.I):
@@ -73,9 +74,12 @@ def freeze(source_path, gold_path, output_path):
         "claims": gold["claims"],
     }
     envelope = {"record": record, "sha256": hashlib.sha256(canonical(record).encode()).hexdigest()}
+    serialized = (canonical(envelope) + "\n").encode("utf-8")
+    if len(serialized) > MAX_FILE_BYTES:
+        raise ValueError("frozen record too large")
     fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as stream:
-        stream.write(canonical(envelope) + "\n")
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(serialized)
 
 
 def score(frozen_path, result_path):

@@ -2,6 +2,7 @@ import copy
 import importlib.util
 import json
 import socket
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -173,3 +174,30 @@ def test_refuses_symlinked_parent_into_repository(tmp_path, inputs):
     link.symlink_to(Path(__file__).parent, target_is_directory=True)
     with pytest.raises(ValueError, match="outside repository"):
         freeze(source, gold, link / "forbidden.jsonl")
+
+
+def test_frozen_size_boundary_is_scoreable_or_refused_before_write(tmp_path, inputs, monkeypatch):
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2030, 1, 1, tzinfo=UTC)
+
+    monkeypatch.setattr(module, "datetime", FixedDatetime)
+    source, gold, claim = inputs
+    sample = tmp_path / "sample.jsonl"
+    freeze(source, gold, sample)
+    padding = module.MAX_FILE_BYTES - sample.stat().st_size
+    near_limit = dict(claim, scope=claim["scope"] + "x" * padding)
+    write(gold, {"claims": [near_limit]})
+    assert gold.stat().st_size <= module.MAX_FILE_BYTES
+    frozen = tmp_path / "limit.jsonl"
+    freeze(source, gold, frozen)
+    assert frozen.stat().st_size == module.MAX_FILE_BYTES
+    assert not any(score(frozen, gold)["errors"].values())
+
+    write(gold, {"claims": [dict(near_limit, scope=near_limit["scope"] + "x")]})
+    assert gold.stat().st_size <= module.MAX_FILE_BYTES
+    refused = tmp_path / "too-large.jsonl"
+    with pytest.raises(ValueError, match="frozen record too large"):
+        freeze(source, gold, refused)
+    assert not refused.exists()
