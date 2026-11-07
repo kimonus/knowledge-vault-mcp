@@ -1,12 +1,21 @@
 """Synthetic lifecycle: logical roles are not independent human reviewers."""
 
+import importlib.util
 import json
 from pathlib import Path
 
 import pytest
-from scripts.prospective_synthetic import freeze
 
 from knowledge_vault.api.app import create_app
+
+spec = importlib.util.spec_from_file_location(
+    "prospective_synthetic",
+    Path(__file__).resolve().parents[2] / "scripts/prospective_synthetic.py",
+)
+assert spec and spec.loader
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+freeze = module.freeze
 
 pytestmark = [pytest.mark.contract, pytest.mark.integration]
 
