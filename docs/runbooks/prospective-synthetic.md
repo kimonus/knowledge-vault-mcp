@@ -49,3 +49,22 @@ The metrics do not measure actual ingestion, retrieval, temporal reasoning or an
 No supported unattended ChatGPT capture or Codex pre-flush hook was established in the inspected
 interfaces; this is not a claim about every possible client or future interface. Any real cohort
 requires a separately approved source-access method, privacy review and retention schedule.
+
+## Local lifecycle experiment
+
+`tests/contract/test_synthetic_proof_local.py` runs a deliberately small generated synthetic
+source through separate evaluator, custodian, and deterministic extractor functions. The custodian
+freezes gold before extraction. The test then invokes the MCP flush against disposable PostgreSQL,
+reads inserted records with a read-scoped principal, and runs search. It checks extraction against
+gold, persistence against submitted assertions, and retrieval against gold separately, and checks
+missing, incorrect and extra controls. Run with:
+
+```sh
+uv run pytest -q tests/contract/test_synthetic_proof_local.py
+```
+
+The roles are functions in one test process, not independent people or access-controlled security
+domains. The simple extractor parses structured fabricated input; it does not exercise a ChatGPT
+or Codex model, evaluate semantic quality, establish a source handoff, or support a real pilot.
+The comparison uses synthetic subject keys, not independently adjudicated real-world ID mapping.
+The fixture creates and destroys a separate database; never point this test at a production vault.
