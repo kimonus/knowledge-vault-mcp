@@ -1,10 +1,20 @@
 import copy
+import importlib.util
 import json
 import socket
 from pathlib import Path
 
 import pytest
-from scripts.prospective_synthetic import freeze, score
+
+spec = importlib.util.spec_from_file_location(
+    "prospective_synthetic",
+    Path(__file__).resolve().parents[2] / "scripts/prospective_synthetic.py",
+)
+assert spec and spec.loader
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+freeze = module.freeze
+score = module.score
 
 
 def write(path, value):
