@@ -1,0 +1,103 @@
+name: Standalone native image evidence
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/standalone-native-images.yml
+      - Dockerfile
+      - Dockerfile.backup
+      - pyproject.toml
+      - uv.lock
+      - src/**
+      - migrations/**
+      - scripts/backup.sh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: standalone-native-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-image:
+    # Standard hosted runners are free for public repositories; never schedule on a private one.
+    if: github.event.repository.private == false
+    # Separate VMs for each image bound disk usage; no artifacts or images are published.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+            machine: x86_64
+            image: app
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            machine: aarch64
+            image: app
+          - runner: ubuntu-24.04
+            arch: amd64
+            machine: x86_64
+            image: backup
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            machine: aarch64
+            image: backup
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      TARGET_ARCH: ${{ matrix.arch }}
+      TARGET_MACHINE: ${{ matrix.machine }}
+      IMAGE_KIND: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Verify runner and daemon architecture
+        run: |
+          set -eu
+          echo "Runner $RUNNER_OS/$RUNNER_ARCH; kernel $(uname -sm)"
+          test "$(uname -m)" = "$TARGET_MACHINE"
+          case "$TARGET_ARCH:$RUNNER_ARCH" in amd64:X64|arm64:ARM64) ;; *) exit 1 ;; esac
+          daemon_arch=$(docker info --format '{{.Architecture}}')
+          case "$TARGET_ARCH:$daemon_arch" in amd64:x86_64|amd64:amd64|arm64:aarch64|arm64:arm64) ;; *) exit 1 ;; esac
+          docker version
+          df -h "$(docker info --format '{{.DockerRootDir}}')"
+      - name: Build and inspect native image
+        run: |
+          set -eu
+          dockerfile=Dockerfile
+          if [ "$IMAGE_KIND" = backup ]; then dockerfile=Dockerfile.backup; fi
+          docker build --platform "linux/$TARGET_ARCH" -f "$dockerfile" -t standalone-native:ci .
+          image_arch=$(docker image inspect --format '{{.Os}}/{{.Architecture}}' standalone-native:ci)
+          test "$image_arch" = "linux/$TARGET_ARCH"
+          docker image inspect --format 'Image ID {{.Id}} architecture {{.Os}}/{{.Architecture}} user {{.Config.User}}' standalone-native:ci
+      - name: Exercise dependencies without network or model downloads
+        run: |
+          set -eu
+          if [ "$IMAGE_KIND" = app ]; then
+            test "$(docker image inspect --format '{{.Config.User}}' standalone-native:ci)" = '10001:10001'
+            docker run --rm --pull=never --network=none --read-only --cap-drop=ALL \
+              --security-opt=no-new-privileges --pids-limit=256 --memory=4g \
+              --env HF_HUB_OFFLINE=1 --env TRANSFORMERS_OFFLINE=1 --env EXPECTED_MACHINE="$TARGET_MACHINE" \
+              --entrypoint /app/.venv/bin/python standalone-native:ci -c '
+          import importlib.metadata as metadata
+          import os, platform, torch, sentence_transformers
+          assert os.geteuid() == 10001 and os.getegid() == 10001
+          assert platform.machine() == os.environ["EXPECTED_MACHINE"]
+          print("Runtime architecture:", platform.machine())
+          for name in ("torch", "sentence-transformers"):
+              dist = metadata.distribution(name)
+              print(name, dist.version, dist.read_text("WHEEL"))
+          value = torch.tensor([1.0, 2.0]).sum().item()
+          assert value == 3.0
+          print("Offline CPU tensor operation passed; no model inference performed")'
+          else
+            test "$(docker image inspect --format '{{.Config.User}}' standalone-native:ci)" = '999:999'
+            docker run --rm --pull=never --network=none --read-only --cap-drop=ALL \
+              --security-opt=no-new-privileges --pids-limit=64 --memory=512m --env EXPECTED_MACHINE="$TARGET_MACHINE" \
+              --entrypoint /bin/sh standalone-native:ci -c \
+              'set -e; test "$(id -u)" = 999; test "$(id -g)" = 999; test "$(uname -m)" = "$EXPECTED_MACHINE"; uname -m; pg_dump --version; restic version'
+          fi

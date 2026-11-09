@@ -33,3 +33,12 @@ Complete Phase 1 only after native runs on both amd64 and arm64 and dependency/w
 including the pinned torch and sentence-transformers distributions. Existing release scans,
 signatures, provenance and SBOMs must continue to cover every published platform and manifest;
 publication requires separate authorization. An unavailable architecture remains unverified.
+
+The `Standalone native image evidence` GitHub Actions workflow builds each image independently on
+standard `ubuntu-24.04` and `ubuntu-24.04-arm` runners. It checks runner, daemon and image
+architecture and executes native dependencies with network disabled. Each image uses a separate
+ephemeral runner to limit disk pressure; no model, artifact, cache or registry publication is
+involved. Jobs are skipped if the event repository is private. Inspect the job logs and exact
+commit before recording evidence; a skipped job is not evidence. The runner label and
+architecture checks do not by themselves establish application or engine support, and the tensor
+operation does not establish model inference. Provisioned model inference remains a separate gate.
