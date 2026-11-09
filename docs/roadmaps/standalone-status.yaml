@@ -1,6 +1,6 @@
 schema_version: 1
 initiative: standalone-container-deployment
-state: phase_0_in_progress
+state: phase_1_in_progress
 baseline:
   branch: main
   commit: 39b6af7c27950a7e57159b59cc7157ff8728f248
@@ -16,17 +16,33 @@ owner_authorizations:
   paid_infrastructure: false
 phases:
   phase_0:
-    state: in_progress
+    state: review_gate_passed_pr_pending
     issue: null
     pr: https://github.com/kimonus/knowledge-vault-mcp/pull/100
-    verified_commit: null
+    verified_commit: 7c693365a48e524bc04cdd0fe1088f29532f6da2
     evidence:
       - "Bootstrap PR #99 draft at recorded head: quality, supply-chain, kubernetes, inspector and GitGuardian passed."
       - "Phase 0 static inventory and proposed ADR independently reviewed; origin authentication and entrypoint findings incorporated."
+      - "Phase 0 head 7c693365a48e524bc04cdd0fe1088f29532f6da2: quality, supply-chain, kubernetes and inspector passed in https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42596296833."
     blockers:
-      - "Required checks for draft PR #100 pending."
+      - "Bootstrap PR #99 and Phase 0 PR #100 remain drafts and unmerged; merging requires owner authorization."
       - "Authenticated TLS is required by AGENTS.md and ADR 0005; a plaintext loopback exception requires an explicit owner architecture/security decision."
-  phase_1: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
+  phase_1:
+    state: in_progress
+    issue: null
+    pr: https://github.com/kimonus/knowledge-vault-mcp/pull/101
+    evidence:
+      - "Phase 0 CI built both images and ran backup-restore checks on the amd64 GitHub runner; this is not native full-profile inference evidence."
+      - "Independent review of the offline smoke completed; five fake-Docker tests passed, including pg_dump failure propagation."
+      - "Native amd64 and arm64 image builds and offline dependency checks passed at 5e48b1989f0c31c3c22cbcd53bf70d471d2023d4: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42603464520."
+      - "Local amd64 image smoke with the checksum-verified model produced a 384-dimensional vector without network access."
+      - "Experimental Podman Mac image-test instructions and engine support reviewed; real Podman Machine test remains pending."
+      - "PR #101 head 2268e7bf29f7d9b04929932a92cf953648f7f685 passed quality, supply-chain, kubernetes and inspector in https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42598985509."
+      - "Preliminary native run https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42602380622 at 92a1c26bc9ef963b27db5c704da6951dacdc37c6: arm64 app image built but runtime import failed without a writable temporary directory; both backup executable checks passed. Run completion and amd64 app result remained pending at observation."
+    blockers:
+      - "Native arm64 host and inference evidence have not been established; no platform support is claimed."
+      - "The shared Docker data root had 11 GiB free on inspection; no local image build or pruning was performed."
+      - "Native-runner build and dependency checks and real model inference are pending."
   phase_2: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_3: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_4: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
@@ -34,6 +50,6 @@ phases:
   phase_6: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_7: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
 verified_platforms: []
-next_action: "Verify draft PR #100 required checks and reconcile its dependency on #99; retain authenticated TLS unless owner explicitly approves an architecture/security change."
+next_action: "Run native GitHub-hosted image build and dependency checks, then gather real-model inference evidence on both architectures; retain authenticated TLS unless owner explicitly approves an architecture/security change."
 notes:
   - "This manifest is a handoff pointer, not proof of success; reconcile against GitHub and executed tests."

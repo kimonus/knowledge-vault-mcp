@@ -8,6 +8,13 @@ stable release.
 
 ## [Unreleased]
 
+### Added
+
+- Experimental offline image smoke for collecting standalone application and backup compatibility
+  evidence; it does not establish native execution or platform support by itself.
+- Experimental Podman engine selection and Apple Silicon image-test steps for that smoke; the
+  standalone Podman deployment remains unimplemented and unverified.
+
 ## [0.7.0] - 2026-11-06
 
 ### Security
