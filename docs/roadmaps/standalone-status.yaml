@@ -1,9 +1,12 @@
 schema_version: 1
 initiative: standalone-container-deployment
-state: bootstrap
+state: phase_0_in_progress
 baseline:
   branch: main
-  commit: null  # Resolve at first supervisor run; do not rely on historical chat SHA.
+  commit: 39b6af7c27950a7e57159b59cc7157ff8728f248
+  bootstrap_pr: https://github.com/kimonus/knowledge-vault-mcp/pull/99
+  bootstrap_head: 2aaa4e46bf59266938319f65a3638f26b9740858
+  bootstrap_ci: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42590753123
 owner_authorizations:
   planning_and_draft_prs: true
   merge: false
@@ -13,12 +16,16 @@ owner_authorizations:
   paid_infrastructure: false
 phases:
   phase_0:
-    state: not_started
+    state: in_progress
     issue: null
     pr: null
     verified_commit: null
-    evidence: []
-    blockers: []
+    evidence:
+      - "Bootstrap PR #99 draft at recorded head: quality, supply-chain, kubernetes, inspector and GitGuardian passed."
+      - "Phase 0 static inventory and proposed ADR independently reviewed; origin authentication and entrypoint findings incorporated."
+    blockers:
+      - "Draft PR and required checks pending."
+      - "Authenticated TLS is required by AGENTS.md and ADR 0005; a plaintext loopback exception requires an explicit owner architecture/security decision."
   phase_1: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_2: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_3: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
@@ -27,6 +34,6 @@ phases:
   phase_6: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_7: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
 verified_platforms: []
-next_action: "Perform Phase 0 portability audit and submit ADR as draft PR."
+next_action: "Submit Phase 0 draft PR and verify its required checks; retain authenticated TLS unless owner explicitly approves an architecture/security change."
 notes:
   - "This manifest is a handoff pointer, not proof of success; reconcile against GitHub and executed tests."
