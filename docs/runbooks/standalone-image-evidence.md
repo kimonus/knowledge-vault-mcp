@@ -14,11 +14,17 @@ Capture how native execution was established independently of container architec
 remote daemons, virtual machines, binfmt and emulators can make `uname` or image metadata misleading.
 Record failures and emulated runs as such. Never use a corporate host without owner authorization.
 
-Provision the model separately, confirm it is readable by UID 10001, and run:
+Provision the model separately, confirm it is readable by UID 10001, and run with Docker (the
+default):
 
 ```sh
 sh scripts/ci/standalone_image_smoke.sh APP_IMAGE BACKUP_IMAGE /absolute/path/to/model
 ```
+
+For Podman, use `KV_SMOKE_ENGINE=podman` before the same command. Only `docker` and `podman`
+are accepted. The Podman path disables its additional read-only tmpfs mounts; the explicit
+bounded `/tmp` mount is shared with the Docker test. Both modes are experimental.
+See the [Apple Silicon Podman Machine image test](podman-macos-image-test.md) for setup and evidence.
 
 The script resolves image IDs once, starts short-lived containers with network disabled, a
 read-only root, dropped capabilities and no ports or credentials, and mounts only the model

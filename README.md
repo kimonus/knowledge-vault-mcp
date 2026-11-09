@@ -31,6 +31,10 @@ configuration.
 
 ## Quick start
 
+This is a **development** setup. A maintained standalone Docker/Podman deployment is still under
+development; do not treat the commands below as its production quickstart. To help test the
+unreleased images on Apple Silicon, see the [Podman Machine image test](docs/runbooks/podman-macos-image-test.md).
+
 Prerequisites: Python 3.12+, [uv](https://docs.astral.sh/uv/), Docker, and a Docker daemon.
 
 ```bash

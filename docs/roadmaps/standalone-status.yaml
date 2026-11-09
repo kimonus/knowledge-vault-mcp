@@ -34,6 +34,9 @@ phases:
     evidence:
       - "Phase 0 CI built both images and ran backup-restore checks on the amd64 GitHub runner; this is not native full-profile inference evidence."
       - "Independent review of the offline smoke completed; five fake-Docker tests passed, including pg_dump failure propagation."
+      - "Native amd64 and arm64 image builds and offline dependency checks passed at 5e48b1989f0c31c3c22cbcd53bf70d471d2023d4: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42603464520."
+      - "Local amd64 image smoke with the checksum-verified model produced a 384-dimensional vector without network access."
+      - "Experimental Podman Mac image-test instructions and engine support reviewed; real Podman Machine test remains pending."
       - "PR #101 head 2268e7bf29f7d9b04929932a92cf953648f7f685 passed quality, supply-chain, kubernetes and inspector in https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42598985509."
       - "Preliminary native run https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42602380622 at 92a1c26bc9ef963b27db5c704da6951dacdc37c6: arm64 app image built but runtime import failed without a writable temporary directory; both backup executable checks passed. Run completion and amd64 app result remained pending at observation."
     blockers:

@@ -5,8 +5,10 @@ from pathlib import Path
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts/ci/standalone_image_smoke.sh"
 
 
-def fake_docker(tmp_path: Path, fail: str = "") -> tuple[Path, dict[str, str]]:
-    docker = tmp_path / "docker"
+def fake_docker(
+    tmp_path: Path, fail: str = "", engine: str = "docker"
+) -> tuple[Path, dict[str, str]]:
+    docker = tmp_path / engine
     log = tmp_path / "docker.log"
     docker.write_text(
         "#!/bin/sh\n"
@@ -19,6 +21,8 @@ def fake_docker(tmp_path: Path, fail: str = "") -> tuple[Path, dict[str, str]]:
         'case "$*" in\n'
         "  *'{{.Config.User}}'*sha256:app*) echo 10001:10001;;\n"
         "  *'{{.Config.User}}'*sha256:backup*) echo 999:999;;\n"
+        "  *'{{.User}}'*sha256:app*) echo 10001:10001;;\n"
+        "  *'{{.User}}'*sha256:backup*) echo 999:999;;\n"
         "  *'{{.Id}} {{.Os}}/{{.Architecture}}'*) echo 'metadata linux/amd64';;\n"
         "  *'{{.Id}}'*app:local*) echo sha256:app;;\n"
         "  *'{{.Id}}'*backup:local*) echo sha256:backup;;\n"
@@ -31,6 +35,7 @@ def fake_docker(tmp_path: Path, fail: str = "") -> tuple[Path, dict[str, str]]:
         "PATH": f"{tmp_path}:{os.environ['PATH']}",
         "DOCKER_LOG": str(log),
         "FAIL_MODE": fail,
+        "KV_SMOKE_ENGINE": engine,
     }
 
 
@@ -57,6 +62,43 @@ def test_smoke_uses_resolved_images_and_isolates_containers(tmp_path: Path) -> N
     assert "pg_dump --version; restic version" in runs[1]
     assert "dst=/model,readonly" in runs[0]
     assert "matching reported architectures alone does not rule out emulation" in result.stdout
+
+
+def test_podman_uses_podman_metadata_and_same_isolation(tmp_path: Path) -> None:
+    log, env = fake_docker(tmp_path, engine="podman")
+    model = tmp_path / "model"
+    model.mkdir()
+    subprocess.run(  # noqa: S603 - fixed script and isolated test paths
+        ["/bin/sh", str(SCRIPT), "app:local", "backup:local", str(model)],
+        env=env,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    calls = log.read_text().splitlines()
+    assert any("{{.Host.Arch}}" in call for call in calls)
+    assert any("{{.User}}" in call for call in calls)
+    assert not any("{{.Config.User}}" in call for call in calls)
+    runs = [line for line in calls if line.startswith("run ")]
+    assert len(runs) == 2
+    assert all("--read-only-tmpfs=false" in line for line in runs)
+    assert all("--network=none" in line and "--read-only" in line for line in runs)
+    assert all("--pull=never" in line and "--cap-drop=ALL" in line for line in runs)
+    assert "sha256:app" in runs[0] and "sha256:backup" in runs[1]
+
+
+def test_smoke_rejects_unrecognized_engine(tmp_path: Path) -> None:
+    model = tmp_path / "model"
+    model.mkdir()
+    result = subprocess.run(  # noqa: S603 - fixed script and isolated test paths
+        ["/bin/sh", str(SCRIPT), "app:local", "backup:local", str(model)],
+        env=os.environ | {"KV_SMOKE_ENGINE": "unexpected"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "KV_SMOKE_ENGINE must be docker or podman" in result.stderr
 
 
 def test_smoke_rejects_missing_model_before_running_docker(tmp_path: Path) -> None:
