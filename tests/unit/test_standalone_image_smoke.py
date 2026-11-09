@@ -49,6 +49,8 @@ def test_smoke_uses_resolved_images_and_isolates_containers(tmp_path: Path) -> N
     assert len(runs) == 2
     assert all("--network=none" in line and "--read-only" in line for line in runs)
     assert all("--pull=never" in line and "--cap-drop=ALL" in line for line in runs)
+    assert "--tmpfs /tmp:rw,nosuid,nodev,size=128m,mode=1777" in runs[0]
+    assert "--tmpfs" not in runs[1]
     assert "sha256:app" in runs[0]
     assert "sha256:backup" in runs[1]
     assert "set -e; test" in runs[1]

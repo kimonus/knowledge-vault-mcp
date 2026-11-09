@@ -321,12 +321,16 @@ jobs:
             test "$(docker image inspect --format '{{.Config.User}}' standalone-native:ci)" = '10001:10001'
             docker run --rm --pull=never --network=none --read-only --cap-drop=ALL \
               --security-opt=no-new-privileges --pids-limit=256 --memory=4g \
+              --tmpfs /tmp:rw,nosuid,nodev,size=128m,mode=1777 \
               --env HF_HUB_OFFLINE=1 --env TRANSFORMERS_OFFLINE=1 --env EXPECTED_MACHINE="$TARGET_MACHINE" \
               --entrypoint /app/.venv/bin/python standalone-native:ci -c '
           import importlib.metadata as metadata
-          import os, platform, torch, sentence_transformers
+          import os, platform, tempfile, torch, sentence_transformers
           assert os.geteuid() == 10001 and os.getegid() == 10001
           assert platform.machine() == os.environ["EXPECTED_MACHINE"]
+          assert tempfile.gettempdir() == "/tmp"
+          with tempfile.TemporaryFile() as scratch:
+              scratch.write(b"scratch")
           print("Runtime architecture:", platform.machine())
           for name in ("torch", "sentence-transformers"):
               dist = metadata.distribution(name)

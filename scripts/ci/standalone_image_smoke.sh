@@ -34,12 +34,16 @@ echo "Backup: $(docker image inspect --format '{{.Id}} {{.Os}}/{{.Architecture}}
 # credentials. Use image IDs so a concurrent tag update cannot change the tested image.
 docker run --rm --pull=never --network=none --read-only --cap-drop=ALL \
     --security-opt=no-new-privileges --pids-limit=256 --memory=4g \
+    --tmpfs /tmp:rw,nosuid,nodev,size=128m,mode=1777 \
     --mount "type=bind,src=$model,dst=/model,readonly" \
     --env HF_HUB_OFFLINE=1 --env TRANSFORMERS_OFFLINE=1 \
     --env TOKENIZERS_PARALLELISM=false --entrypoint /app/.venv/bin/python \
-    "$app_id" -c 'import os, platform, torch, sentence_transformers
+    "$app_id" -c 'import os, platform, tempfile, torch, sentence_transformers
 from sentence_transformers import SentenceTransformer
 assert os.geteuid() == 10001 and os.getegid() == 10001
+assert tempfile.gettempdir() == "/tmp"
+with tempfile.TemporaryFile() as scratch:
+    scratch.write(b"scratch")
 print("Container architecture:", platform.machine())
 print("torch:", torch.__version__, "sentence-transformers:", sentence_transformers.__version__)
 model = SentenceTransformer("/model", local_files_only=True, device="cpu")

@@ -35,6 +35,7 @@ phases:
       - "Phase 0 CI built both images and ran backup-restore checks on the amd64 GitHub runner; this is not native full-profile inference evidence."
       - "Independent review of the offline smoke completed; five fake-Docker tests passed, including pg_dump failure propagation."
       - "PR #101 head 2268e7bf29f7d9b04929932a92cf953648f7f685 passed quality, supply-chain, kubernetes and inspector in https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42598985509."
+      - "Preliminary native run https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42602380622 at 92a1c26bc9ef963b27db5c704da6951dacdc37c6: arm64 app image built but runtime import failed without a writable temporary directory; both backup executable checks passed. Run completion and amd64 app result remained pending at observation."
     blockers:
       - "Native arm64 host and inference evidence have not been established; no platform support is claimed."
       - "The shared Docker data root had 11 GiB free on inspection; no local image build or pruning was performed."

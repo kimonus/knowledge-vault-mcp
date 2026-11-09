@@ -22,7 +22,9 @@ sh scripts/ci/standalone_image_smoke.sh APP_IMAGE BACKUP_IMAGE /absolute/path/to
 
 The script resolves image IDs once, starts short-lived containers with network disabled, a
 read-only root, dropped capabilities and no ports or credentials, and mounts only the model
-read-only. It imports the pinned native dependencies and performs CPU inference without network,
+read-only. The application has a writable, 128 MiB `/tmp` tmpfs (mode 1777), while its root stays
+read-only; this allows non-root dependencies to create temporary files. It imports the pinned native
+dependencies and performs CPU inference without network,
 checking the 384-dimensional result. It also checks the backup image's `pg_dump` and `restic`
 executables. It verifies the images' expected non-root defaults and effective identities. Output
 gives image IDs, architecture reports and versions, but must be paired with
@@ -39,7 +41,7 @@ standard `ubuntu-24.04` and `ubuntu-24.04-arm` runners. It defaults to false and
 for manual dispatches on a public repository. It checks runner, daemon and image
 architecture and executes native dependencies with network disabled. Each image uses a separate
 ephemeral runner to limit disk pressure; no model, artifact, cache or registry publication is
-involved. The opt-in dispatch runs only the native matrix, skipping the four ordinary CI jobs and
+involved. The app check also mounts the bounded `/tmp` tmpfs. The opt-in dispatch runs only the native matrix, skipping the four ordinary CI jobs and
 their artifact and cache operations; normal CI and dispatch without the input remain unchanged.
 Native jobs are skipped if the event repository is private. Inspect the job logs and exact
 commit before recording evidence; a skipped job is not evidence. The runner label and
