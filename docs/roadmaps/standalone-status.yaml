@@ -1,0 +1,32 @@
+schema_version: 1
+initiative: standalone-container-deployment
+state: bootstrap
+baseline:
+  branch: main
+  commit: null  # Resolve at first supervisor run; do not rely on historical chat SHA.
+owner_authorizations:
+  planning_and_draft_prs: true
+  merge: false
+  deploy_existing_homelab: false
+  access_corporate_mac: false
+  publish_release: false
+  paid_infrastructure: false
+phases:
+  phase_0:
+    state: not_started
+    issue: null
+    pr: null
+    verified_commit: null
+    evidence: []
+    blockers: []
+  phase_1: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
+  phase_2: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
+  phase_3: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
+  phase_4: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
+  phase_5: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
+  phase_6: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
+  phase_7: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
+verified_platforms: []
+next_action: "Perform Phase 0 portability audit and submit ADR as draft PR."
+notes:
+  - "This manifest is a handoff pointer, not proof of success; reconcile against GitHub and executed tests."
