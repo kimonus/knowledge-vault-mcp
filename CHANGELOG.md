@@ -8,6 +8,11 @@ stable release.
 
 ## [Unreleased]
 
+### Added
+
+- Experimental offline image smoke for collecting standalone application and backup compatibility
+  evidence; it does not establish native execution or platform support by itself.
+
 ## [0.7.0] - 2026-11-06
 
 ### Security
