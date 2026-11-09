@@ -18,13 +18,13 @@ phases:
   phase_0:
     state: in_progress
     issue: null
-    pr: null
+    pr: https://github.com/kimonus/knowledge-vault-mcp/pull/100
     verified_commit: null
     evidence:
       - "Bootstrap PR #99 draft at recorded head: quality, supply-chain, kubernetes, inspector and GitGuardian passed."
       - "Phase 0 static inventory and proposed ADR independently reviewed; origin authentication and entrypoint findings incorporated."
     blockers:
-      - "Draft PR and required checks pending."
+      - "Required checks for draft PR #100 pending."
       - "Authenticated TLS is required by AGENTS.md and ADR 0005; a plaintext loopback exception requires an explicit owner architecture/security decision."
   phase_1: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_2: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
@@ -34,6 +34,6 @@ phases:
   phase_6: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_7: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
 verified_platforms: []
-next_action: "Submit Phase 0 draft PR and verify its required checks; retain authenticated TLS unless owner explicitly approves an architecture/security change."
+next_action: "Verify draft PR #100 required checks and reconcile its dependency on #99; retain authenticated TLS unless owner explicitly approves an architecture/security change."
 notes:
   - "This manifest is a handoff pointer, not proof of success; reconcile against GitHub and executed tests."
