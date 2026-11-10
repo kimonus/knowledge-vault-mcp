@@ -46,23 +46,29 @@ contains the recorded image IDs, model provenance, exact limits and CI links.
    mismatched runnable platform descriptors, invalid digests and malformed manifests. BuildKit
    attestation descriptors must be handled separately rather than counted as runnable images.
    Select children by digest, never by mutable tag or the scanning host's default platform.
-3. Scan **each of the four immutable child digests** with the pinned policy and produce an SBOM
-   for each child. Verify the per-child BuildKit provenance and SBOM attestation subjects and
-   expected builder/source identity, and preserve those attestations when composing an index.
-   Metadata assertions alone do not authenticate an attestation: establish a cryptographically
-   verified trust chain to an authorized issuer and workflow identity, or a separately reviewed
-   trusted signing/binding policy that binds the attestation to the immutable candidate index
-   and its child subjects. Verify that binding again after index assembly, and fail closed for
-   unsigned, forged, untrusted or wrong-identity evidence. Verify that all evidence refers to the
-   same reviewed source and intended candidate digests. Pin and independently validate the
-   relevant tools and artifact formats; demonstrate failure when any child, digest, expected
-   identity, scan, trusted binding or attestation is missing or invalid.
-4. After all gates pass, sign the immutable index digests and verify signatures using the existing
-   workflow-identity contract in RELEASING.md. Decide and document whether the consumer contract
-   additionally requires child signatures; do not imply an index signature alone is a separately
-   verified child signature. Publish machine-readable index-to-child digest mappings, per-child
-   SBOMs, checksums, and verification instructions in the release artifacts. Update the existing
-   chart and homelab guidance without weakening digest-pinned deployments or existing amd64 gates.
+3. Before signing, scan **each of the four immutable child digests** with the pinned policy and
+   produce an SBOM for each child. Check the candidate's exact bytes, child and attachment
+   descriptors, and intended source and predicate fields for consistency. Preserve the BuildKit
+   attachments during assembly and recheck the final candidate index and subjects. These checks
+   are pre-sign consistency checks, not authenticated provenance. Fail closed on absent, malformed,
+   ambiguous, or inconsistent evidence, and pin the tools and formats used.
+4. After the pre-sign checks pass and only within an authorized release, sign the exact assembled
+   immutable index digests, then **verify** each signature before any semantic-tag promotion.
+   Enforce the expected exact source-tag release-workflow certificate identity, GitHub OIDC issuer,
+   signed digest claim, trusted Sigstore roots and applicable transparency-log and timestamp policy,
+   following the existing identity contract in RELEASING.md. For a short-lived Fulcio certificate,
+   verify its validity at an authenticated signing or integration time established by the accepted
+   transparency or trusted-timestamp proof, not against the current wall-clock time alone; a
+   certificate that has since expired can still validate. See [Sigstore timestamp verification](https://docs.sigstore.dev/cosign/verifying/timestamps/).
+   Pin the verifier version and securely provision and rotate trust material. Fail closed on a
+   missing, forged, wrong-identity or untrusted signature; invalid trust material; a certificate
+   invalid at the verified time; or missing or invalid required time or log proof. Do not bypass
+   claims, transparency-log or certificate-transparency checks in production for a passing rehearsal.
+   Decide and document whether the consumer contract additionally requires child signatures; an
+   index signature is not an independently verified signature on each child.
+   Publish machine-readable index-to-child digest mappings, per-child SBOMs, checksums, and
+   verification instructions in the release artifacts. Update the existing chart and homelab
+   guidance without weakening digest-pinned deployments or existing amd64 gates.
 5. Only a maintainer-authorized release may perform registry writes, signing, tag promotion or
    GitHub release creation. Once the candidate contents and all required evidence are verified,
    promote semantic tags to the already-tested immutable indexes, verify the resulting tag-to-index
@@ -72,6 +78,21 @@ contains the recorded image IDs, model provenance, exact limits and CI links.
    updates may not be atomic: define collision, partial-promotion and recovery behavior before
    implementation, never claim atomicity without a tested registry guarantee. Consumers deploy
    verified immutable digests, not mutable tags.
+
+The current [release procedure](../../RELEASING.md) explicitly distinguishes BuildKit's OCI
+attachments from GitHub artifact attestations. BuildKit [stores attestations in manifests attached
+to the index](https://docs.docker.com/build/metadata/attestations/attestation-storage/); merely
+reading their builder/source fields or running `cosign verify-attestation` is not a demonstrated
+verification of those attachments. For the proposed index-signature trust model, hash and verify
+the exact signed index, each selected child descriptor, each attached attestation manifest and its
+in-toto blob, including descriptor sizes, digests, predicate type, source and subject binding.
+Recheck the resulting index and attachment relationships after assembly; do not rely on descriptor
+annotations alone. This establishes that the authenticated **release signer vouched for the
+bound contents**. It does not independently establish that the builder named inside an unsigned
+BuildKit statement produced them. If independent builder authentication is required, define and
+verify a separately signed builder statement and trust policy before promotion. Tool behavior,
+registry referrer/attachment representation, and the precise bytes bound by the signature remain
+implementation and rehearsal gates, not claims already established by this design.
 
 Candidate storage itself is a registry write even when no public version tag exists. When the
 owner authorizes that write, a candidate may be stored in the approved registry **before** scans
@@ -89,8 +110,24 @@ registry operations. Include negative cases for wrong architecture, missing/dupl
 wrong digest or subject, missing or malformed attestations, forged or untrusted identities,
 broken post-assembly binding, a failed child scan, stale or conflicting tag, and partial promotion.
 Assert that no signing, tag, GH release, registry mutation, credential
-use, paid cache or artifact upload occurs in rehearsal. Fixtures validate control flow; they do not
-prove real registry semantics, real signatures, vulnerability scan coverage, or publication.
+use, paid cache or artifact upload occurs in rehearsal. Fixtures validate control flow and can
+exercise verification against test signatures; they do not prove production-signature trust,
+real registry semantics, vulnerability scan coverage, or publication.
+
+For offline cryptographic-verifier tests, use an already-generated, nonsecret signed fixture,
+verification bundle and **test-only** trusted root. Verify success and reject wrong candidate digest,
+identity or issuer, tampered signature or bundle, missing or invalid trust material, a certificate
+invalid at the verified signing time, and missing or invalid required authenticated time or log
+proof. Include a valid signature whose short-lived certificate has since expired but was valid at
+the authenticated time. Run the verifier with network access denied and prove it does not fetch
+registry data, TUF metadata, Fulcio, or Rekor; `--local-image` alone is not proof of offline
+operation. A local test-key fixture checks signature-handling behavior but does not prove Fulcio
+OIDC identity, Rekor inclusion or the actual registry publication path. Never use fixture roots as
+production roots. Establish a reviewed out-of-band production-root provisioning, freshness,
+rotation and revocation policy: an offline snapshot cannot reveal a later revocation. GitHub's
+[offline artifact-attestation procedure](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/verify-attestations-offline)
+describes a different attestation type and is not evidence that `gh attestation verify` verifies
+the current BuildKit attachments. Rehearsal must not change production verification flags.
 
 The first offline helper, `python scripts/ci/oci_index.py INDEX.json`, checks a bounded OCI image
 index and prints the two image descriptor digests. It accepts baseline `amd64/v1` and `arm64/v8`,
@@ -127,7 +164,7 @@ is not Phase 1 completion.
 | Risk | Required control or unresolved decision |
 | --- | --- |
 | A scanner or SBOM tool silently selects the host architecture from an index. | Resolve and scan each platform child digest explicitly; test mismatches and missing children. |
-| Index composition drops attestations, signs a different subject, or trusts forged provenance metadata. | Cryptographically verify a trusted issuer/workflow or approved signing/binding policy and subjects after composition; fail closed and choose a child-signature policy. |
+| Index composition drops attestations, signs a different subject, or trusts forged provenance metadata. | Verify the signer, digest and complete attachment hash chain after signing; distinguish signer-vouched contents from independently authenticated builder provenance, and decide a child-signature policy. |
 | A failed scan leaves an already published version tag. | Gate promotion on all scans; decide an authorized candidate store and test interrupted or partial promotion. |
 | Existing tag is overwritten or app/backup tags diverge. | Fail on immutable-version conflicts; specify safe idempotent recovery for every partial state and test registry behavior. |
 | A manual rehearsal causes registry writes, cache/artifact charges, or consumes secrets. | Separate rehearsal and publishing permissions/steps; assert absence of these effects and use local disposable fixtures. |
@@ -136,6 +173,7 @@ is not Phase 1 completion.
 | A failed upgrade or promotion triggers unsafe rollback. | Follow existing digest rollback and database restore procedure; never delete a published tag or assume schema downgrades are safe. |
 
 Open decisions include the authorized candidate registry or alternative, platform-child signature
-requirements, exact attestation verification tooling and subject representation, moving minor-tag
-semantics, and how to demonstrate all intended tags under a partial registry failure. No decision
+requirements, whether independent builder authentication is required, exact signature/attachment
+verification tooling and trusted-root lifecycle, moving minor-tag semantics, and how to demonstrate
+all intended tags under a partial registry failure. No decision
 above authorizes a weaker security boundary, a release, or a paid service.
