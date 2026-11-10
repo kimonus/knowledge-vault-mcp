@@ -39,6 +39,7 @@ phases:
       - "Owner-reported Mac Podman Machine test at 35d691bbe209f452650e2bd57be313cef71ab519: macOS arm64 and Linux arm64 VM; application and backup images built, model manifest verified, non-root mount and network-disabled 384-dimensional inference passed; backup tools ran. Translation configuration not supplied. Details: PR #101."
       - "Owner-reported Podman test emitted a joblib read-only-filesystem warning and reported serial fallback; inference passed, performance implications remain unverified."
       - "Multi-platform release design independently reviewed; attestation trust and candidate-write findings addressed. Implementation and registry verification remain pending."
+      - "Offline OCI index descriptor helper and 20 focused fixture tests prepared; independent static review completed. The helper does not authenticate images or attestations and is not integrated into releases."
       - "PR #101 head 35d691bbe209f452650e2bd57be313cef71ab519 passed quality, supply-chain, kubernetes and inspector: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42612291106."
       - "PR #101 head 2268e7bf29f7d9b04929932a92cf953648f7f685 passed quality, supply-chain, kubernetes and inspector in https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42598985509."
       - "Preliminary native run https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42602380622 at 92a1c26bc9ef963b27db5c704da6951dacdc37c6: both app imports failed without writable temporary storage; both backup executable checks passed. A later run passed with bounded /tmp."
@@ -53,6 +54,6 @@ phases:
   phase_6: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_7: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
 verified_platforms: []
-next_action: "Submit the reviewed multi-platform release design, implement no-write fixture checks and remaining gates, and obtain VM translation configuration when available; retain authenticated TLS unless owner explicitly approves an architecture/security change."
+next_action: "Submit the offline OCI descriptor helper for review and CI, implement authenticated release evidence and remaining gates, and obtain VM translation configuration when available; retain authenticated TLS unless owner explicitly approves an architecture/security change."
 notes:
   - "This manifest is a handoff pointer, not proof of success; reconcile against GitHub and executed tests."

@@ -92,6 +92,14 @@ Assert that no signing, tag, GH release, registry mutation, credential
 use, paid cache or artifact upload occurs in rehearsal. Fixtures validate control flow; they do not
 prove real registry semantics, real signatures, vulnerability scan coverage, or publication.
 
+The first offline helper, `python scripts/ci/oci_index.py INDEX.json`, checks a bounded OCI image
+index and prints the two image descriptor digests. It accepts baseline `amd64/v1` and `arm64/v8`,
+rejects ambiguous or unsupported platform requirements, and classifies the documented BuildKit
+`unknown/unknown` attestation descriptors. This is a narrow policy, not a general OCI parser; it
+does not fetch blobs, validate manifest contents, check signatures, or authenticate attestations.
+It is not integrated into the release workflow and cannot authorize promotion. Later gates must
+verify the index and child content digests and establish trusted attestation bindings separately.
+
 Run production-equivalent builds, per-platform tests, backup/restore and scans on disposable,
 authorized native environments without using shared production data. Record exact tools, source,
 runner architectures, image and child digests, scan outcomes and evidence. A full real-registry
