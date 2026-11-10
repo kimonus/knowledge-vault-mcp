@@ -1,7 +1,7 @@
 """Inspect an OCI release index offline; this does not authenticate or fetch content.
 
 This intentionally implements a narrow release policy, not a general OCI parser.
-Attestation descriptors are classified only; their contents and identity remain unverified.
+Attestation graph consistency is optional; identity and authenticity remain unverified.
 """
 
 from __future__ import annotations
@@ -23,7 +23,16 @@ DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 MAX_BYTES = 1024 * 1024
 MAX_MANIFEST_BYTES = 8 * 1024 * 1024
 MAX_DESCRIPTORS = 64
+MAX_ATTESTATION_LAYERS = 32
+MAX_ATTESTATION_TOTAL = 64 * 1024 * 1024
 PLATFORMS = {("linux", "amd64"), ("linux", "arm64")}
+INTOTO = "application/vnd.in-toto+json"
+ARTIFACT = "application/vnd.docker.attestation.manifest.v1+json"
+OCI_EMPTY = "application/vnd.oci.empty.v1+json"
+OCI_CONFIG = "application/vnd.oci.image.config.v1+json"
+PREDICATE_ANNOTATION = "in-toto.io/predicate-type"
+PREDICATES = frozenset({"https://slsa.dev/provenance/v0.2", "https://spdx.dev/Document"})
+STATEMENTS = frozenset({"https://in-toto.io/Statement/v0.1", "https://in-toto.io/Statement/v1"})
 
 
 class IndexError(ValueError):
@@ -160,15 +169,160 @@ def verify_integrity(index_path: str, expected_digest: str, blob_directory: str)
     return {platform: descriptor[0] for platform, descriptor in descriptors.items()}
 
 
+def _parse_json(content: bytes) -> object:
+    return json.loads(content, object_pairs_hook=_unique_object, parse_constant=_invalid_constant)
+
+
+def _descriptor(value: object, media_type: str, limit: int) -> tuple[str, int]:
+    if not isinstance(value, dict) or value.get("mediaType") != media_type:
+        raise IndexError("unsupported descriptor media type")
+    digest = _digest(value.get("digest"))
+    size = value.get("size")
+    if isinstance(size, bool) or not isinstance(size, int) or not 0 < size <= limit:
+        raise IndexError("invalid descriptor size")
+    return digest, size
+
+
+def _checked_blob(directory_fd: int, descriptor: tuple[str, int], limit: int) -> bytes:
+    digest, size = descriptor
+    content = _read_regular(digest.removeprefix("sha256:"), limit, dir_fd=directory_fd)
+    if len(content) != size or _sha256(content) != digest:
+        raise IndexError("blob size or digest mismatch")
+    return content
+
+
+def _validate_statement(content: bytes, target: str, annotation: object) -> str:
+    statement = _parse_json(content)
+    if (
+        not isinstance(statement, dict)
+        or not isinstance(statement.get("_type"), str)
+        or statement["_type"] not in STATEMENTS
+    ):
+        raise IndexError("unsupported statement version")
+    predicate = statement.get("predicateType")
+    if not isinstance(predicate, str) or predicate not in PREDICATES:
+        raise IndexError("unsupported predicate type")
+    if annotation is not None and annotation != predicate:
+        raise IndexError("predicate annotation mismatch")
+    if not isinstance(statement.get("predicate"), dict):
+        raise IndexError("missing predicate object")
+    subjects = statement.get("subject")
+    if not isinstance(subjects, list) or len(subjects) != 1 or not isinstance(subjects[0], dict):
+        raise IndexError("ambiguous statement subject")
+    if subjects[0].get("digest") != {"sha256": target.removeprefix("sha256:")}:
+        raise IndexError("statement subject mismatch")
+    return predicate
+
+
+def verify_attestation_bindings(
+    index_path: str, expected_digest: str, blob_directory: str
+) -> dict[str, list[str]]:
+    """Check BuildKit byte/subject consistency; do not authenticate any content or source."""
+    content = _read_regular(index_path, MAX_BYTES)
+    if _sha256(content) != _digest(expected_digest):
+        raise IndexError("index digest mismatch")
+    index = _parse_json(content)
+    descriptors = _resolve_descriptors(index)
+    assert isinstance(index, dict)
+    entries = index["manifests"]
+    assert isinstance(entries, list)
+    targets = {digest: (platform, size) for platform, (digest, size) in descriptors.items()}
+    predicates: dict[str, set[str]] = {platform: set() for platform in descriptors}
+    consumed = 0
+    layer_count = 0
+    directory_fd = os.open(blob_directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for digest, size in descriptors.values():
+            if size > MAX_MANIFEST_BYTES:
+                raise IndexError("manifest exceeds byte limit")
+            _checked_blob(directory_fd, (digest, size), MAX_MANIFEST_BYTES)
+        for entry in entries:
+            annotations = entry.get("annotations", {})
+            if annotations.get(REFERENCE_TYPE) != "attestation-manifest":
+                continue
+            target = annotations[REFERENCE_DIGEST]
+            platform, target_size = targets[target]
+            attestation_descriptor = _descriptor(entry, MANIFEST, MAX_MANIFEST_BYTES)
+            manifest_bytes = _checked_blob(directory_fd, attestation_descriptor, MAX_MANIFEST_BYTES)
+            consumed += len(manifest_bytes)
+            if consumed > MAX_ATTESTATION_TOTAL:
+                raise IndexError("attestation total exceeds byte limit")
+            manifest = _parse_json(manifest_bytes)
+            if (
+                not isinstance(manifest, dict)
+                or type(manifest.get("schemaVersion")) is not int
+                or manifest["schemaVersion"] != 2
+                or manifest.get("mediaType") != MANIFEST
+            ):
+                raise IndexError("invalid attestation manifest")
+            artifact_type = manifest.get("artifactType")
+            config = manifest.get("config")
+            if artifact_type is None:
+                _descriptor(config, OCI_CONFIG, MAX_MANIFEST_BYTES)
+                if "subject" in manifest:
+                    raise IndexError("unsupported legacy manifest subject")
+            elif artifact_type == ARTIFACT:
+                empty = _descriptor(config, OCI_EMPTY, MAX_MANIFEST_BYTES)
+                if empty != (_sha256(b"{}"), 2):
+                    raise IndexError("invalid OCI empty config")
+                if _descriptor(manifest.get("subject"), MANIFEST, MAX_MANIFEST_BYTES) != (
+                    target,
+                    target_size,
+                ):
+                    raise IndexError("manifest subject mismatch")
+            else:
+                raise IndexError("unsupported attestation artifact type")
+            layers = manifest.get("layers")
+            if not isinstance(layers, list) or not layers:
+                raise IndexError("missing attestation layers")
+            for layer in layers:
+                layer_count += 1
+                if layer_count > MAX_ATTESTATION_LAYERS:
+                    raise IndexError("too many attestation layers")
+                layer_descriptor = _descriptor(layer, INTOTO, MAX_MANIFEST_BYTES)
+                layer_bytes = _checked_blob(directory_fd, layer_descriptor, MAX_MANIFEST_BYTES)
+                consumed += len(layer_bytes)
+                if consumed > MAX_ATTESTATION_TOTAL:
+                    raise IndexError("attestation total exceeds byte limit")
+                layer_annotations = layer.get("annotations", {})
+                if not isinstance(layer_annotations, dict) or any(
+                    not isinstance(key, str) or not isinstance(value, str)
+                    for key, value in layer_annotations.items()
+                ):
+                    raise IndexError("invalid layer annotations")
+                predicate = _validate_statement(
+                    layer_bytes, target, layer_annotations.get(PREDICATE_ANNOTATION)
+                )
+                if predicate in predicates[platform]:
+                    raise IndexError("duplicate predicate")
+                predicates[platform].add(predicate)
+    finally:
+        os.close(directory_fd)
+    if any(found != PREDICATES for found in predicates.values()):
+        raise IndexError("missing required predicate")
+    return {platform: sorted(found) for platform, found in predicates.items()}
+
+
 def main() -> int:
-    if len(sys.argv) not in (2, 5) or (len(sys.argv) == 5 and sys.argv[1] != "--verify"):
+    if len(sys.argv) not in (2, 5) or (
+        len(sys.argv) == 5 and sys.argv[1] not in ("--verify", "--verify-attestations")
+    ):
         print(
-            "usage: oci_index.py INDEX.json | --verify INDEX.json EXPECTED_SHA256 BLOBS_DIR",
+            "usage: oci_index.py INDEX.json | --verify|--verify-attestations "
+            "INDEX.json EXPECTED_SHA256 BLOBS_DIR",
             file=sys.stderr,
         )
         return 2
     try:
         if len(sys.argv) == 5:
+            if sys.argv[1] == "--verify-attestations":
+                print(
+                    json.dumps(
+                        verify_attestation_bindings(sys.argv[2], sys.argv[3], sys.argv[4]),
+                        sort_keys=True,
+                    )
+                )
+                return 0
             print(
                 json.dumps(verify_integrity(sys.argv[2], sys.argv[3], sys.argv[4]), sort_keys=True)
             )

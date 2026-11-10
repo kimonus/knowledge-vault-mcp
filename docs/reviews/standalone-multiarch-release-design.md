@@ -137,6 +137,28 @@ does not fetch blobs, validate manifest contents, check signatures, or authentic
 It is not integrated into the release workflow and cannot authorize promotion. Later gates must
 verify the index and child content digests and establish trusted attestation bindings separately.
 
+`python scripts/ci/oci_index.py --verify-attestations INDEX.json EXPECTED_SHA256 BLOBS_DIR`
+also checks the byte-digest and declared-size chain from the supplied index through selected child
+manifests and BuildKit attachment manifests to their in-toto statements. It requires each child to
+have exactly one SLSA v0.2 provenance statement and one SPDX document statement, each naming that
+child's SHA-256 as its sole subject. It accepts in-toto v0.1 and v1 statements, and either BuildKit
+legacy image-config or OCI artifact attestation manifests; unknown forms, predicate types and
+ambiguous subject lists fail closed. It checks declared predicate annotations when present. This
+deliberately narrower policy does not assert general OCI conformance or validate the predicate
+schema, source revision, builder, image configs, layers, signatures, or trust in the supplied index
+digest. An attacker-controlled but internally consistent graph can pass. It does not fetch files or
+authenticate any claim and must not gate releases by itself. Parent directory path components may
+be symbolic links; the operator must supply a trusted local directory. Reads reject symlink leaves,
+non-regular files, and excess sizes; attestation statements and manifests are limited to 8 MiB
+each, with at most 32 statement layers and 64 MiB total attachment bytes.
+The 8 MiB per-blob limit is stricter than BuildKit's documented 80 MiB pre-wrap attestation input
+limit. The current fixtures are synthetic, so real producer output and suitable bounds must be
+validated before release integration.
+
+These narrow choices follow the documented [BuildKit attestation layout](https://docs.docker.com/build/metadata/attestations/attestation-storage/)
+and its [default SLSA v0.2 provenance format](https://docs.docker.com/build/metadata/attestations/slsa-provenance/).
+They still require validation against the actual release producer before use.
+
 The optional offline mode `python scripts/ci/oci_index.py --verify INDEX.json EXPECTED_SHA256
 BLOBS_DIR` additionally hashes the exact selected index bytes against the separately supplied
 digest and verifies the size and SHA-256 of each runnable child in `BLOBS_DIR` (the local

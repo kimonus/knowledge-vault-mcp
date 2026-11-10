@@ -40,6 +40,7 @@ phases:
       - "Owner-reported Podman test emitted a joblib read-only-filesystem warning and reported serial fallback; inference passed, performance implications remain unverified."
       - "Multi-platform release design independently reviewed; attestation trust and candidate-write findings addressed. Implementation and registry verification remain pending."
       - "Offline OCI index descriptor helper and 20 focused fixture tests prepared; independent static review completed. The helper does not authenticate images or attestations and is not integrated into releases."
+      - "Offline BuildKit attachment digest/subject consistency check under development; it does not authenticate the index, signer, builder, source, or predicates and is not integrated into releases."
       - "Offline candidate index and child byte-integrity verification independently reviewed; PR #104 head 6a182ed4e31990753e6f6077632335225fe9a5e3 passed all four required CI jobs: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42902732674. Caller-supplied expected digest is not authenticated and no signature or configuration is verified."
       - "Release trust design corrected to distinguish a verified index signer vouching for digest-bound attachments from independently authenticated builder provenance; proposed verification and promotion remain unimplemented."
       - "PR #101 head 35d691bbe209f452650e2bd57be313cef71ab519 passed quality, supply-chain, kubernetes and inspector: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42612291106."
