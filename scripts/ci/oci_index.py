@@ -6,8 +6,11 @@ Attestation descriptors are classified only; their contents and identity remain 
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
+import stat
 import sys
 from pathlib import Path
 from typing import Any
@@ -18,6 +21,7 @@ REFERENCE_TYPE = "vnd.docker.reference.type"
 REFERENCE_DIGEST = "vnd.docker.reference.digest"
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 MAX_BYTES = 1024 * 1024
+MAX_MANIFEST_BYTES = 8 * 1024 * 1024
 MAX_DESCRIPTORS = 64
 PLATFORMS = {("linux", "amd64"), ("linux", "arm64")}
 
@@ -32,8 +36,7 @@ def _digest(value: object) -> str:
     return value
 
 
-def resolve_index(index: object) -> dict[str, str]:
-    """Return platform-to-child digests; inspect no blobs and verify no attestations."""
+def _resolve_descriptors(index: object) -> dict[str, tuple[str, int]]:
     if not isinstance(index, dict) or type(index.get("schemaVersion")) is not int:
         raise IndexError("invalid index schema version")
     if index["schemaVersion"] != 2:
@@ -45,7 +48,7 @@ def resolve_index(index: object) -> dict[str, str]:
     entries = index.get("manifests")
     if not isinstance(entries, list) or len(entries) > MAX_DESCRIPTORS:
         raise IndexError("invalid or oversized manifest list")
-    images: dict[str, str] = {}
+    images: dict[str, tuple[str, int]] = {}
     references: list[str] = []
     descriptor_digests: set[str] = set()
     for item in entries:
@@ -90,12 +93,17 @@ def resolve_index(index: object) -> dict[str, str]:
         key = f"{os_name}/{arch}"
         if key in images:
             raise IndexError("duplicate platform")
-        images[key] = digest
+        images[key] = (digest, size)
     if set(images) != {"linux/amd64", "linux/arm64"}:
         raise IndexError("missing required platform")
-    if any(reference not in images.values() for reference in references):
+    if any(reference not in {digest for digest, _ in images.values()} for reference in references):
         raise IndexError("attestation references an unknown image")
     return images
+
+
+def resolve_index(index: object) -> dict[str, str]:
+    """Return platform-to-child digests; inspect no blobs and verify no attestations."""
+    return {platform: descriptor[0] for platform, descriptor in _resolve_descriptors(index).items()}
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -111,11 +119,60 @@ def _invalid_constant(_value: str) -> None:
     raise IndexError("invalid JSON constant")
 
 
+def _read_regular(path: str, limit: int, *, dir_fd: int | None = None) -> bytes:
+    """Read bounded exact bytes from a regular file, never following its final symlink."""
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+    fd = os.open(path, flags, dir_fd=dir_fd)
+    with os.fdopen(fd, "rb") as source:
+        info = os.fstat(source.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
+            raise IndexError("file is not regular or exceeds byte limit")
+        content = source.read(limit + 1)
+        if len(content) > limit:
+            raise IndexError("file exceeds byte limit")
+        return content
+
+
+def _sha256(content: bytes) -> str:
+    return "sha256:" + hashlib.sha256(content).hexdigest()
+
+
+def verify_integrity(index_path: str, expected_digest: str, blob_directory: str) -> dict[str, str]:
+    """Verify explicitly selected local bytes; this does not authenticate their origin."""
+    expected_digest = _digest(expected_digest)
+    content = _read_regular(index_path, MAX_BYTES)
+    if _sha256(content) != expected_digest:
+        raise IndexError("index digest mismatch")
+    index = json.loads(content, object_pairs_hook=_unique_object, parse_constant=_invalid_constant)
+    descriptors = _resolve_descriptors(index)
+    directory_fd = os.open(blob_directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for digest, size in descriptors.values():
+            if size > MAX_MANIFEST_BYTES:
+                raise IndexError("manifest exceeds byte limit")
+            blob = _read_regular(
+                digest.removeprefix("sha256:"), MAX_MANIFEST_BYTES, dir_fd=directory_fd
+            )
+            if len(blob) != size or _sha256(blob) != digest:
+                raise IndexError("manifest size or digest mismatch")
+    finally:
+        os.close(directory_fd)
+    return {platform: descriptor[0] for platform, descriptor in descriptors.items()}
+
+
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: python scripts/ci/oci_index.py INDEX.json", file=sys.stderr)
+    if len(sys.argv) not in (2, 5) or (len(sys.argv) == 5 and sys.argv[1] != "--verify"):
+        print(
+            "usage: oci_index.py INDEX.json | --verify INDEX.json EXPECTED_SHA256 BLOBS_DIR",
+            file=sys.stderr,
+        )
         return 2
     try:
+        if len(sys.argv) == 5:
+            print(
+                json.dumps(verify_integrity(sys.argv[2], sys.argv[3], sys.argv[4]), sort_keys=True)
+            )
+            return 0
         with Path(sys.argv[1]).open("rb") as source:
             content = source.read(MAX_BYTES + 1)
         if len(content) > MAX_BYTES:

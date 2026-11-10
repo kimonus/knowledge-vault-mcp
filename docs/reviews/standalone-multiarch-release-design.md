@@ -100,6 +100,17 @@ does not fetch blobs, validate manifest contents, check signatures, or authentic
 It is not integrated into the release workflow and cannot authorize promotion. Later gates must
 verify the index and child content digests and establish trusted attestation bindings separately.
 
+The optional offline mode `python scripts/ci/oci_index.py --verify INDEX.json EXPECTED_SHA256
+BLOBS_DIR` additionally hashes the exact selected index bytes against the separately supplied
+digest and verifies the size and SHA-256 of each runnable child in `BLOBS_DIR` (the local
+`blobs/sha256` directory). The index path must identify the intended candidate index itself; an
+OCI layout's `index.json` entrypoint may instead reference another index blob. Both files and the
+blob directory reject final-component symlinks, child files must be regular, and reads are bounded
+to 1 MiB for the index and 8 MiB per child. Parent path components are not checked for symlinks.
+This establishes byte consistency with the supplied digest only: the digest's trust, manifest
+structure, image configurations, layers, signatures, and attestations are not validated. No
+result from this mode authorizes a release or establishes a platform claim.
+
 Run production-equivalent builds, per-platform tests, backup/restore and scans on disposable,
 authorized native environments without using shared production data. Record exact tools, source,
 runner architectures, image and child digests, scan outcomes and evidence. A full real-registry
