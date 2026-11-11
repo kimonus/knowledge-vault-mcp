@@ -1,5 +1,10 @@
 # Embedding model cache, migration, and rebuild
 
+When `KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED=false`, the worker still runs scheduled cleanup and
+records its heartbeat, but does not load a model or claim existing embedding jobs. Pending jobs
+remain queued for a worker started with embeddings enabled. Roll out the worker after changing
+the setting. The explicit re-embedding command remains a separate operator action.
+
 Every vector records the model that produced it. The schema uses 384 dimensions. Changing
 dimensions requires a reviewed database migration; changing only the model at the same dimension
 requires a full rebuild.

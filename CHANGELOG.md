@@ -8,6 +8,12 @@ stable release.
 
 ## [Unreleased]
 
+### Fixed
+
+- With embeddings disabled, the worker continues scheduled cleanup and its heartbeat without
+  claiming or exhausting previously queued embedding jobs. Roll out the worker after changing the
+  setting; pending jobs resume when an embeddings-enabled worker is started.
+
 ### Added
 
 - Experimental offline image smoke for collecting standalone application and backup compatibility

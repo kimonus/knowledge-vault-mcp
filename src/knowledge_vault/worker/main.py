@@ -25,9 +25,13 @@ def _provider() -> SentenceTransformerProvider:
 async def _worker() -> None:
     settings = get_settings()
     configure_logging(settings.log_level, service=settings.service_name, version=settings.version)
-    provider = _provider()
+    provider = _provider() if settings.embeddings_enabled else None
     container = build_container(settings, embedder=provider)
-    worker = EmbeddingWorker(container.database.sessions, settings, provider)
+    worker = (
+        EmbeddingWorker(container.database.sessions, settings, provider)
+        if provider is not None
+        else None
+    )
     if settings.worker_metrics_port:
         start_http_server(settings.worker_metrics_port)
     stopping = asyncio.Event()

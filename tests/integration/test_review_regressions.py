@@ -515,6 +515,46 @@ async def test_worker_loop_runs_maintenance_survives_errors_and_releases_claims(
 
 
 @pytest.mark.integration
+async def test_maintenance_only_loop_preserves_existing_pending_embedding_jobs(
+    integration_container,
+) -> None:
+    from knowledge_vault.services.operations import WORKER
+
+    container = integration_container
+    await flush(container, "before-lite", [item("queued before disabling embeddings")])
+    staged = await container.ingestion.begin(P, "expire-in-lite", 1, 1)
+    async with container.database.sessions.begin() as session:
+        await session.execute(
+            update(FlushBatchRow)
+            .where(FlushBatchRow.id == staged.id)
+            .values(expires_at=datetime.now(UTC) - timedelta(seconds=1))
+        )
+    assert await count(container, EmbeddingJobRow, EmbeddingJobRow.state == "pending") == 1
+    stopping = asyncio.Event()
+
+    async def maintenance() -> None:
+        await container.ingestion.expire_and_purge()
+        await container.artifacts.purge()
+        await container.administration.purge_confirmation_tokens()
+        await container.maintenance.purge()
+        await container.operations.beat(WORKER)
+        stopping.set()
+
+    await asyncio.wait_for(
+        run_worker_loop(
+            None, maintenance, stopping, poll_seconds=0.01, maintenance_interval_seconds=1
+        ),
+        timeout=20,
+    )
+    async with container.database.sessions() as session:
+        job = (await session.scalars(select(EmbeddingJobRow))).one()
+        batch = await session.get(FlushBatchRow, staged.id)
+        assert job.state == "pending" and job.attempts == 0 and job.claimed_by is None
+        assert batch is not None and batch.state == "expired"
+    assert WORKER in await container.operations.heartbeats()
+
+
+@pytest.mark.integration
 async def test_database_rejects_values_outside_the_enumerations(integration_container) -> None:
     """KV-013: revision 0002 enforces enumerated columns in PostgreSQL itself."""
     container = integration_container

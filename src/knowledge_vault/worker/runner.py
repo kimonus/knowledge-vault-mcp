@@ -10,14 +10,14 @@ from knowledge_vault.worker.jobs import EmbeddingWorker
 
 
 async def run_worker_loop(
-    worker: EmbeddingWorker,
+    worker: EmbeddingWorker | None,
     maintenance: Callable[[], Awaitable[None]],
     stopping: asyncio.Event,
     *,
     poll_seconds: float,
     maintenance_interval_seconds: float,
 ) -> None:
-    """Embed queued assertions and run periodic staging maintenance until asked to stop.
+    """Run periodic maintenance and, when enabled, embed queued assertions until stopped.
 
     A failing iteration is logged without content and retried after the poll interval, so a
     database restart does not terminate the worker.
@@ -31,17 +31,19 @@ async def run_worker_loop(
                 if time.monotonic() >= next_maintenance:
                     await maintenance()
                     next_maintenance = time.monotonic() + maintenance_interval_seconds
-                processed = await worker.process_once()
+                if worker is not None:
+                    processed = await worker.process_once()
             except Exception as exc:
                 logger.error("worker_iteration_failed", **describe_exception(exc))
             if not processed:
                 with suppress(TimeoutError):
                     await asyncio.wait_for(stopping.wait(), timeout=poll_seconds)
     finally:
-        try:
-            released = await worker.release_claims()
-        except Exception as exc:
-            # The database may be the reason for the shutdown; leases expire on their own.
-            logger.error("worker_shutdown_failed", **describe_exception(exc))
-        else:
-            logger.info("worker_shutdown", operation="release_claims", released=released)
+        if worker is not None:
+            try:
+                released = await worker.release_claims()
+            except Exception as exc:
+                # The database may be the reason for the shutdown; leases expire on their own.
+                logger.error("worker_shutdown_failed", **describe_exception(exc))
+            else:
+                logger.info("worker_shutdown", operation="release_claims", released=released)
