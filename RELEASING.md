@@ -24,8 +24,12 @@ gh workflow run release.yml --ref main
 gh run watch
 ```
 
-A manual run executes every verification step, builds both images, and packages the chart, but
-pushes, signs, and releases nothing.
+A manual run executes the verification job, including local image builds, vulnerability scans and
+the backup/restore test. A separate read-only rehearsal job repeats the BuildKit builds and packages
+the chart. It does not log in to a registry, push or sign images, create a release, or upload build
+records or GitHub Actions caches. It still downloads build dependencies and public tool images.
+The privileged publish job runs only on the version-tag push. A manual run does not verify real
+registry publication, remote attestations or keyless signing; those remain release-time checks.
 
 The first rehearsal (2026-10-02) caught the secret scan running after the tests and flagging
 their cached fixtures; the scan now runs on the fresh checkout.
