@@ -16,6 +16,9 @@ stable release.
 
 ### Added
 
+- The application and Alembic accept explicit `_FILE` settings for the database URL, token pepper,
+  and bootstrap-token records. See the [secret-file guidance](docs/runbooks/standalone-secret-files.md)
+  before provisioning or rotating them; the standalone deployment remains unimplemented.
 - Standalone mode can require an explicit, strictly validated Host allowlist before CORS and
   authentication. This is a prerequisite for a standalone deployment, not a deployment itself.
 - Experimental offline image smoke for collecting standalone application and backup compatibility

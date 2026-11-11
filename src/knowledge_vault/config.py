@@ -1,10 +1,14 @@
+import os
+import stat
 from functools import lru_cache
 from importlib import metadata
-from typing import Literal
+from typing import Any, Literal, cast
 from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, ValidationError, field_validator, model_validator
+from pydantic.fields import FieldInfo
+from pydantic_core import InitErrorDetails
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 from knowledge_vault.auth.hosts import canonical_host, strict_host
 from knowledge_vault.auth.tokens import Scope
@@ -23,18 +27,103 @@ def _host_set(raw: str) -> frozenset[str]:
     return frozenset(canonical_host(item) for item in raw.split(",") if item.strip())
 
 
+_SECRET_FILE_FIELDS = ("database_url", "token_pepper", "bootstrap_tokens")
+_SECRET_FILE_MAX_BYTES = 128 * 1024
+
+
+class _SafeConfigError(ValueError):
+    """A configuration diagnostic built only from fixed, nonsecret text."""
+
+
+def _read_secret_file(path: object, field_name: str) -> str:
+    """Read exact UTF-8 content from a bounded regular file without following its final symlink."""
+    try:
+        if not isinstance(path, str) or not path or "\0" in path:
+            raise ValueError
+        fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NONBLOCK | os.O_NOFOLLOW)
+        with os.fdopen(fd, "rb") as source:
+            if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):
+                raise ValueError
+            value = source.read(_SECRET_FILE_MAX_BYTES + 1)
+        if not value or len(value) > _SECRET_FILE_MAX_BYTES or b"\0" in value:
+            raise ValueError
+        return value.decode("utf-8", errors="strict")
+    except (OSError, ValueError, UnicodeError):
+        pass
+    # Raise outside the handler so __context__ cannot retain a path-bearing OS error.
+    raise RuntimeError(f"KNOWLEDGE_VAULT_{field_name.upper()}_FILE cannot be read") from None
+
+
+class _FileSettingsSource(PydanticBaseSettingsSource):
+    """Resolve explicit _FILE inputs once per construction, before normal sources validate."""
+
+    def __init__(
+        self, settings_cls: type[BaseSettings], sources: tuple[PydanticBaseSettingsSource, ...]
+    ) -> None:
+        super().__init__(settings_cls)
+        self._sources = sources
+        self.snapshots: list[dict[str, Any]] = []
+
+    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        self.snapshots = [source() for source in self._sources]
+        resolved: dict[str, Any] = {}
+        for name in _SECRET_FILE_FIELDS:
+            file_name = f"{name}_file"
+            paths = [
+                source[file_name] for source in self.snapshots if source.get(file_name) is not None
+            ]
+            if not paths:
+                continue
+            if any(name in source for source in self.snapshots):
+                raise RuntimeError(
+                    f"KNOWLEDGE_VAULT_{name.upper()} and _FILE are mutually exclusive"
+                )
+            resolved[name] = _read_secret_file(paths[0], name)
+        return resolved
+
+
+class _SnapshotSettingsSource(PydanticBaseSettingsSource):
+    """Reuse each source's one-time snapshot without retaining secret-file paths in Settings."""
+
+    def __init__(
+        self, settings_cls: type[BaseSettings], files: _FileSettingsSource, source_index: int
+    ) -> None:
+        super().__init__(settings_cls)
+        self._files = files
+        self._source_index = source_index
+
+    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        hidden = {f"{name}_file" for name in _SECRET_FILE_FIELDS}
+        return {
+            key: value
+            for key, value in self._files.snapshots[self._source_index].items()
+            if key not in hidden
+        }
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="KNOWLEDGE_VAULT_", env_file=".env", extra="ignore"
+        env_prefix="KNOWLEDGE_VAULT_", env_file=".env", extra="ignore", hide_input_in_errors=True
     )
 
     environment: Literal["production", "development", "test"] = "production"
     service_name: str = "knowledge-vault"
     # The installed package is the single source of the version.
     version: str = Field(default_factory=_package_version)
-    database_url: str = "postgresql://knowledge_vault@localhost/knowledge_vault"
+    database_url: str = Field(
+        default="postgresql://knowledge_vault@localhost/knowledge_vault", repr=False
+    )
     token_pepper: str = Field(default="", repr=False)
     bootstrap_tokens: str = Field(default="", repr=False)
+    database_url_file: str | None = Field(default=None, repr=False, exclude=True)
+    token_pepper_file: str | None = Field(default=None, repr=False, exclude=True)
+    bootstrap_tokens_file: str | None = Field(default=None, repr=False, exclude=True)
     cors_origins: str = ""
     # Explicit opt-in for standalone deployments; never use an empty or wildcard host list.
     standalone_mode: bool = False
@@ -101,22 +190,69 @@ class Settings(BaseSettings):
     # the image; see observability/tracing.py.
     otel_enabled: bool = False
 
+    def __init__(self, **values: Any) -> None:
+        sanitized: ValidationError | None = None
+        try:
+            super().__init__(**values)
+        except ValidationError as exc:
+            # Model-level validation errors normally retain the complete input mapping, including
+            # credentials, and nested validator exceptions may retain their own contexts.
+            details = exc.errors(include_url=False)
+            for detail in details:
+                detail["input"] = None
+                context = detail.get("ctx")
+                if context is not None and "error" in context:
+                    original = context["error"]
+                    message = (
+                        str(original)
+                        if isinstance(original, _SafeConfigError)
+                        else "invalid configuration"
+                    )
+                    context["error"] = ValueError(message)
+            sanitized = ValidationError.from_exception_data(
+                exc.title, cast(list[InitErrorDetails], details), hide_input=True
+            )
+        # Raising outside the handler avoids retaining the original error in __context__.
+        if sanitized is not None:
+            raise sanitized from None
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        sources = (init_settings, env_settings, dotenv_settings, file_secret_settings)
+        files = _FileSettingsSource(settings_cls, sources)
+        return (
+            files,
+            *(_SnapshotSettingsSource(settings_cls, files, i) for i in range(len(sources))),
+        )
+
     @field_validator("ingestion_policy")
     @classmethod
     def validate_ingestion_policy(cls, value: str) -> str:
         if not value.strip():
-            raise ValueError("ingestion policy must contain non-whitespace guidance")
+            raise _SafeConfigError("ingestion policy must contain non-whitespace guidance")
         if any(ord(character) < 32 and character not in "\n\r\t" for character in value):
-            raise ValueError("ingestion policy must not contain control characters")
+            raise _SafeConfigError("ingestion policy must not contain control characters")
         if detect_secret(value):
-            raise ValueError("ingestion policy must not contain secret-shaped values")
+            raise _SafeConfigError("ingestion policy must not contain secret-shaped values")
         return value
 
     @field_validator("alert_webhook_url")
     @classmethod
     def validate_alert_webhook_url(cls, value: str) -> str:
-        if value and urlsplit(value).scheme not in {"http", "https"}:
-            raise ValueError("alert webhook URL must be an http or https URL")
+        try:
+            valid_scheme = not value or urlsplit(value).scheme in {"http", "https"}
+        except ValueError:
+            # urllib may include credential-bearing authority text in its exception.
+            valid_scheme = False
+        if not valid_scheme:
+            raise _SafeConfigError("alert webhook URL must be an http or https URL")
         return value
 
     @model_validator(mode="after")
@@ -124,7 +260,7 @@ class Settings(BaseSettings):
         if self.standalone_mode:
             hosts = self.standalone_allowed_hosts.split(",")
             if not self.standalone_allowed_hosts.strip() or any(not host.strip() for host in hosts):
-                raise ValueError("standalone mode requires an explicit host allowlist")
+                raise _SafeConfigError("standalone mode requires an explicit host allowlist")
             for host in hosts:
                 strict_host(host.strip())
         return self
@@ -144,21 +280,21 @@ class Settings(BaseSettings):
         ]
         if missing:
             joined = ", ".join(f"KNOWLEDGE_VAULT_{name}" for name in missing)
-            raise ValueError(f"Cloudflare Access requires {joined}")
+            raise _SafeConfigError(f"Cloudflare Access requires {joined}")
         issuer = self.cloudflare_access_issuer_url.rstrip("/")
         if not issuer.startswith("https://") or not issuer.endswith(".cloudflareaccess.com"):
-            raise ValueError(
+            raise _SafeConfigError(
                 "KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_ISSUER_URL must be an HTTPS "
                 "cloudflareaccess.com team domain"
             )
         scopes = self.cloudflare_access_scope_set
         if not scopes:
-            raise ValueError("KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_SCOPES cannot be empty")
+            raise _SafeConfigError("KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_SCOPES cannot be empty")
         if Scope.ADMIN in scopes:
-            raise ValueError("Cloudflare Access identities cannot receive knowledge:admin")
+            raise _SafeConfigError("Cloudflare Access identities cannot receive knowledge:admin")
         public_hosts = self.cloudflare_access_public_host_set
         if not public_hosts or any(host.endswith(".invalid") for host in public_hosts):
-            raise ValueError(
+            raise _SafeConfigError(
                 "Cloudflare Access requires the published hostname: set "
                 "KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_PUBLIC_HOSTS or a real "
                 "KNOWLEDGE_VAULT_PUBLIC_BASE_URL"
@@ -169,17 +305,19 @@ class Settings(BaseSettings):
         # Requiring the allowlist confines bearer acceptance to the declared private hostname(s).
         private_hosts = self.cloudflare_access_private_host_set
         if not private_hosts:
-            raise ValueError(
+            raise _SafeConfigError(
                 "Cloudflare Access requires the private hostname allowlist: set "
                 "KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_PRIVATE_HOSTS to the device-bearer hostname(s) "
                 "so bearer tokens are not accepted for every unpublished Host"
             )
         if any(host.endswith(".invalid") for host in private_hosts):
-            raise ValueError(
+            raise _SafeConfigError(
                 "KNOWLEDGE_VAULT_CLOUDFLARE_ACCESS_PRIVATE_HOSTS must list real hostnames"
             )
         if public_hosts & private_hosts:
-            raise ValueError("a hostname cannot be both a Cloudflare public and a private host")
+            raise _SafeConfigError(
+                "a hostname cannot be both a Cloudflare public and a private host"
+            )
         return self
 
     @property
@@ -202,16 +340,31 @@ class Settings(BaseSettings):
 
     @property
     def cloudflare_access_scope_set(self) -> frozenset[Scope]:
-        return frozenset(
-            Scope(item.strip()) for item in self.cloudflare_access_scopes.split(",") if item.strip()
-        )
+        try:
+            return frozenset(
+                Scope(item.strip())
+                for item in self.cloudflare_access_scopes.split(",")
+                if item.strip()
+            )
+        except ValueError:
+            pass
+        raise _SafeConfigError("invalid Cloudflare Access scope") from None
 
     @property
     def cloudflare_access_public_host_set(self) -> frozenset[str]:
         explicit = _host_set(self.cloudflare_access_public_hosts)
         if explicit:
             return explicit
-        derived = urlsplit(self.public_base_url).hostname
+        try:
+            derived = urlsplit(self.public_base_url).hostname
+        except ValueError:
+            # Leave the handler before raising to avoid retaining the authority in __context__.
+            derived = None
+            invalid_url = True
+        else:
+            invalid_url = False
+        if invalid_url:
+            raise _SafeConfigError("invalid public base URL") from None
         return frozenset({canonical_host(derived)}) if derived else frozenset()
 
     @property
