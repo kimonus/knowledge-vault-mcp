@@ -57,6 +57,6 @@ phases:
   phase_6: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_7: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
 verified_platforms: []
-next_action: "Independently review the proposed attestation trust correction, then implement and test authenticated release evidence and remaining gates; obtain VM translation configuration when available and retain authenticated TLS unless owner explicitly approves an architecture/security change."
+next_action: "Review and run the opt-in nonpublishing multi-platform archive rehearsal; verify its real producer profile, then implement authenticated release evidence and remaining gates. Retain authenticated TLS unless owner explicitly approves an architecture/security change."
 notes:
   - "This manifest is a handoff pointer, not proof of success; reconcile against GitHub and executed tests."
