@@ -8,6 +8,11 @@ stable release.
 
 ## [Unreleased]
 
+### Changed
+
+- Separate manual release rehearsals from the privileged publishing job. Rehearsals no longer
+  log in to GHCR or upload GitHub Actions caches or build records; they still download build inputs.
+
 ### Added
 
 - Experimental offline image smoke for collecting standalone application and backup compatibility
