@@ -41,6 +41,8 @@ phases:
       - "Multi-platform release design independently reviewed; attestation trust and candidate-write findings addressed. Implementation and registry verification remain pending."
       - "Offline OCI index descriptor helper and 20 focused fixture tests prepared; independent static review completed. The helper does not authenticate images or attestations and is not integrated into releases."
       - "Offline BuildKit attachment digest/subject consistency check under development; it does not authenticate the index, signer, builder, source, or predicates and is not integrated into releases."
+      - "PR #108 head 744b67aa77aa12a5f7643bec787e7c7ebc219761 built and checked nonpublishing multi-platform app and backup OCI archives: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42984192678. This establishes consistency, not signature or registry verification."
+      - "PR #107 head e0c675e9c7ab2e0cceaca687ca8f65c561ae0c34 passed its nonpublishing release rehearsal with the publish job skipped: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42982178210."
       - "Offline candidate index and child byte-integrity verification independently reviewed; PR #104 head 6a182ed4e31990753e6f6077632335225fe9a5e3 passed all four required CI jobs: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42902732674. Caller-supplied expected digest is not authenticated and no signature or configuration is verified."
       - "Release trust design corrected to distinguish a verified index signer vouching for digest-bound attachments from independently authenticated builder provenance; proposed verification and promotion remain unimplemented."
       - "PR #101 head 35d691bbe209f452650e2bd57be313cef71ab519 passed quality, supply-chain, kubernetes and inspector: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/42612291106."
@@ -50,13 +52,21 @@ phases:
       - "Confirm the Mac VM translation configuration and investigate the joblib serial fallback; the reported image smoke does not establish full platform support."
       - "Multi-platform release construction, child digest scans/SBOMs/attestation verification and native backup/restore evidence remain unimplemented or unverified."
       - "No publication, release, merge, paid infrastructure or direct corporate resource access is authorized; a real-registry rehearsal requires separate authorization."
-  phase_2: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
+  phase_2:
+    state: prerequisite_in_progress
+    issue: null
+    pr: null
+    evidence:
+      - "Maintenance-only worker change drafted and independently reviewed; real PostgreSQL CI remains pending."
+    blockers:
+      - "Phase 1 multi-platform publication guarantees remain unimplemented; no Phase 2 completion or deployment claim."
+      - "Standalone TLS, Host enforcement, secret injection, migrations and Compose runtime remain unimplemented."
   phase_3: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_4: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_5: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_6: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_7: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
 verified_platforms: []
-next_action: "Review and run the opt-in nonpublishing multi-platform archive rehearsal; verify its real producer profile, then implement authenticated release evidence and remaining gates. Retain authenticated TLS unless owner explicitly approves an architecture/security change."
+next_action: "Verify the maintenance-only worker against disposable PostgreSQL in CI; implement standalone TLS, Host enforcement and secret injection while retaining the open multi-platform release gates."
 notes:
   - "This manifest is a handoff pointer, not proof of success; reconcile against GitHub and executed tests."
