@@ -16,6 +16,9 @@ stable release.
 
 ### Added
 
+- An explicit standalone migration command serializes cooperating migrations with a PostgreSQL
+  session lock and verifies the shipped schema head. It does not run at application startup; see
+  the [migration guidance](docs/runbooks/migrations.md) before use.
 - The application and Alembic accept explicit `_FILE` settings for the database URL, token pepper,
   and bootstrap-token records. See the [secret-file guidance](docs/runbooks/standalone-secret-files.md)
   before provisioning or rotating them; the standalone deployment remains unimplemented.
