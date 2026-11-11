@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from knowledge_vault.auth.hosts import canonical_host
+from knowledge_vault.auth.hosts import canonical_host, strict_host
 from knowledge_vault.auth.tokens import Scope
 from knowledge_vault.domain.secrets import detect_secret
 from knowledge_vault.ingestion_policy import DEFAULT_INGESTION_POLICY
@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     token_pepper: str = Field(default="", repr=False)
     bootstrap_tokens: str = Field(default="", repr=False)
     cors_origins: str = ""
+    # Explicit opt-in for standalone deployments; never use an empty or wildcard host list.
+    standalone_mode: bool = False
+    standalone_allowed_hosts: str = ""
     public_base_url: str = "https://knowledge-vault.invalid"
     auth_issuer_url: str = "https://knowledge-vault.invalid"
     ingestion_policy_version: str = Field(
@@ -117,6 +120,16 @@ class Settings(BaseSettings):
         return value
 
     @model_validator(mode="after")
+    def validate_standalone_hosts(self) -> "Settings":
+        if self.standalone_mode:
+            hosts = self.standalone_allowed_hosts.split(",")
+            if not self.standalone_allowed_hosts.strip() or any(not host.strip() for host in hosts):
+                raise ValueError("standalone mode requires an explicit host allowlist")
+            for host in hosts:
+                strict_host(host.strip())
+        return self
+
+    @model_validator(mode="after")
     def validate_cloudflare_access(self) -> "Settings":
         if not self.cloudflare_access_enabled:
             return self
@@ -172,6 +185,12 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
+
+    @property
+    def standalone_allowed_host_set(self) -> frozenset[str]:
+        return frozenset(
+            strict_host(host.strip()) for host in self.standalone_allowed_hosts.split(",")
+        )
 
     @property
     def cloudflare_access_email_set(self) -> frozenset[str]:
