@@ -57,7 +57,8 @@ phases:
     issue: null
     pr: null
     evidence:
-      - "Maintenance-only worker change drafted and independently reviewed; real PostgreSQL CI remains pending."
+      - "Maintenance-only worker PR #109 head 16df9be692ac589a8b009c5af60546ad97423ff3 passed all four CI jobs, including disposable pgvector tests: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43038140150."
+      - "Opt-in standalone Host guard drafted and independently reviewed; CI remains pending. TLS, secret handling and metrics isolation remain separate."
     blockers:
       - "Phase 1 multi-platform publication guarantees remain unimplemented; no Phase 2 completion or deployment claim."
       - "Standalone TLS, Host enforcement, secret injection, migrations and Compose runtime remain unimplemented."
@@ -67,6 +68,6 @@ phases:
   phase_6: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_7: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
 verified_platforms: []
-next_action: "Verify the maintenance-only worker against disposable PostgreSQL in CI; implement standalone TLS, Host enforcement and secret injection while retaining the open multi-platform release gates."
+next_action: "Submit and verify the standalone Host guard; implement standalone TLS, secret injection and migration gates while retaining the open multi-platform release gates."
 notes:
   - "This manifest is a handoff pointer, not proof of success; reconcile against GitHub and executed tests."

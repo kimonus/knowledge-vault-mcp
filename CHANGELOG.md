@@ -16,6 +16,8 @@ stable release.
 
 ### Added
 
+- Standalone mode can require an explicit, strictly validated Host allowlist before CORS and
+  authentication. This is a prerequisite for a standalone deployment, not a deployment itself.
 - Experimental offline image smoke for collecting standalone application and backup compatibility
   evidence; it does not establish native execution or platform support by itself.
 - Experimental Podman engine selection and Apple Silicon image-test steps for that smoke; the

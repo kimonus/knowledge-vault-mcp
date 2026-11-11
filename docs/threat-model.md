@@ -22,6 +22,12 @@ The controls below describe the maintained Cloudflare + LAN/WireGuard reference 
 is not required by MCP or the application domain. Alternative connectivity architectures must map
 each threat to equivalent controls and add transport-specific threats before production use.
 
+An experimental standalone-mode origin guard requires an explicit Host allowlist when
+`KNOWLEDGE_VAULT_STANDALONE_MODE=true`. It validates each HTTP authority before CORS and rejects
+missing, repeated, malformed, or unlisted Host headers, except health probes. This does not provide
+TLS, isolate an origin, filter metrics, or authenticate a client; standalone packaging and its
+external reachability remain unverified.
+
 ## Threats and controls
 
 | Threat | Controls | Residual/operator responsibility |

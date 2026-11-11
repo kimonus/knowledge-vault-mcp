@@ -37,3 +37,7 @@ Client ingestion guidance is trusted operator configuration delivered in MCP ini
 an authorization boundary. Keep it free of secrets and restrict ConfigMap/Helm edits. Fixed rules
 remain in code; server-side scopes, input validation and secret detection apply independently.
 Neither instructions nor readback can guarantee that a client has seen or extracted an entire chat.
+
+Experimental standalone mode requires a nonempty exact Host allowlist; wildcards and malformed
+authorities fail configuration validation. Host checks are an additional boundary, not a
+substitute for authenticated TLS, server-side scopes, origin checks, or restricting origin access.

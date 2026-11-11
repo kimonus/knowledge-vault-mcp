@@ -16,6 +16,7 @@ from knowledge_vault.api.middleware import (
     ObservabilityMiddleware,
     OriginValidationMiddleware,
     RequestSizeLimitMiddleware,
+    StandaloneHostMiddleware,
 )
 from knowledge_vault.api.schemas import (
     AppendArtifactChunkRequest,
@@ -83,8 +84,8 @@ def create_app(container: Container) -> FastAPI:
     )
     app.state.container = container
     # Middleware added later wraps middleware added earlier, so the request passes through
-    # CORS, observability, Origin validation, Access validation, OAuth discovery scoping, then
-    # the size limit.
+    # standalone Host validation, CORS, observability, Origin validation, Access validation,
+    # OAuth discovery scoping, then the size limit.
     app.add_middleware(RequestSizeLimitMiddleware, max_bytes=container.settings.max_request_bytes)
     app.add_middleware(
         OAuthDiscoveryMiddleware,
@@ -114,6 +115,10 @@ def create_app(container: Container) -> FastAPI:
             allow_methods=["GET", "POST", "PUT"],
             allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
             allow_credentials=False,
+        )
+    if container.settings.standalone_mode:
+        app.add_middleware(
+            StandaloneHostMiddleware, allowed_hosts=container.settings.standalone_allowed_host_set
         )
 
     @app.exception_handler(KnowledgeVaultError)

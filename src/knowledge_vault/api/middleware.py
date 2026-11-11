@@ -15,7 +15,7 @@ from knowledge_vault.auth.cloudflare import (
     CloudflareAccessError,
     bind_cloudflare_principal,
 )
-from knowledge_vault.auth.hosts import canonical_host
+from knowledge_vault.auth.hosts import canonical_host, strict_host
 from knowledge_vault.observability.logging import describe_exception
 from knowledge_vault.observability.metrics import HTTP_LATENCY, HTTP_REQUESTS
 
@@ -29,6 +29,32 @@ def _problem(status: int, title: str, detail: str, **headers: str) -> JSONRespon
         headers=headers or None,
         media_type="application/problem+json",
     )
+
+
+class StandaloneHostMiddleware:
+    """Restrict standalone HTTP authorities before CORS, authentication, or routing."""
+
+    def __init__(self, app: ASGIApp, allowed_hosts: frozenset[str]) -> None:
+        self.app = app
+        self._allowed_hosts = allowed_hosts
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope.get("path") in HEALTH_PATHS:
+            await self.app(scope, receive, send)
+            return
+        hosts = [value for name, value in scope.get("headers", []) if name.lower() == b"host"]
+        try:
+            if len(hosts) != 1:
+                raise ValueError("ambiguous Host")
+            host = strict_host(hosts[0].decode("ascii", errors="strict"))
+        except (UnicodeDecodeError, ValueError):
+            response = _problem(400, "Bad Request", "invalid Host header")
+        else:
+            if host in self._allowed_hosts:
+                await self.app(scope, receive, send)
+                return
+            response = _problem(400, "Bad Request", "unrecognized Host header")
+        await response(scope, receive, send)
 
 
 class CloudflareAccessMiddleware:
