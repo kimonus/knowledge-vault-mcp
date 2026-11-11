@@ -41,3 +41,8 @@ Neither instructions nor readback can guarantee that a client has seen or extrac
 Experimental standalone mode requires a nonempty exact Host allowlist; wildcards and malformed
 authorities fail configuration validation. Host checks are an additional boundary, not a
 substitute for authenticated TLS, server-side scopes, origin checks, or restricting origin access.
+
+Secret-file settings are an alternative to direct configuration for the database URL, token
+pepper and bootstrap records. They do not protect files from the host operator or other processes
+with access. Follow the [secret-file guidance](docs/runbooks/standalone-secret-files.md) for access,
+rotation and engine-specific permission checks. Never log settings dumps: they contain secret values.
