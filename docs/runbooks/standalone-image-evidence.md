@@ -53,3 +53,23 @@ Native jobs are skipped if the event repository is private. Inspect the job logs
 commit before recording evidence; a skipped job is not evidence. The runner label and
 architecture checks do not by themselves establish application or engine support, and the tensor
 operation does not establish model inference. Provisioned model inference remains a separate gate.
+
+The `CI` workflow also offers `multiarch_archives` as a separate, default-off manual input on a
+public repository. Each of two standard x86 runners builds the actual application or backup image
+as a **named**, local amd64/arm64 OCI archive with pinned BuildKit and SPDX scanner images. Build
+inputs and the scanner may be fetched over the network; no image, cache, artifact or release is
+published. To run the branch's workflow after it is available to the dispatcher:
+
+```sh
+gh workflow run ci.yml --ref BRANCH -f multiarch_archives=true
+```
+
+Select only one optional input. The check stages bounded archive metadata without extracting
+arbitrary paths, resolves the nested candidate index and validates its child and BuildKit statement
+digest/size links in a separate network namespace. Results establish only internal consistency
+with the candidate digest taken from that archive; they do not authenticate an image, builder,
+source, signature, or SBOM contents. GitHub's runner storage is limited: a disk, unsupported
+producer format, scanner, or network-namespace failure is a failed rehearsal, not a passed gate.
+The 8 MiB metadata blob cap is narrower than BuildKit's supported attestation size and must be
+checked against real producer output. These builds may use emulation; native execution remains a
+separate requirement. The release workflow and its actual producer are unchanged.

@@ -14,6 +14,8 @@ stable release.
   evidence; it does not establish native execution or platform support by itself.
 - Experimental Podman engine selection and Apple Silicon image-test steps for that smoke; the
   standalone Podman deployment remains unimplemented and unverified.
+- Opt-in, nonpublishing multi-platform OCI archive rehearsal for the application and backup images;
+  it checks metadata consistency without verifying release signatures or platform support.
 
 ## [0.7.0] - 2026-11-06
 
