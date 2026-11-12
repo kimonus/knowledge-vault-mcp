@@ -44,8 +44,23 @@ wait_gateway() {
         sleep 2
     done
 }
-mkdir -m 755 "$KV_SECRETS_DIR"
 chmod 755 "$tmp"
+if [ "${KV_TEST_PRIVATE_SECRETS:-}" = 1 ]; then
+python3 "$root/deploy/standalone/provision-secrets.py" "$KV_SECRETS_DIR"
+python3 - <<'PY'
+import hashlib, hmac, json, os, secrets
+from pathlib import Path
+p = Path(os.environ['KV_SECRETS_DIR'])
+writer = (p / 'device-token').read_text()
+reader = 'kv_' + secrets.token_urlsafe(32)
+(p / 'writer-token').write_text(writer)
+(p / 'reader-token').write_text(reader)
+records = json.loads((p / 'bootstrap-tokens').read_text())
+records.append({'principal_id': 'reader', 'sha256': hmac.new((p / 'token-pepper').read_bytes(), reader.encode(), hashlib.sha256).hexdigest(), 'scopes': ['knowledge:read']})
+(p / 'bootstrap-tokens').write_text(json.dumps(records))
+PY
+else
+mkdir -m 755 "$KV_SECRETS_DIR"
 python3 - <<'PY'
 import hashlib
 import hmac
@@ -68,11 +83,22 @@ for name, (token, scopes) in tokens.items():
 (root / 'database-url').write_text(
     'postgresql://knowledge_vault:ci-fixture-database-password@db:5432/knowledge_vault')
 PY
+fi
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
     -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' \
     -keyout "$KV_SECRETS_DIR/tls-key.pem" -out "$KV_SECRETS_DIR/tls-cert.pem" >/dev/null 2>&1
 # These are throwaway fixture credentials on an isolated disposable runner only.
-chmod 644 "$KV_SECRETS_DIR"/*
+if [ "${KV_TEST_PRIVATE_SECRETS:-}" = 1 ]; then
+    # Only newly generated disposable CI files: no production paths or recursive ownership changes.
+    chmod 711 "$KV_SECRETS_DIR"
+    chmod 600 "$KV_SECRETS_DIR"/database-url "$KV_SECRETS_DIR"/token-pepper "$KV_SECRETS_DIR"/bootstrap-tokens "$KV_SECRETS_DIR"/postgres-password "$KV_SECRETS_DIR"/tls-key.pem "$KV_SECRETS_DIR"/writer-token "$KV_SECRETS_DIR"/reader-token
+    chmod 644 "$KV_SECRETS_DIR/tls-cert.pem"
+    sudo chown 10001:10001 "$KV_SECRETS_DIR"/database-url "$KV_SECRETS_DIR"/token-pepper "$KV_SECRETS_DIR"/bootstrap-tokens
+    sudo chown 999:999 "$KV_SECRETS_DIR/postgres-password"
+    sudo chown 101:101 "$KV_SECRETS_DIR/tls-key.pem"
+else
+    chmod 644 "$KV_SECRETS_DIR"/*
+fi
 docker build --pull=false -t "$KV_APP_IMAGE" "$root"
 KV_APP_IMAGE=$(docker image inspect --format '{{.Id}}' "$KV_APP_IMAGE")
 export KV_APP_IMAGE
