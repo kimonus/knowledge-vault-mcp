@@ -16,6 +16,8 @@ stable release.
 
 ### Added
 
+- An experimental standalone Compose package for review with a loopback TLS gateway and explicit
+  migration step. It is not yet a verified deployment; see [its limitations](deploy/standalone/README.md).
 - Standalone API and worker processes fail closed when the database is not at the image's exact
   singleton migration head. Stop writers during upgrades as described in the standalone ADR.
 - An explicit standalone migration command serializes cooperating migrations with a PostgreSQL
