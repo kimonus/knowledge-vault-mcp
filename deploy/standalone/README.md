@@ -1,8 +1,8 @@
 # Standalone Compose package (experimental)
 
 This is a reviewable implementation, **not a verified quick start or supported deployment**.
-Docker Compose and Podman Compose, macOS VM forwarding, secrets, TLS, database initialization,
-migration, backups, and authenticated end-to-end behavior have not been validated for this package.
+Disposable Linux Docker CI has exercised initialization, migration, TLS and authenticated MCP;
+Podman Compose, macOS VM forwarding, operator secret permissions and recovery remain unverified.
 Do not use it for valuable data until those tests and recovery exercises pass. The independent
 multi-platform application image publication gate is also open. Helm remains unchanged.
 
@@ -28,7 +28,7 @@ for whichever of these names the client uses. Never bypass TLS verification for 
    For experimental testing only, `KV_APP_IMAGE` may instead be a locally built image's full
    `sha256:` ID followed by 64 lowercase hexadecimal characters. Obtain it with your engine's
    image inspection and verify both local resolution and Compose startup on the actual engine;
-   support for image IDs by Docker Compose and Podman Compose providers is not yet established.
+   Docker Compose resolved an image ID in disposable Linux CI; Podman Compose remains unverified.
    A local image ID is not a published release or a multi-platform image. The gateway still
    requires an image reference pinned by registry digest.
 2. Set `KV_SECRETS_DIR` to an absolute operator-owned directory outside the repository. Provision
@@ -56,8 +56,8 @@ for whichever of these names the client uses. Never bypass TLS verification for 
 4. The fresh named volume is durable. Its initialization requires PostgreSQL UID 999 to be able
    to write the volume and its parent directory. Verify ownership and user mappings for the chosen
    engine with a disposable empty volume first; do not recursively change ownership of an existing
-   volume or reuse a production database. The postgres image, non-root initialization and
-   read-only filesystem combination are not yet runtime verified. Do not use automatic volume
+   volume or reuse a production database. Non-root initialization with a read-only root filesystem
+   passed in disposable Linux Docker CI; other engines remain unverified. Do not use automatic volume
    ownership-changing options.
 
 ## Lifecycle under test
@@ -88,6 +88,8 @@ mismatch, but do not eliminate a concurrent migration race. Recovery from an inc
 is by restoring a verified backup to an isolated instance; schema downgrade is not assumed safe.
 Do not schedule the separate reembed or watchdog commands here: they lack this schema guard.
 Lexical-only mode disables embeddings while retaining the dedicated maintenance worker.
+An [experimental offline embedding override](FULL-PROFILE.md) is available for review; it has not
+been validated as a full deployment.
 
 The gateway resolves the API container address when nginx starts. If Compose replaces the API
 container, restart the gateway after the replacement is healthy (`docker compose restart gateway`,

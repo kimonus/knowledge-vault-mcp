@@ -47,6 +47,19 @@ def test_gateway_is_allowlisted_and_tls_only():
     assert "/health" not in config
 
 
+def test_offline_profile_uses_the_same_revision_without_downloads():
+    override = yaml.safe_load((PACKAGE / "compose.full.yaml").read_text())
+    api, worker = (override["services"][name] for name in ("api", "worker"))
+    model = "/models/e8f8c211226b894fcb81acc59f3b34ba3efd5f42"
+    for service in (api, worker):
+        env = service["environment"]
+        assert env["KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED"] == "true"
+        assert env["KNOWLEDGE_VAULT_EMBEDDING_ALLOW_DOWNLOAD"] == "false"
+        assert env["KNOWLEDGE_VAULT_EMBEDDING_MODEL"] == model
+        assert service["volumes"][0].endswith(f":{model}:ro")
+        assert service["tmpfs"] == ["/tmp:mode=1777,size=268435456"]  # noqa: S108
+
+
 def test_configuration_checker_fails_closed(tmp_path):
     env = os.environ | {
         "KV_APP_IMAGE": "registry.example/app:latest",

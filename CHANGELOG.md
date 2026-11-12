@@ -16,6 +16,8 @@ stable release.
 
 ### Added
 
+- A draft offline embedding Compose override pins the tested model revision; full-profile runtime
+  and model rebuild procedures remain unverified.
 - An experimental non-pruning standalone backup prototype; restore is deliberately disabled and
   no disaster-recovery procedure is yet verified.
 - An experimental standalone Compose package for review with a loopback TLS gateway and explicit

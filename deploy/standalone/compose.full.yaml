@@ -1,0 +1,28 @@
+# Experimental offline embeddings override. Use with compose.yaml, not by itself.
+services:
+  api:
+    environment:
+      KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED: "true"
+      KNOWLEDGE_VAULT_EMBEDDING_ALLOW_DOWNLOAD: "false"
+      KNOWLEDGE_VAULT_EMBEDDING_MODEL: /models/e8f8c211226b894fcb81acc59f3b34ba3efd5f42
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HOME: /tmp/huggingface
+    volumes:
+      - ${KV_MODEL_DIR:?Set KV_MODEL_DIR to the verified revision directory}:/models/e8f8c211226b894fcb81acc59f3b34ba3efd5f42:ro
+    tmpfs:
+      - /tmp:mode=1777,size=268435456
+    mem_limit: 3g
+  worker:
+    environment:
+      KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED: "true"
+      KNOWLEDGE_VAULT_EMBEDDING_ALLOW_DOWNLOAD: "false"
+      KNOWLEDGE_VAULT_EMBEDDING_MODEL: /models/e8f8c211226b894fcb81acc59f3b34ba3efd5f42
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HOME: /tmp/huggingface
+    volumes:
+      - ${KV_MODEL_DIR:?Set KV_MODEL_DIR to the verified revision directory}:/models/e8f8c211226b894fcb81acc59f3b34ba3efd5f42:ro
+    tmpfs:
+      - /tmp:mode=1777,size=268435456
+    mem_limit: 3g
