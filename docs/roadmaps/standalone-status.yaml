@@ -70,10 +70,18 @@ phases:
       - "Podman/macOS, production-grade mapped secret permissions, backup/restore and long-lived streams remain unverified. The successful CI uses disposable test credentials."
   phase_3: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_4: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
-  phase_5: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
+  phase_5:
+    state: blocked_by_dependency
+    issue: null
+    pr: null
+    evidence:
+      - "Non-pruning standalone backup prototype and disabled restore drafted in feat/standalone-safe-backup; mocked command tests passed. No real backup or restore has been performed."
+    blockers:
+      - "A service file and empty-catalog check cannot prove a restore target is fresh and isolated; restore remains disabled until an enforceable target design is reviewed."
+      - "Real encrypted backup, credential recovery, disaster recovery and failed-upgrade exercises remain unverified."
   phase_6: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_7: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
 verified_platforms: []
-next_action: "Verify the provisioning helper, backup/restore and Podman/macOS Compose behavior; retain the open multi-platform release gates."
+next_action: "Design enforceable fresh restore target provisioning and test isolated backups; verify Podman/macOS Compose behavior and retain the open multi-platform release gates."
 notes:
   - "This manifest is a handoff pointer, not proof of success; reconcile against GitHub and executed tests."
