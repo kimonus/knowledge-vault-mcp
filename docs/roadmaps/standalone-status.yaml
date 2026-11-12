@@ -69,7 +69,16 @@ phases:
       - "Phase 1 multi-platform publication guarantees remain unimplemented; no Phase 2 completion or deployment claim."
       - "Podman/macOS, production-grade mapped secret permissions, backup/restore and long-lived streams remain unverified. The successful CI uses disposable test credentials."
   phase_3: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
-  phase_4: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
+  phase_4:
+    state: blocked_by_dependency
+    issue: null
+    pr: null
+    evidence:
+      - "Draft offline Compose override pins the owner-verified model revision and disables downloads; full-profile Compose runtime remains unverified."
+      - "The owner-reported Mac image smoke loaded the same model offline and produced a 384-dimensional vector, but did not exercise Compose or semantic ingestion/search."
+    blockers:
+      - "Full-profile authenticated ingestion/search, maintenance, cold start, concurrent first use, memory limits and Podman/macOS mappings remain unverified."
+      - "Existing data requires a separately reviewed rebuild procedure; standalone reembed is not schema-guarded."
   phase_5:
     state: blocked_by_dependency
     issue: null
