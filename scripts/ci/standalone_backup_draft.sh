@@ -78,5 +78,5 @@ docker run --network none --read-only --tmpfs /tmp:rw,nosuid,nodev,mode=1777 --c
   --mount "type=bind,src=$work/secrets/restic-password,dst=/run/fixture/restic-password,readonly" \
   --env RESTIC_REPOSITORY=/repository --env RESTIC_PASSWORD_FILE=/run/fixture/restic-password \
   --env RESTIC_CACHE_DIR=/scratch/cache --entrypoint /bin/bash "$image" -o pipefail -c \
-  'restic --no-lock dump latest /scratch/knowledge-vault.dump | pg_restore --list | grep "TABLE public backup_ci_probe" > /dev/null'
+  'restic --no-lock dump latest /knowledge-vault.dump | pg_restore --list | grep "TABLE public backup_ci_probe" > /dev/null'
 echo 'Synthetic encrypted backup integrity and archive structure checks passed; restore remains disabled.'
