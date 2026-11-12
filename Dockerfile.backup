@@ -13,7 +13,7 @@ RUN git clone --filter=blob:none https://github.com/restic/restic.git . \
     && go run build.go \
     && ./restic version
 
-FROM postgres:17-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27 AS postgres-runtime
+FROM postgres:17-bookworm@sha256:665dc7b37ac52a17e298511414c21d23ffa4e6a6ef6225b3e5d59c7afb35e994 AS postgres-runtime
 # Keep the OpenSSL fix until the pinned base contains it; gosu is unused by this image.
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends --only-upgrade \
