@@ -1,0 +1,108 @@
+name: knowledge-vault-standalone
+
+x-app: &app
+  image: ${KV_APP_IMAGE:?Set KV_APP_IMAGE to the reviewed application image digest}
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+  mem_limit: 1g
+  restart: unless-stopped
+  environment: &app-environment
+    KNOWLEDGE_VAULT_DATABASE_URL_FILE: /run/kv-secrets/database-url
+    KNOWLEDGE_VAULT_TOKEN_PEPPER_FILE: /run/kv-secrets/token-pepper
+    KNOWLEDGE_VAULT_BOOTSTRAP_TOKENS_FILE: /run/kv-secrets/bootstrap-tokens
+    KNOWLEDGE_VAULT_STANDALONE_MODE: "true"
+    KNOWLEDGE_VAULT_STANDALONE_ALLOWED_HOSTS: localhost,127.0.0.1
+    KNOWLEDGE_VAULT_PUBLIC_BASE_URL: https://localhost:8443
+    KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED: "false"
+    KNOWLEDGE_VAULT_EMBEDDING_ALLOW_DOWNLOAD: "false"
+    KNOWLEDGE_VAULT_WORKER_METRICS_PORT: "0"
+  volumes: &app-secrets
+    - ${KV_SECRETS_DIR:?Set KV_SECRETS_DIR to the operator-created secret directory}/database-url:/run/kv-secrets/database-url:ro
+    - ${KV_SECRETS_DIR}/token-pepper:/run/kv-secrets/token-pepper:ro
+    - ${KV_SECRETS_DIR}/bootstrap-tokens:/run/kv-secrets/bootstrap-tokens:ro
+  networks: [private]
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    image: pgvector/pgvector@sha256:137f044b0efe3d57f39b972b9b53641b1f2045b99d879e298bbf514a25787dcf
+    user: "999:999"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql:uid=999,gid=999,mode=0770
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      POSTGRES_USER: knowledge_vault
+      POSTGRES_DB: knowledge_vault
+      POSTGRES_PASSWORD_FILE: /run/kv-secrets/postgres-password
+    volumes:
+      - database:/var/lib/postgresql/data
+      - ${KV_SECRETS_DIR:?Set KV_SECRETS_DIR to the operator-created secret directory}/postgres-password:/run/kv-secrets/postgres-password:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U knowledge_vault -d knowledge_vault"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [private]
+    restart: unless-stopped
+    stop_grace_period: 60s
+    pids_limit: 128
+    mem_limit: 1g
+
+  migrate:
+    <<: *app
+    profiles: [migration]
+    restart: "no"
+    entrypoint: [knowledge-vault-migrate]
+
+  api:
+    <<: *app
+    entrypoint: [knowledge-vault-api]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  worker:
+    <<: *app
+    entrypoint: [knowledge-vault-worker]
+    stop_grace_period: 45s
+
+  gateway:
+    image: ${KV_GATEWAY_IMAGE:?Set KV_GATEWAY_IMAGE to the reviewed nginx-unprivileged image digest}
+    user: "101:101"
+    # Configuration test runs before accepting traffic, so its diagnostics cannot include requests.
+    entrypoint: [/bin/sh, -c, "nginx -t -g 'error_log stderr crit;' || exit 1; exec nginx -g 'daemon off; error_log /dev/null crit;'"]
+    read_only: true
+    tmpfs:
+      - /tmp:uid=101,gid=101,mode=0700
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 128m
+    ports:
+      - "127.0.0.1:8443:8443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${KV_SECRETS_DIR:?Set KV_SECRETS_DIR to the operator-created secret directory}/tls-cert.pem:/run/kv-secrets/tls-cert.pem:ro
+      - ${KV_SECRETS_DIR}/tls-key.pem:/run/kv-secrets/tls-key.pem:ro
+    networks: [private, frontend]
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  private:
+    internal: true
+  frontend: {}
+
+volumes:
+  database:
