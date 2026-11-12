@@ -16,6 +16,8 @@ stable release.
 
 ### Added
 
+- An experimental non-pruning standalone backup prototype; restore is deliberately disabled and
+  no disaster-recovery procedure is yet verified.
 - An experimental standalone Compose package for review with a loopback TLS gateway and explicit
   migration step. It is not yet a verified deployment; see [its limitations](deploy/standalone/README.md).
 - An experimental local credential helper creates a fresh private directory without overwriting
