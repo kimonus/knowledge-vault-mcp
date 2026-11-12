@@ -76,8 +76,9 @@ phases:
     evidence:
       - "Draft offline Compose override pins the owner-verified model revision and disables downloads; full-profile Compose runtime remains unverified."
       - "The owner-reported Mac image smoke loaded the same model offline and produced a 384-dimensional vector, but did not exercise Compose or semantic ingestion/search."
+      - "Disposable Linux Docker CI at 76a188d0c7c9e0ce2b17cd4f2c383ba2c1d20940 generated random synthetic 384-dimensional model weights with networking disabled, then exercised full-profile worker embeddings and concurrent authenticated MCP searches: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43235424760. This does not test the real model or establish Mac/Podman support."
     blockers:
-      - "Full-profile authenticated ingestion/search, maintenance, cold start, concurrent first use, memory limits and Podman/macOS mappings remain unverified."
+      - "Full-profile real-model authenticated ingestion/search, maintenance, cold start, concurrent first use, memory limits and Podman/macOS mappings remain unverified."
       - "Existing data requires a separately reviewed rebuild procedure; standalone reembed is not schema-guarded."
   phase_5:
     state: blocked_by_dependency

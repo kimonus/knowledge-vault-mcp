@@ -12,7 +12,13 @@ export KV_SECRETS_DIR="$tmp/secrets" KV_TEST_SECRETS_DIR="$tmp/secrets"
 export KV_APP_IMAGE="kv-compose-ci:${GITHUB_RUN_ID}"
 # CI candidate only: publisher index with amd64/arm64; runtime verification is required.
 export KV_GATEWAY_IMAGE='ghcr.io/nginxinc/nginx-unprivileged@sha256:8ff43bb0bd15a960d4cce6bcdfabf97c6aeb29067e3ec401f5d0eb77e66d4f8c'
-compose() { docker compose -p "$project" -f "$root/deploy/standalone/compose.yaml" "$@"; }
+compose() {
+    if [ "${KV_TEST_FULL_PROFILE:-}" = 1 ]; then
+        docker compose -p "$project" -f "$root/deploy/standalone/compose.yaml" -f "$root/deploy/standalone/compose.full.yaml" "$@"
+    else
+        docker compose -p "$project" -f "$root/deploy/standalone/compose.yaml" "$@"
+    fi
+}
 wait_gateway() {
     attempt=0
     until curl --noproxy '*' -4 --silent --show-error --cacert "$KV_SECRETS_DIR/tls-cert.pem" \
@@ -70,6 +76,16 @@ chmod 644 "$KV_SECRETS_DIR"/*
 docker build --pull=false -t "$KV_APP_IMAGE" "$root"
 KV_APP_IMAGE=$(docker image inspect --format '{{.Id}}' "$KV_APP_IMAGE")
 export KV_APP_IMAGE
+if [ "${KV_TEST_FULL_PROFILE:-}" = 1 ]; then
+    mkdir "$tmp/synthetic-model"
+    chmod 777 "$tmp/synthetic-model" # Synthetic fixture on the disposable runner only.
+    docker run --network none --read-only --tmpfs /tmp:mode=1777 --cap-drop ALL --security-opt no-new-privileges \
+      --mount "type=bind,src=$tmp/synthetic-model,dst=/fixture" \
+      --mount "type=bind,src=$root/scripts/ci/create_synthetic_embedding_model.py,dst=/run/create-model.py,readonly" \
+      --env HF_HUB_OFFLINE=1 --env TRANSFORMERS_OFFLINE=1 --env HF_HOME=/tmp/huggingface \
+      --entrypoint python "$KV_APP_IMAGE" /run/create-model.py
+    export KV_MODEL_DIR="$tmp/synthetic-model/model"
+fi
 sh "$root/deploy/standalone/check-config.sh"
 compose up -d db
 db=$(compose ps -q db)
