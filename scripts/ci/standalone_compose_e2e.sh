@@ -110,3 +110,6 @@ done
 wait_gateway
 # New process: a successful read checks the database volume survived the restart.
 KV_TEST_READ_ONLY=1 uv run --locked python "$root/scripts/ci/standalone_gateway_client.py"
+if [ "${KV_APP_RECOVERY_REHEARSAL:-}" = 1 ]; then
+    sh "$root/scripts/ci/standalone_app_recovery.sh" "$project" "$tmp" "$KV_APP_IMAGE"
+fi

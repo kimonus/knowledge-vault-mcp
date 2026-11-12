@@ -77,6 +77,8 @@ phases:
     evidence:
       - "Non-pruning standalone backup prototype and disabled restore drafted in feat/standalone-safe-backup; mocked command tests passed. No production data has been backed up and no restore has been performed."
       - "Disposable synthetic Linux backup rehearsal at 9175f34 created an encrypted restic snapshot, checked all data and inspected the PostgreSQL archive: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43179528611. It did not restore a database or test actual vault data."
+      - "Disposable Linux CI at 4bd5b1b0e61fde1a9277cffa6fb5d1a0a7991995 restored one synthetic table to a freshly created database: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43179889387. Operator restore remains disabled; full application recovery and failed-upgrade recovery remain unverified."
+      - "Disposable Linux Docker CI at 39b08bba5c3b9db63a0c1e23a3aafc5e93f4db7c restored synthetic vault assertions, an artifact, source metadata, provenance and temporal state to a distinct database and checked them through authenticated TLS MCP: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43232371779. This does not establish safe operator restore, failed-upgrade recovery, independent storage or Podman/macOS support."
     blockers:
       - "A service file and empty-catalog check cannot prove a restore target is fresh and isolated; restore remains disabled until an enforceable target design is reviewed."
       - "Real encrypted backup, credential recovery, disaster recovery and failed-upgrade exercises remain unverified."
