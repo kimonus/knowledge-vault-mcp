@@ -40,6 +40,12 @@ for whichever of these names the client uses. Never bypass TLS verification for 
    bearer tokens; see [device token setup](../../docs/runbooks/minikube.md). Keep the plaintext
    token separately in an operator secret store and issue a separate admin token only when needed.
    Provision a TLS certificate and matching private key for the loopback name; never commit them.
+   For an isolated experiment, `python3 ./provision-secrets.py "$HOME/kv-secrets-new"` creates a
+   previously nonexistent directory with fresh database and device credentials; it refuses to
+   overwrite an existing destination. Set `KV_SECRETS_DIR` to that directory. Its `device-token`
+   file contains the plaintext bearer and is not mounted by Compose; keep it private. The helper
+   does not create a TLS certificate or make files readable to mapped container users. On failure,
+   it leaves any partial directory in place and a new destination is required for another attempt.
 3. Restrict directory and file permissions and verify the engine's mapped container users can read
    only the files they require: application UID 10001, PostgreSQL UID 999 and gateway UID 101.
    Docker and Podman on Linux and macOS have different user and mount mapping

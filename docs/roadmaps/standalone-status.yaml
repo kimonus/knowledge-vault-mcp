@@ -64,15 +64,16 @@ phases:
       - "Standalone schema guard PR #113 head 4d483320af81a2616b7148ccf3df627de9494a90 passed all four required CI jobs after the initial Bandit assert finding was fixed. Disposable PostgreSQL tests passed."
       - "Experimental Compose PR #114 drafted and independently reviewed. Four static package tests passed. Disposable Linux Docker CI run https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43176205331 initialized PostgreSQL, migrated and reached healthy API, but failed to reach the TLS gateway; authenticated gateway test has not passed."
       - "Docker CI run https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43177276536 reached the loopback TLS gateway after adding a frontend network; the test then incorrectly expected API Origin validation, which is required for MCP only. Authenticated MCP remains unverified."
+      - "Docker Linux amd64 disposable CI at head 68ddc7957aaf754e97a1feb11b8c3417471cafd0 passed fresh PostgreSQL initialization, migration, local image ID, TLS, authenticated MCP write/read, scope/Host/MCP Origin refusals and persistence after restart: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43177651076. This does not verify Podman, macOS, backup/restore, release trust or long-lived streams."
     blockers:
       - "Phase 1 multi-platform publication guarantees remain unimplemented; no Phase 2 completion or deployment claim."
-      - "Compose TLS and authenticated runtime failed the first disposable test; Podman/macOS, engine-specific secret mounts and backup/restore remain unverified."
+      - "Podman/macOS, production-grade mapped secret permissions, backup/restore and long-lived streams remain unverified. The successful CI uses disposable test credentials."
   phase_3: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_4: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_5: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_6: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
   phase_7: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
 verified_platforms: []
-next_action: "Verify corrected schema-guard CI and run disposable Compose TLS, authentication, migration and persistence tests; retain the open multi-platform release gates."
+next_action: "Verify the provisioning helper, backup/restore and Podman/macOS Compose behavior; retain the open multi-platform release gates."
 notes:
   - "This manifest is a handoff pointer, not proof of success; reconcile against GitHub and executed tests."
