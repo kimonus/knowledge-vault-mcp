@@ -31,8 +31,8 @@ password = secrets.token_urlsafe(32)
 PY
 # libpq rejects password files that are group/world readable. Container UID 999 reads
 # this synthetic fixture via ownership on the isolated runner.
-sudo chown 999:999 "$work/secrets/pgpass"
 chmod 600 "$work/secrets/pgpass"
+sudo chown 999:999 "$work/secrets/pgpass"
 chmod 644 "$work/secrets/postgres-password" "$work/secrets/pgservice" "$work/secrets/restic-password"
 docker build -f "$root/Dockerfile.backup" -t "$image" "$root"
 docker pull pgvector/pgvector@sha256:137f044b0efe3d57f39b972b9b53641b1f2045b99d879e298bbf514a25787dcf
