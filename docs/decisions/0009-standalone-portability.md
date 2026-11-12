@@ -28,6 +28,15 @@ implicitly rerun a migration. The image's API ENTRYPOINT must be explicitly over
 migration and worker processes; test the actual invoked commands on each engine. Exact engine
 semantics require runtime tests.
 
+Stop all API and worker writers before starting a migration, and do not restart them until the
+explicit migration has succeeded. Standalone API requests and worker iterations check the exact
+shipped singleton head, but this check and subsequent database operations are not atomic: it
+cannot eliminate a claim or request race with a concurrent migration. A mismatch makes readiness
+and non-health HTTP paths (including internal metrics) unavailable and pauses worker maintenance,
+heartbeat and claims; the worker retries and leases expire if shutdown cannot release them safely.
+The separate reembed and watchdog commands are not covered by this guard and must not be scheduled
+in standalone until they have their own compatibility checks.
+
 The worker must run staging expiration, artifact and confirmation-token cleanup, maintenance
 purge, and successful heartbeat recording even when embeddings are disabled. Embedding jobs
 remain model-scoped, leased and retryable; shutdown releases claims where possible and leases

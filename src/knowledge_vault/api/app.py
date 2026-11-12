@@ -16,6 +16,7 @@ from knowledge_vault.api.middleware import (
     ObservabilityMiddleware,
     OriginValidationMiddleware,
     RequestSizeLimitMiddleware,
+    SchemaGuardMiddleware,
     StandaloneHostMiddleware,
 )
 from knowledge_vault.api.schemas import (
@@ -55,10 +56,14 @@ from knowledge_vault.domain.responses import (
 from knowledge_vault.domain.temporal import ResolutionRequest
 from knowledge_vault.mcp.server import artifact_page, create_mcp_server
 from knowledge_vault.observability.metrics import DB_POOL, HEARTBEAT_AGE
+from knowledge_vault.persistence.schema_guard import SchemaGuard
 from knowledge_vault.services.errors import KnowledgeVaultError, RateLimitedError
 
 
 def create_app(container: Container) -> FastAPI:
+    schema_guard = (
+        SchemaGuard(container.database.sessions) if container.settings.standalone_mode else None
+    )
     mcp_server = create_mcp_server(container)
     mcp_app = mcp_server.streamable_http_app(
         streamable_http_path="/mcp",
@@ -71,9 +76,11 @@ def create_app(container: Container) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         del app
-        async with mcp_app.router.lifespan_context(mcp_app):
-            yield
-        await container.database.close()
+        try:
+            async with mcp_app.router.lifespan_context(mcp_app):
+                yield
+        finally:
+            await container.database.close()
 
     app = FastAPI(
         title="Knowledge Vault internal API",
@@ -117,6 +124,8 @@ def create_app(container: Container) -> FastAPI:
             allow_credentials=False,
         )
     if container.settings.standalone_mode:
+        assert schema_guard is not None
+        app.add_middleware(SchemaGuardMiddleware, ready=schema_guard.ready)
         app.add_middleware(
             StandaloneHostMiddleware, allowed_hosts=container.settings.standalone_allowed_host_set
         )
@@ -168,7 +177,9 @@ def create_app(container: Container) -> FastAPI:
 
     @app.get("/health/ready", include_in_schema=False)
     async def ready() -> JSONResponse:
-        database_ready = await container.database.ready()
+        database_ready = (
+            await schema_guard.ready() if schema_guard else await container.database.ready()
+        )
         status = 200 if database_ready else 503
         embedding = "enabled" if container.settings.embeddings_enabled else "disabled"
         if embedding == "enabled" and getattr(container.embedder, "degraded", False):

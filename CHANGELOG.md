@@ -16,6 +16,8 @@ stable release.
 
 ### Added
 
+- Standalone API and worker processes fail closed when the database is not at the image's exact
+  singleton migration head. Stop writers during upgrades as described in the standalone ADR.
 - An explicit standalone migration command serializes cooperating migrations with a PostgreSQL
   session lock and verifies the shipped schema head. It does not run at application startup; see
   the [migration guidance](docs/runbooks/migrations.md) before use.

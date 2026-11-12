@@ -1,4 +1,5 @@
 from typing import Any
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -12,6 +13,7 @@ from knowledge_vault.auth.hosts import strict_host
 from knowledge_vault.auth.tokens import Scope
 from knowledge_vault.config import Settings
 from knowledge_vault.container import build_container
+from knowledge_vault.persistence.schema_guard import SchemaGuard
 
 
 @pytest.mark.parametrize(
@@ -90,7 +92,8 @@ async def test_host_guard_rejects_missing_duplicate_and_invalid_headers() -> Non
     assert await invoke([], "/health/live") == 204
 
 
-async def test_host_guard_wraps_cors_and_retains_authentication() -> None:
+async def test_host_guard_wraps_cors_and_retains_authentication(monkeypatch) -> None:
+    monkeypatch.setattr(SchemaGuard, "ready", AsyncMock(return_value=True))
     settings = Settings(
         environment="test",
         embeddings_enabled=False,
@@ -114,8 +117,9 @@ async def test_host_guard_wraps_cors_and_retains_authentication() -> None:
 
 
 async def test_allowed_host_preserves_bearer_scopes_and_origin(
-    settings: Settings, reader_token: str
+    settings: Settings, reader_token: str, monkeypatch
 ) -> None:
+    monkeypatch.setattr(SchemaGuard, "ready", AsyncMock(return_value=True))
     configured = Settings(
         **(
             settings.model_dump()
@@ -156,8 +160,9 @@ async def test_allowed_host_preserves_bearer_scopes_and_origin(
 
 
 async def test_standalone_guard_composes_with_cloudflare_access(
-    settings: Settings, reader_token: str
+    settings: Settings, reader_token: str, monkeypatch
 ) -> None:
+    monkeypatch.setattr(SchemaGuard, "ready", AsyncMock(return_value=True))
     configured = Settings(
         **(
             settings.model_dump()
