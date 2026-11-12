@@ -1,6 +1,7 @@
 import re
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from contextlib import AbstractContextManager, nullcontext, suppress
 from typing import Any
 
@@ -29,6 +30,20 @@ def _problem(status: int, title: str, detail: str, **headers: str) -> JSONRespon
         headers=headers or None,
         media_type="application/problem+json",
     )
+
+
+class SchemaGuardMiddleware:
+    def __init__(self, app: ASGIApp, ready: Callable[[], Awaitable[bool]]) -> None:
+        self.app = app
+        self._ready = ready
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope.get("path") in HEALTH_PATHS or await self._ready():
+            await self.app(scope, receive, send)
+            return
+        await _problem(503, "Service Unavailable", "database schema unavailable")(
+            scope, receive, send
+        )
 
 
 class StandaloneHostMiddleware:

@@ -16,6 +16,7 @@ async def run_worker_loop(
     *,
     poll_seconds: float,
     maintenance_interval_seconds: float,
+    schema_ready: Callable[[], Awaitable[bool]] | None = None,
 ) -> None:
     """Run periodic maintenance and, when enabled, embed queued assertions until stopped.
 
@@ -28,11 +29,12 @@ async def run_worker_loop(
         while not stopping.is_set():
             processed = 0
             try:
-                if time.monotonic() >= next_maintenance:
-                    await maintenance()
-                    next_maintenance = time.monotonic() + maintenance_interval_seconds
-                if worker is not None:
-                    processed = await worker.process_once()
+                if schema_ready is None or await schema_ready():
+                    if time.monotonic() >= next_maintenance:
+                        await maintenance()
+                        next_maintenance = time.monotonic() + maintenance_interval_seconds
+                    if worker is not None:
+                        processed = await worker.process_once()
             except Exception as exc:
                 logger.error("worker_iteration_failed", **describe_exception(exc))
             if not processed:
@@ -41,9 +43,10 @@ async def run_worker_loop(
     finally:
         if worker is not None:
             try:
-                released = await worker.release_claims()
+                # Schema may have changed while running; expired leases are the safe fallback.
+                if schema_ready is None or await schema_ready():
+                    released = await worker.release_claims()
+                    logger.info("worker_shutdown", operation="release_claims", released=released)
             except Exception as exc:
                 # The database may be the reason for the shutdown; leases expire on their own.
                 logger.error("worker_shutdown_failed", **describe_exception(exc))
-            else:
-                logger.info("worker_shutdown", operation="release_claims", released=released)

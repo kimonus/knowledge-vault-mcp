@@ -8,6 +8,7 @@ from knowledge_vault.config import get_settings
 from knowledge_vault.container import build_container
 from knowledge_vault.embeddings.providers import SentenceTransformerProvider
 from knowledge_vault.observability.logging import configure_logging
+from knowledge_vault.persistence.schema_guard import SchemaGuard
 from knowledge_vault.services.operations import WORKER
 from knowledge_vault.worker.jobs import EmbeddingWorker
 from knowledge_vault.worker.runner import run_worker_loop
@@ -48,12 +49,16 @@ async def _worker() -> None:
         await container.operations.beat(WORKER)
 
     try:
+        schema_guard = (
+            SchemaGuard(container.database.sessions) if settings.standalone_mode else None
+        )
         await run_worker_loop(
             worker,
             maintenance,
             stopping,
             poll_seconds=settings.worker_poll_seconds,
             maintenance_interval_seconds=settings.maintenance_interval_seconds,
+            schema_ready=schema_guard.ready if schema_guard else None,
         )
     finally:
         await container.database.close()
