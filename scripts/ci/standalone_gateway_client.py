@@ -101,6 +101,22 @@ async def main() -> None:
         assertion_id = committed["assertion_ids"][0]
         fetched = await call(session, "get_knowledge", {"assertion_id": assertion_id})
         assert fetched["id"] == assertion_id
+        if os.environ.get("KV_TEST_FULL_PROFILE"):
+            for _ in range(90):
+                fetched = await call(session, "get_knowledge", {"assertion_id": assertion_id})
+                if fetched["embedding_state"] == "ready":
+                    break
+                await asyncio.sleep(2)
+            else:
+                raise AssertionError("Synthetic embedding did not become ready")
+            results = await asyncio.gather(
+                *(
+                    call(session, "search_knowledge", {"query": "keyboard", "limit": 5})
+                    for _ in range(2)
+                )
+            )
+            assert all(page["results"] for page in results)
+            print("Synthetic offline embedding and concurrent search passed")
 
     async with (
         httpx2.AsyncClient(
