@@ -75,7 +75,8 @@ phases:
     issue: null
     pr: null
     evidence:
-      - "Non-pruning standalone backup prototype and disabled restore drafted in feat/standalone-safe-backup; mocked command tests passed. No real backup or restore has been performed."
+      - "Non-pruning standalone backup prototype and disabled restore drafted in feat/standalone-safe-backup; mocked command tests passed. No production data has been backed up and no restore has been performed."
+      - "Disposable synthetic Linux backup rehearsal at 9175f34 created an encrypted restic snapshot, checked all data and inspected the PostgreSQL archive: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43179528611. It did not restore a database or test actual vault data."
     blockers:
       - "A service file and empty-catalog check cannot prove a restore target is fresh and isolated; restore remains disabled until an enforceable target design is reviewed."
       - "Real encrypted backup, credential recovery, disaster recovery and failed-upgrade exercises remain unverified."
