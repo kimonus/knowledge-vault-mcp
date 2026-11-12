@@ -1,5 +1,21 @@
 # Database migration and rollback
 
+## Standalone migration prerequisite
+
+The standalone runtime is not yet implemented. Its experimental explicit migration command,
+`knowledge-vault-migrate`, loads the database URL through the shared settings, including the
+optional [secret-file setting](standalone-secret-files.md). It requires exactly one shipped
+Alembic head, obtains a PostgreSQL session advisory lock, runs `alembic upgrade head` on that
+same session, and succeeds only if the database reports exactly that head. A concurrent invocation
+using the same command fails promptly. The lock is released on completion or connection close.
+
+The lock only serializes cooperating invocations of this command; the existing Helm job and a
+direct `alembic` invocation do not take it. Stop all writers and other migration tools before an
+upgrade. This command does not provide application startup or readiness gating, does not start the
+standalone service, and does not imply safe downgrade. Preserve and restore-test a backup first;
+recover a failed upgrade by restoring into an isolated instance rather than assuming downgrade is
+safe. Do not expose the database URL in arguments or logs.
+
 ## 0.6.0 temporal evidence / migration 0006
 
 0006 creates an empty evidence table, checks, indexes and an immutability trigger; it never updates

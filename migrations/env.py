@@ -2,6 +2,7 @@ from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+from sqlalchemy.engine import Connection
 
 from knowledge_vault.config import Settings
 from knowledge_vault.persistence.tables import Base
@@ -10,10 +11,11 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-database_url = Settings().database_url
-if database_url.startswith("postgresql://"):
-    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
-config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
+if config.attributes.get("connection") is None:
+    database_url = Settings().database_url
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 target_metadata = Base.metadata
 
 
@@ -29,16 +31,24 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def _run_with_connection(connection: Connection) -> None:
+    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+    with context.begin_transaction():
+        context.run_migrations()
+
+
 def run_migrations_online() -> None:
+    supplied = config.attributes.get("connection")
+    if supplied is not None:
+        _run_with_connection(supplied)
+        return
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
-        with context.begin_transaction():
-            context.run_migrations()
+        _run_with_connection(connection)
 
 
 if context.is_offline_mode():
