@@ -1,4 +1,4 @@
-"""Standalone lock behavior against the disposable pgvector test container only."""
+"""Standalone migration locking against the disposable pgvector test container only."""
 
 from uuid import uuid4
 
