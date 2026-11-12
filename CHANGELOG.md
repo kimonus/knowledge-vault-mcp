@@ -16,6 +16,8 @@ stable release.
 
 ### Added
 
+- A read-only macOS Podman standalone preflight documents the remaining VM and secret-mapping
+  checks; the deployment quickstart remains unverified.
 - A draft offline embedding Compose override pins the tested model revision; full-profile runtime
   and model rebuild procedures remain unverified.
 - An experimental non-pruning standalone backup prototype; restore is deliberately disabled and

@@ -90,6 +90,8 @@ Do not schedule the separate reembed or watchdog commands here: they lack this s
 Lexical-only mode disables embeddings while retaining the dedicated maintenance worker.
 An [experimental offline embedding override](FULL-PROFILE.md) is available for review; it has not
 been validated as a full deployment.
+For a read-only macOS Podman readiness check, see the
+[Mac preflight](../../docs/runbooks/podman-macos-standalone-preflight.md).
 
 The gateway resolves the API container address when nginx starts. If Compose replaces the API
 container, restart the gateway after the replacement is healthy (`docker compose restart gateway`,
