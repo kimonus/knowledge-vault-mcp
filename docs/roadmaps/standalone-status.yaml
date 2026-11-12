@@ -63,6 +63,7 @@ phases:
       - "Explicit standalone migration PR #112 head 685bb889bf6b77a636a51ff623d6980267a891f0 passed all required CI jobs, including disposable PostgreSQL lock tests: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43174212248."
       - "Standalone schema guard PR #113 head 4d483320af81a2616b7148ccf3df627de9494a90 passed all four required CI jobs after the initial Bandit assert finding was fixed. Disposable PostgreSQL tests passed."
       - "Experimental Compose PR #114 drafted and independently reviewed. Four static package tests passed. Disposable Linux Docker CI run https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43176205331 initialized PostgreSQL, migrated and reached healthy API, but failed to reach the TLS gateway; authenticated gateway test has not passed."
+      - "Docker CI run https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43177276536 reached the loopback TLS gateway after adding a frontend network; the test then incorrectly expected API Origin validation, which is required for MCP only. Authenticated MCP remains unverified."
     blockers:
       - "Phase 1 multi-platform publication guarantees remain unimplemented; no Phase 2 completion or deployment claim."
       - "Compose TLS and authenticated runtime failed the first disposable test; Podman/macOS, engine-specific secret mounts and backup/restore remain unverified."

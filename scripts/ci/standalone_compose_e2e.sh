@@ -68,6 +68,9 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
 # These are throwaway fixture credentials on an isolated disposable runner only.
 chmod 644 "$KV_SECRETS_DIR"/*
 docker build --pull=false -t "$KV_APP_IMAGE" "$root"
+KV_APP_IMAGE=$(docker image inspect --format '{{.Id}}' "$KV_APP_IMAGE")
+export KV_APP_IMAGE
+sh "$root/deploy/standalone/check-config.sh"
 compose up -d db
 db=$(compose ps -q db)
 test -n "$db"

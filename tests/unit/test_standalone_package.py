@@ -123,3 +123,33 @@ def test_configuration_checker_rejects_symlink_files(tmp_path, symlink_name):
     )
     assert result.returncode != 0
     assert b"must not be a symlink" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("app", "gateway", "accepted"),
+    [
+        ("sha256:" + "b" * 64, "registry.example/proxy@sha256:" + "a" * 64, True),
+        ("sha256:" + "b" * 63, "registry.example/proxy@sha256:" + "a" * 64, False),
+        ("sha256:" + "B" * 64, "registry.example/proxy@sha256:" + "a" * 64, False),
+        ("sha256:" + "b" * 64, "sha256:" + "a" * 64, False),
+    ],
+)
+def test_configuration_checker_local_image_ids(tmp_path, app, gateway, accepted):
+    for name in (
+        "database-url",
+        "token-pepper",
+        "bootstrap-tokens",
+        "postgres-password",
+        "tls-cert.pem",
+        "tls-key.pem",
+    ):
+        (tmp_path / name).write_text("placeholder")
+    env = os.environ | {
+        "KV_APP_IMAGE": app,
+        "KV_GATEWAY_IMAGE": gateway,
+        "KV_SECRETS_DIR": str(tmp_path),
+    }
+    result = subprocess.run(  # noqa: S603
+        ["/bin/sh", str(PACKAGE / "check-config.sh")], env=env, capture_output=True, check=False
+    )
+    assert (result.returncode == 0) is accepted

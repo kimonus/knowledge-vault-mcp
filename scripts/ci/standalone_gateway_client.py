@@ -30,11 +30,24 @@ async def main() -> None:
         )
         assert response.status_code == 400, response.status_code
         response = await http.post(
-            f"{url}/api/v1/search",
-            headers={"Authorization": f"Bearer {writer}", "Origin": "https://evil.example"},
-            json={"query": "fixture"},
+            f"{url}/mcp",
+            headers={
+                "Authorization": f"Bearer {writer}",
+                "Origin": "https://evil.example",
+                "Accept": "application/json, text/event-stream",
+            },
+            json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
         )
         assert response.status_code == 403, response.status_code
+        response = await http.options(
+            f"{url}/api/v1/search",
+            headers={
+                "Origin": "https://evil.example",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization",
+            },
+        )
+        assert "access-control-allow-origin" not in response.headers
         for path in ("/metrics", "/health/ready", "/api/openapi.json"):
             response = await http.get(url + path)
             assert response.status_code == 404, (path, response.status_code)

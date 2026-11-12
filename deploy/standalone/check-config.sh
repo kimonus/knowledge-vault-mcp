@@ -5,10 +5,16 @@ for name in KV_APP_IMAGE KV_GATEWAY_IMAGE; do
         KV_APP_IMAGE) value=${KV_APP_IMAGE:-} ;;
         KV_GATEWAY_IMAGE) value=${KV_GATEWAY_IMAGE:-} ;;
     esac
-    if ! printf '%s\n' "$value" | LC_ALL=C grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9./:_-]*@sha256:[0-9a-f]{64}$'; then
-        printf '%s must be pinned by sha256 digest\n' "$name" >&2
-        exit 1
+    if printf '%s\n' "$value" | LC_ALL=C grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9./:_-]*@sha256:[0-9a-f]{64}$'; then
+        continue
     fi
+    if [ "$name" = KV_APP_IMAGE ] && printf '%s\n' "$value" | LC_ALL=C grep -Eq '^sha256:[0-9a-f]{64}$'; then
+        continue
+    fi
+    printf '%s must be pinned by sha256 digest' "$name" >&2
+    if [ "$name" = KV_APP_IMAGE ]; then printf ' or be a full local sha256 image ID' >&2; fi
+    printf '\n' >&2
+    exit 1
 done
 : "${KV_SECRETS_DIR:?Set KV_SECRETS_DIR to the operator-created secret directory}"
 case "$KV_SECRETS_DIR" in /*) ;; *) echo 'KV_SECRETS_DIR must be absolute' >&2; exit 1;; esac

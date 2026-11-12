@@ -25,6 +25,12 @@ for whichever of these names the client uses. Never bypass TLS verification for 
    qualified immutable `name@sha256:<64 lowercase hex>` references. The application image must
    contain the standalone schema guard and migration entry point from this branch. A local
    build tag is not a release digest. Verify signatures and platform availability independently.
+   For experimental testing only, `KV_APP_IMAGE` may instead be a locally built image's full
+   `sha256:` ID followed by 64 lowercase hexadecimal characters. Obtain it with your engine's
+   image inspection and verify both local resolution and Compose startup on the actual engine;
+   support for image IDs by Docker Compose and Podman Compose providers is not yet established.
+   A local image ID is not a published release or a multi-platform image. The gateway still
+   requires an image reference pinned by registry digest.
 2. Set `KV_SECRETS_DIR` to an absolute operator-owned directory outside the repository. Provision
    these **individual files** using an operator-local secret store or equivalent protected method:
    `database-url`, `token-pepper`, `bootstrap-tokens`, `postgres-password`, `tls-cert.pem`, and
@@ -85,6 +91,6 @@ Docker and Podman has not been verified.
 
 Before relying on the package, test a fresh database and restart; verify migrations and failed
 migration behavior; exercise authenticated read/write, wrong scopes, missing credentials, Host
-and Origin refusals through the TLS gateway; attempt access to metrics, database and origin from
+and MCP Origin refusals through the TLS gateway; attempt access to metrics, database and origin from
 outside the private network; test backup/restore; and verify actual host port forwarding on each
 target engine. No release, deployment, data restore or cleanup is performed by this document.
