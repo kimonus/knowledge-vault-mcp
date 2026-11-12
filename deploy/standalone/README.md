@@ -18,7 +18,7 @@ for whichever of these names the client uses. Never bypass TLS verification for 
 ## Operator preparation
 
 1. Select reviewed, available multi-architecture images for the application and
-   `nginxinc/nginx-unprivileged` and set `KV_APP_IMAGE` and `KV_GATEWAY_IMAGE` to their fully
+   `nginxinc/nginx-unprivileged` compatible with UID/GID 101 and set `KV_APP_IMAGE` and `KV_GATEWAY_IMAGE` to their fully
    qualified immutable `name@sha256:<64 lowercase hex>` references. The application image must
    contain the standalone schema guard and migration entry point from this branch. A local
    build tag is not a release digest. Verify signatures and platform availability independently.
@@ -32,8 +32,8 @@ for whichever of these names the client uses. Never bypass TLS verification for 
    token separately in an operator secret store and issue a separate admin token only when needed.
    Provision a TLS certificate and matching private key for the loopback name; never commit them.
 3. Restrict directory and file permissions and verify the engine's mapped container users can read
-   only the files they require: application UID 10001, PostgreSQL UID 999 and the selected gateway
-   image's non-root UID. Docker and Podman on Linux and macOS have different user and mount mapping
+   only the files they require: application UID 10001, PostgreSQL UID 999 and gateway UID 101.
+   Docker and Podman on Linux and macOS have different user and mount mapping
    behavior; a host-readable file is not necessarily container-readable. Bind-mounted files are
    not a hardware secret store and are accessible to engine administrators, host backups and any
    process with sufficient host permissions. Do not print their contents or put them in shell

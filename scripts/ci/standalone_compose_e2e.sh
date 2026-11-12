@@ -18,7 +18,17 @@ wait_gateway() {
     until curl --silent --show-error --cacert "$KV_SECRETS_DIR/tls-cert.pem" \
         --output /dev/null https://localhost:8443/ 2>/dev/null; do
         attempt=$((attempt + 1))
-        if [ "$attempt" -ge 30 ]; then echo 'TLS gateway did not become reachable' >&2; exit 1; fi
+        if [ "$attempt" -ge 30 ]; then
+            echo 'TLS gateway did not become reachable; diagnostic TLS request follows.' >&2
+            curl --silent --show-error --cacert "$KV_SECRETS_DIR/tls-cert.pem" \
+                --output /dev/null https://localhost:8443/ || :
+            gateway=$(compose ps -q gateway)
+            if [ -n "$gateway" ]; then
+                docker inspect --format 'gateway state={{.State.Status}} exit={{.State.ExitCode}} restarts={{.RestartCount}}' "$gateway" || :
+                docker logs "$gateway" || :
+            fi
+            exit 1
+        fi
         sleep 2
     done
 }

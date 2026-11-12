@@ -77,9 +77,12 @@ services:
 
   gateway:
     image: ${KV_GATEWAY_IMAGE:?Set KV_GATEWAY_IMAGE to the reviewed nginx-unprivileged image digest}
-    entrypoint: [nginx, -g, "daemon off;"]
+    user: "101:101"
+    # Configuration test runs before accepting traffic, so its diagnostics cannot include requests.
+    entrypoint: [/bin/sh, -c, "nginx -t -g 'error_log stderr crit;' || exit 1; exec nginx -g 'daemon off; error_log /dev/null crit;'"]
     read_only: true
-    tmpfs: [/tmp]
+    tmpfs:
+      - /tmp:uid=101,gid=101,mode=0700
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     pids_limit: 64
