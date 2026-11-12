@@ -152,6 +152,14 @@ done
 wait_gateway
 # New process: a successful read checks the database volume survived the restart.
 KV_TEST_READ_ONLY=1 uv run --locked python "$root/scripts/ci/standalone_gateway_client.py"
+if [ "${KV_TEST_NETWORK_ISOLATION:-}" = 1 ]; then
+    api_ip=$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$api")
+    db_ip=$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$db")
+    test -n "$api_ip" && test -n "$db_ip"
+    docker run --network bridge --read-only --cap-drop ALL --security-opt no-new-privileges \
+      --mount "type=bind,src=$root/scripts/ci/standalone_negative_reachability.py,dst=/run/check-network.py,readonly" \
+      --entrypoint python "$KV_APP_IMAGE" /run/check-network.py "$api_ip" "$db_ip"
+fi
 if [ "${KV_APP_RECOVERY_REHEARSAL:-}" = 1 ]; then
     sh "$root/scripts/ci/standalone_app_recovery.sh" "$project" "$tmp" "$KV_APP_IMAGE"
 fi
