@@ -4,6 +4,7 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,6 +17,8 @@ def test_compose_security_boundaries():
     assert {name for name, service in services.items() if "ports" in service} == {"gateway"}
     assert services["gateway"]["ports"] == ["127.0.0.1:8443:8443"]
     assert compose["networks"]["private"]["internal"] is True
+    assert services["gateway"]["networks"] == ["private", "frontend"]
+    assert all(services[name]["networks"] == ["private"] for name in ("api", "worker", "db"))
     assert services["migrate"]["profiles"] == ["migration"]
     assert services["migrate"]["entrypoint"] == ["knowledge-vault-migrate"]
     assert services["worker"]["entrypoint"] == ["knowledge-vault-worker"]
@@ -81,3 +84,42 @@ def test_database_wait_accepts_healthy_and_rejects_unhealthy(tmp_path):
     assert subprocess.run(command, env=env, capture_output=True, check=False).returncode != 0  # noqa: S603
     env["TEST_STATE"] = "exited unhealthy"
     assert subprocess.run(command, env=env, capture_output=True, check=False).returncode != 0  # noqa: S603
+
+
+@pytest.mark.parametrize(
+    "symlink_name",
+    [
+        "database-url",
+        "token-pepper",
+        "bootstrap-tokens",
+        "postgres-password",
+        "tls-cert.pem",
+        "tls-key.pem",
+    ],
+)
+def test_configuration_checker_rejects_symlink_files(tmp_path, symlink_name):
+    target = tmp_path / "target"
+    target.write_text("placeholder")
+    for name in (
+        "database-url",
+        "token-pepper",
+        "bootstrap-tokens",
+        "postgres-password",
+        "tls-cert.pem",
+        "tls-key.pem",
+    ):
+        path = tmp_path / name
+        if name == symlink_name:
+            path.symlink_to(target)
+        else:
+            path.write_text("placeholder")
+    env = os.environ | {
+        "KV_APP_IMAGE": "registry.example/app@sha256:" + "b" * 64,
+        "KV_GATEWAY_IMAGE": "registry.example/proxy@sha256:" + "a" * 64,
+        "KV_SECRETS_DIR": str(tmp_path),
+    }
+    result = subprocess.run(  # noqa: S603
+        ["/bin/sh", str(PACKAGE / "check-config.sh")], env=env, capture_output=True, check=False
+    )
+    assert result.returncode != 0
+    assert b"must not be a symlink" in result.stderr

@@ -10,7 +10,10 @@ The only published listener is TLS on `127.0.0.1:8443`. The gateway forwards `/m
 `/api/v1/`; metrics, health and other paths are not exposed there. API authentication and scope
 checks still apply. Containers share a private network, not a security boundary against a trusted
 local user who controls the container engine; such a user may reach the internal HTTP origin or
-read mounted secrets. Do not forward the listener or expose the container network. On macOS, VM
+read mounted secrets. Do not forward the listener or expose the container network. The gateway
+also joins a separate frontend network for host port forwarding and can initiate
+outbound connections; application and database containers remain on the internal network only.
+On macOS, VM
 forwarding behavior must be checked on the actual engine and host. The API Host guard allows only
 `localhost` and `127.0.0.1`; CORS is disabled. Use a certificate trusted by the client and valid
 for whichever of these names the client uses. Never bypass TLS verification for a bearer token.

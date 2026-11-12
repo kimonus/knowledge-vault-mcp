@@ -20,7 +20,7 @@ async def main() -> None:
     reader = (secrets / "reader-token").read_text().strip()
     tls = ssl.create_default_context(cafile=str(secrets / "tls-cert.pem"))
     url = "https://localhost:8443"
-    async with httpx2.AsyncClient(verify=tls, timeout=30) as http:
+    async with httpx2.AsyncClient(verify=tls, timeout=30, trust_env=False) as http:
         response = await http.post(f"{url}/api/v1/search", json={"query": "fixture"})
         assert response.status_code == 401, response.status_code
         response = await http.post(
@@ -47,7 +47,7 @@ async def main() -> None:
 
     headers = {"Authorization": f"Bearer {writer}"}
     async with (
-        httpx2.AsyncClient(verify=tls, headers=headers, timeout=30) as http,
+        httpx2.AsyncClient(verify=tls, headers=headers, timeout=30, trust_env=False) as http,
         streamable_http_client(f"{url}/mcp", http_client=http) as streams,
         ClientSession(streams[0], streams[1]) as session,
     ):
@@ -91,7 +91,7 @@ async def main() -> None:
 
     async with (
         httpx2.AsyncClient(
-            verify=tls, headers={"Authorization": f"Bearer {reader}"}, timeout=30
+            verify=tls, headers={"Authorization": f"Bearer {reader}"}, timeout=30, trust_env=False
         ) as http,
         streamable_http_client(f"{url}/mcp", http_client=http) as streams,
         ClientSession(streams[0], streams[1]) as session,

@@ -13,6 +13,10 @@ done
 : "${KV_SECRETS_DIR:?Set KV_SECRETS_DIR to the operator-created secret directory}"
 case "$KV_SECRETS_DIR" in /*) ;; *) echo 'KV_SECRETS_DIR must be absolute' >&2; exit 1;; esac
 for file in database-url token-pepper bootstrap-tokens postgres-password tls-cert.pem tls-key.pem; do
+    if [ -L "$KV_SECRETS_DIR/$file" ]; then
+        printf 'Operator file must not be a symlink: %s\n' "$file" >&2
+        exit 1
+    fi
     if [ ! -f "$KV_SECRETS_DIR/$file" ] || [ ! -s "$KV_SECRETS_DIR/$file" ]; then
         printf 'Missing or empty operator file: %s\n' "$file" >&2
         exit 1

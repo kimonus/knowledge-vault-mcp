@@ -93,7 +93,7 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ${KV_SECRETS_DIR:?Set KV_SECRETS_DIR to the operator-created secret directory}/tls-cert.pem:/run/kv-secrets/tls-cert.pem:ro
       - ${KV_SECRETS_DIR}/tls-key.pem:/run/kv-secrets/tls-key.pem:ro
-    networks: [private]
+    networks: [private, frontend]
     depends_on:
       api:
         condition: service_healthy
@@ -102,6 +102,7 @@ services:
 networks:
   private:
     internal: true
+  frontend: {}
 
 volumes:
   database:

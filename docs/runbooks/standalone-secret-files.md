@@ -22,8 +22,8 @@ directory access, including against other host users and containers. The applica
 10001; verify that the *actual* mapped identity can read each mounted file. Docker Compose may ignore
 requested `uid`, `gid` and `mode` for file-backed secrets, and rootless Podman user-namespace mapping
 can differ. Check the actual engine and mount before use; do not use recursive `:U` or make existing
-private files world-readable. The standalone Compose deployment and these engine-specific workflows
-are not yet implemented or verified.
+private files world-readable. An experimental [standalone Compose package](../../deploy/standalone/README.md)
+exists; its engine-specific secret mounts and deployment workflows remain unverified.
 
 Settings are cached within an application process. Provision a complete new secret file by an
 operator-controlled atomic replacement and restart affected processes to use it. For a file bind

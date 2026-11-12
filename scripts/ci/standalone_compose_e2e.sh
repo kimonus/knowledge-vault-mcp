@@ -15,18 +15,24 @@ export KV_GATEWAY_IMAGE='ghcr.io/nginxinc/nginx-unprivileged@sha256:8ff43bb0bd15
 compose() { docker compose -p "$project" -f "$root/deploy/standalone/compose.yaml" "$@"; }
 wait_gateway() {
     attempt=0
-    until curl --silent --show-error --cacert "$KV_SECRETS_DIR/tls-cert.pem" \
+    until curl --noproxy '*' -4 --silent --show-error --cacert "$KV_SECRETS_DIR/tls-cert.pem" \
         --output /dev/null https://localhost:8443/ 2>/dev/null; do
         attempt=$((attempt + 1))
         if [ "$attempt" -ge 30 ]; then
             echo 'TLS gateway did not become reachable; diagnostic TLS request follows.' >&2
-            curl --silent --show-error --cacert "$KV_SECRETS_DIR/tls-cert.pem" \
+            curl --noproxy '*' -4 --silent --show-error --cacert "$KV_SECRETS_DIR/tls-cert.pem" \
                 --output /dev/null https://localhost:8443/ || :
+            curl --silent --show-error --cacert "$KV_SECRETS_DIR/tls-cert.pem" \
+                --output /dev/null https://127.0.0.1:8443/ || :
             gateway=$(compose ps -q gateway)
             if [ -n "$gateway" ]; then
                 docker inspect --format 'gateway state={{.State.Status}} exit={{.State.ExitCode}} restarts={{.RestartCount}}' "$gateway" || :
+                docker inspect --format 'ports={{json .NetworkSettings.Ports}} command={{.Path}} {{json .Args}}' "$gateway" || :
+                docker port "$gateway" || :
+                docker exec "$gateway" cat /proc/net/tcp || :
                 docker logs "$gateway" || :
             fi
+            ss -ltn '( sport = :8443 )' || :
             exit 1
         fi
         sleep 2
