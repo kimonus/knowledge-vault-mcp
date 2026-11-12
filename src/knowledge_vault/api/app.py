@@ -123,8 +123,7 @@ def create_app(container: Container) -> FastAPI:
             allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
             allow_credentials=False,
         )
-    if container.settings.standalone_mode:
-        assert schema_guard is not None
+    if schema_guard is not None:
         app.add_middleware(SchemaGuardMiddleware, ready=schema_guard.ready)
         app.add_middleware(
             StandaloneHostMiddleware, allowed_hosts=container.settings.standalone_allowed_host_set
