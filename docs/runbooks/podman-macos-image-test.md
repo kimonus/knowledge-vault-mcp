@@ -1,7 +1,8 @@
 # Apple Silicon Podman Machine image test
 
-This is an **image test**, not a deployment quickstart. It has not yet been run on macOS or
-Podman Machine. Run it only on a machine you are authorized to use and under its applicable
+This is an **image test**, not a deployment quickstart. The owner reported a successful Apple Silicon
+Podman Machine run at commit `35d691bbe209f452650e2bd57be313cef71ab519`; its translation setting
+was not supplied. Run it only on a machine you are authorized to use and under its applicable
 policies. It creates no vault, database, published port or application credentials. Builds need
 network access for pinned build dependencies; the later inference container runs with no network
 and never downloads a model.

@@ -19,7 +19,7 @@ async def main() -> None:
     writer = (secrets / "writer-token").read_text().strip()
     reader = (secrets / "reader-token").read_text().strip()
     tls = ssl.create_default_context(cafile=str(secrets / "tls-cert.pem"))
-    url = "https://localhost:8443"
+    url = os.environ.get("KV_TEST_BASE_URL", "https://localhost:8443")
     async with httpx2.AsyncClient(verify=tls, timeout=30, trust_env=False) as http:
         response = await http.post(f"{url}/api/v1/search", json={"query": "fixture"})
         assert response.status_code == 401, response.status_code

@@ -63,12 +63,21 @@ phases:
       - "Explicit standalone migration PR #112 head 685bb889bf6b77a636a51ff623d6980267a891f0 passed all required CI jobs, including disposable PostgreSQL lock tests: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43174212248."
       - "Standalone schema guard PR #113 head 4d483320af81a2616b7148ccf3df627de9494a90 passed all four required CI jobs after the initial Bandit assert finding was fixed. Disposable PostgreSQL tests passed."
       - "Experimental Compose PR #114 drafted and independently reviewed. Four static package tests passed. Disposable Linux Docker CI run https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43176205331 initialized PostgreSQL, migrated and reached healthy API, but failed to reach the TLS gateway; authenticated gateway test has not passed."
-      - "Docker CI run https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43177276536 reached the loopback TLS gateway after adding a frontend network; the test then incorrectly expected API Origin validation, which is required for MCP only. Authenticated MCP remains unverified."
+      - "Docker CI run https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43177276536 reached the loopback TLS gateway after adding a frontend network; the test then incorrectly expected API Origin validation, which is required for MCP only. That run did not verify authenticated MCP."
+      - "Linux Docker CI at 1dfa995b0792607ed194589b71f14b9936b98fee verified generated private secret files with individually mapped container UIDs and authenticated MCP: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43237065244. macOS/Podman mappings remain unverified."
       - "Docker Linux amd64 disposable CI at head 68ddc7957aaf754e97a1feb11b8c3417471cafd0 passed fresh PostgreSQL initialization, migration, local image ID, TLS, authenticated MCP write/read, scope/Host/MCP Origin refusals and persistence after restart: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43177651076. This does not verify Podman, macOS, backup/restore, release trust or long-lived streams."
     blockers:
       - "Phase 1 multi-platform publication guarantees remain unimplemented; no Phase 2 completion or deployment claim."
       - "Podman/macOS, production-grade mapped secret permissions, backup/restore and long-lived streams remain unverified. The successful CI uses disposable test credentials."
-  phase_3: {state: blocked_by_dependency, issue: null, pr: null, evidence: [], blockers: []}
+  phase_3:
+    state: blocked_by_dependency
+    issue: null
+    pr: https://github.com/kimonus/knowledge-vault-mcp/pull/120
+    evidence:
+      - "Linux Docker CI at cf03c9f459b8fc2eff1cee86ea7f5cc6f1f43a4a verified a separate bridge cannot reach the host listener, API or database: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43238140984."
+      - "A read-only macOS Podman standalone preflight and optional synthetic-only mapping probe are prepared; the probe has mock tests but has not run on Mac and does not establish a working quickstart."
+    blockers:
+      - "Physical LAN reachability and macOS Podman/Docker VM forwarding remain unverified; this is not a platform support claim."
   phase_4:
     state: blocked_by_dependency
     issue: null
