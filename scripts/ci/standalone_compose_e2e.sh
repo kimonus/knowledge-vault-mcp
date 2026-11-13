@@ -152,6 +152,9 @@ done
 wait_gateway
 # New process: a successful read checks the database volume survived the restart.
 KV_TEST_READ_ONLY=1 uv run --locked python "$root/scripts/ci/standalone_gateway_client.py"
+if [ "${KV_TEST_REPLACEMENT:-}" = 1 ]; then
+    sh "$root/scripts/ci/standalone_replacement_test.sh" "$project" "$db"
+fi
 if [ "${KV_TEST_NETWORK_ISOLATION:-}" = 1 ]; then
     api_ip=$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$api")
     db_ip=$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$db")

@@ -25,4 +25,4 @@ jobs:
           KV_SECRETS_DIR: /tmp/standalone-ci-secrets
           KV_MODEL_DIR: /tmp/standalone-ci-model
         run: docker compose -f deploy/standalone/compose.yaml -f deploy/standalone/compose.full.yaml config --quiet
-      - run: sh scripts/ci/standalone_compose_e2e.sh
+      - run: KV_TEST_REPLACEMENT=1 sh scripts/ci/standalone_compose_e2e.sh
