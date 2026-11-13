@@ -75,7 +75,7 @@ phases:
     pr: https://github.com/kimonus/knowledge-vault-mcp/pull/120
     evidence:
       - "Linux Docker CI at cf03c9f459b8fc2eff1cee86ea7f5cc6f1f43a4a verified a separate bridge cannot reach the host listener, API or database: https://github.com/kimonus/knowledge-vault-mcp/actions/runs/43238140984."
-      - "A read-only macOS Podman standalone preflight is documented; it does not establish bind-mount permissions or a working quickstart."
+      - "A read-only macOS Podman standalone preflight and optional synthetic-only mapping probe are prepared; the probe has mock tests but has not run on Mac and does not establish a working quickstart."
     blockers:
       - "Physical LAN reachability and macOS Podman/Docker VM forwarding remain unverified; this is not a platform support claim."
   phase_4:

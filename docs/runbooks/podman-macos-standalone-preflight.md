@@ -40,6 +40,21 @@ or make private files world-readable. A Mac-specific, no-overwrite permissions a
 full authenticated Compose run, loopback forwarding verification and recovery exercise remain
 necessary before a quickstart can be validated.
 
+For a more direct **synthetic-only** check, the draft also includes
+`deploy/standalone/probe-podman-macos-mapping.sh`. It uses the already built local image
+`kv-test-app:arm64` by default (`KV_TEST_IMAGE` selects a different local image), creates a fresh
+private marker under your home directory, and attempts to read it as the three numeric UIDs. It
+does not read your vault or credential files, change existing file ownership, download an image,
+or remove data. It leaves the synthetic marker and stopped probe containers in place. A failure
+means access was not verified; inspect the printed engine error before drawing conclusions. A
+pass does not establish full Compose, TLS, network isolation or backup/restore behavior.
+
+From the repository root containing the draft:
+
+```sh
+sh deploy/standalone/probe-podman-macos-mapping.sh
+```
+
 The experimental package and its current limitations are in
 [deploy/standalone/README.md](../../deploy/standalone/README.md); the optional model override and
 manifest verification command are in [FULL-PROFILE.md](../../deploy/standalone/FULL-PROFILE.md).
