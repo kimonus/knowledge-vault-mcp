@@ -194,7 +194,10 @@ def test_offline_environment_uses_empty_cache(tmp_path: Path) -> None:
 
 def test_semantic_mode_requires_verified_model_before_database(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
+    # Do not depend on whether this host has an operator-provisioned model directory.
+    monkeypatch.setattr(offline_model, "INDEPENDENT_ROOT", tmp_path / "missing-model-root")
     monkeypatch.setattr(
         lab,
         "check_host",

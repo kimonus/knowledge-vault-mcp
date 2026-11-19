@@ -1,5 +1,10 @@
 # Monitoring without a monitoring stack
 
+Core inspection uses existing HTTP/read-rate/search/temporal metrics with fixed route labels
+under `/api/v1/read`; identifiers, source URLs, query text and cursor values are not metric labels.
+Inspection does not write usage counters or introduce a background duty/heartbeat. A future BFF
+will have its own availability boundary; no dashboard is deployed by core inspection support.
+
 Temporal resolution exposes `knowledge_vault_temporal_resolutions_total` with fixed outcomes
 resolved/ambiguous/conflict/unknown/overflow. These count lookups, not unique conflicting properties.
 Inspect reasons through authenticated resolution and use temporal diagnostics for metadata

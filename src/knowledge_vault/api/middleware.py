@@ -335,9 +335,35 @@ _STATIC_ROUTES = frozenset(
         "/api/v1/forget/preview",
         "/api/v1/forget/confirm",
         "/api/v1/statistics",
+        "/api/v1/read/capabilities",
+        "/api/v1/read/assertions/query",
+        "/api/v1/read/catalog/query",
+        "/api/v1/read/search",
+        "/api/v1/read/state/resolve",
+        "/api/v1/read/state/evidence/query",
+        "/api/v1/read/topic-aliases",
     }
 )
 _ROUTE_PATTERNS = (
+    (re.compile(r"^/api/v1/read/assertions/[^/]+$"), "/api/v1/read/assertions/{id}"),
+    (
+        re.compile(r"^/api/v1/read/assertions/[^/]+/sources$"),
+        "/api/v1/read/assertions/{id}/sources",
+    ),
+    (
+        re.compile(r"^/api/v1/read/assertions/[^/]+/artifacts$"),
+        "/api/v1/read/assertions/{id}/artifacts",
+    ),
+    (
+        re.compile(r"^/api/v1/read/assertions/[^/]+/identities$"),
+        "/api/v1/read/assertions/{id}/identities",
+    ),
+    (
+        re.compile(r"^/api/v1/read/assertions/[^/]+/relations$"),
+        "/api/v1/read/assertions/{id}/relations",
+    ),
+    (re.compile(r"^/api/v1/read/contexts/[^/]+$"), "/api/v1/read/contexts/{id}"),
+    (re.compile(r"^/api/v1/read/artifacts/[^/]+$"), "/api/v1/read/artifacts/{id}"),
     (re.compile(r"^/api/v1/flushes/[^/]+/parts/[^/]+$"), "/api/v1/flushes/{id}/parts/{n}"),
     (re.compile(r"^/api/v1/flushes/[^/]+/commit$"), "/api/v1/flushes/{id}/commit"),
     (re.compile(r"^/api/v1/flushes/[^/]+/abort$"), "/api/v1/flushes/{id}/abort"),

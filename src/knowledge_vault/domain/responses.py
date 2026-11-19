@@ -11,13 +11,27 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from knowledge_vault.domain.maintenance import ContextInput, LinkInput
+from knowledge_vault.domain.enums import (
+    AssertionKind,
+    AssertionOrigin,
+    AssertionStatus,
+    Sensitivity,
+)
+from knowledge_vault.domain.maintenance import (
+    ContextInput,
+    EvidenceState,
+    LinkInput,
+    TemporalRole,
+    WorkflowState,
+)
 from knowledge_vault.domain.models import (
+    ArtifactRef,
     AssertionInput,
     AssertionView,
     CandidateCheckPage,
     RejectedItem,
     SearchPage,
+    SourceView,
 )
 from knowledge_vault.domain.temporal import StateIdentity
 
@@ -252,3 +266,95 @@ class StatisticsResponse(BaseModel):
     operations: OperationsStatus
     usage_totals: dict[str, int] = Field(default_factory=dict)
     maintenance_totals: dict[str, int] = Field(default_factory=dict)
+
+
+class InspectionPage[ReadItem](BaseModel):
+    items: list[ReadItem]
+    page_size: int = Field(ge=1, le=100)
+    next_cursor: str | None = None
+    consistency: Literal["live"] = "live"
+    evaluated_at: datetime
+    untrusted_data: Literal[True] = True
+
+
+class AssertionSummary(BaseModel):
+    id: UUID
+    revision: int
+    excerpt: str = Field(max_length=400)
+    content_truncated: bool
+    kind: AssertionKind
+    origin: AssertionOrigin
+    status: AssertionStatus
+    confidence: float
+    sensitivity: Sensitivity
+    topics: list[str]
+    context_id: UUID | None
+    facet: str | None
+    evidence_state: EvidenceState
+    temporal_role: TemporalRole
+    workflow_state: WorkflowState | None
+    created_at: datetime
+    updated_at: datetime
+    observed_at: datetime | None
+    valid_from: datetime | None
+    valid_to: datetime | None
+    last_confirmed_at: datetime
+    confirmation_count: int
+
+
+class RankedAssertionSummary(BaseModel):
+    assertion: AssertionSummary
+    score: float
+
+
+class RankedAssertionPage(InspectionPage[RankedAssertionSummary]):
+    candidate_limited: Literal[True] = True
+    embedding_degraded: bool = False
+
+
+class CatalogItem(BaseModel):
+    key: str | None
+    label: str
+    stored_labels: list[str] = Field(default_factory=list)
+    assertion_count: int
+    by_status: dict[str, int]
+    by_kind: dict[str, int]
+    by_evidence_state: dict[str, int]
+    by_workflow_state: dict[str, int]
+
+
+class CatalogPage(InspectionPage[CatalogItem]):
+    grouping_version: Literal["1"] = "1"
+
+
+class InspectionConflictView(ConflictView):
+    resolved_at: datetime | None = None
+
+
+class InspectionRelation(BaseModel):
+    type: Literal["link", "supersession", "conflict"]
+    edge: LinkView | None = None
+    predecessor_id: UUID | None = None
+    successor_id: UUID | None = None
+    conflict: InspectionConflictView | None = None
+
+
+class RawTemporalEvidence(BaseModel):
+    evidence_key: str
+    assertion_id: UUID
+    recorded_at: datetime
+    assertion: AssertionInput
+    retired: bool
+
+
+class AssertionDetailResponse(AssertionResponse):
+    source_page: InspectionPage[SourceView]
+    artifact_page: InspectionPage[ArtifactRef]
+    identity_page: InspectionPage[StateIdentity]
+
+
+class InspectionCapabilities(BaseModel):
+    protocol_version: Literal["1"] = "1"
+    operations: list[str]
+    max_page_size: int
+    untrusted_data: Literal[True] = True

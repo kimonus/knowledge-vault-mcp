@@ -1,5 +1,12 @@
 # Minikube deployment
 
+The [core inspection API](../http-inspection.md) adds no dashboard workload or public routing.
+Its optional `KNOWLEDGE_VAULT_INSPECTION_PRINCIPALS` list is empty by default. When deliberately
+provisioning a service later, use the existing Secret token workflow with exact read scope and
+the chart's existing `extraEnv` seam for the principal list; normal credential/config rollout is
+required. Do not reuse an ordinary client principal: inspection identities lose ordinary HTTP/MCP
+access. No new inspection credential or live configuration is created by the implementation PR.
+
 The supported public deployment path is the Helm chart. Personal host paths, DNS names, ingress
 objects, and cluster-wide certificate manifests belong in an operator's private infrastructure
 repository and are intentionally excluded from this project.

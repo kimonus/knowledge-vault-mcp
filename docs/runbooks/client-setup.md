@@ -1,5 +1,10 @@
 # MCP client setup
 
+Dedicated [inspection principals](../http-inspection.md) cannot be used by any MCP client or
+ordinary HTTP retrieval: they are confined to `/api/v1/read`, including refusal of ordinary
+usage-recording reads. Keep existing MCP device records separate. No browser UI/login is provided
+by the core inspection API; never put its service token or privileged tokens in browser storage.
+
 After upgrading to temporal evidence, refresh MCP tool schemas and the flush skill. Use
 `resolve_knowledge_state` for current/historical state questions; semantic search discovers
 assertions and get exposes temporal identities. Preserve source keys and original dates on

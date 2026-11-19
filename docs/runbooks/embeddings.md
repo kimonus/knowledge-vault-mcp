@@ -1,5 +1,9 @@
 # Embedding model cache, migration, and rebuild
 
+Inspection ranked search shares the existing API embedding-provider object and its single-load/
+single-encode discipline. Exhaustive browse, lexical enumeration and catalogs never call the
+embedder. Core inspection adds no model process/cache/PVC, and a future BFF must not load one.
+
 Every vector records the model that produced it. The schema uses 384 dimensions. Changing
 dimensions requires a reviewed database migration; changing only the model at the same dimension
 requires a full rebuild.
