@@ -128,7 +128,9 @@ def create_mcp_server(container: Container) -> MCPServer[None]:
             # validates the Cloudflare JWT issuer and audience before MCP dispatch.
             validate_token_resource=False,
         ),
-        token_verifier=MCPTokenVerifier(container.authenticator),
+        token_verifier=MCPTokenVerifier(
+            container.authenticator, container.settings.inspection_principal_set
+        ),
     )
 
     def principal(required: Scope) -> str:

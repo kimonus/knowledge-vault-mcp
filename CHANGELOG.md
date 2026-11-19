@@ -8,6 +8,22 @@ stable release.
 
 ## [Unreleased]
 
+### Security
+
+- Rebuild the backup helper with digest-pinned Go 1.26.11 to remove CVE-2026-97054 from the restic
+  binary. The existing supply-chain gate detected the older toolchain while validating inspection
+  PR1. No live image or deployment is changed by this source update.
+
+### Added
+
+- Core protocol-1 inspection API at `/api/v1/read`: exhaustive all-status/strict lexical browsing,
+  deterministic catalogs, paged provenance/artifact/relationship/temporal inspection and bounded
+  ranked reads. Dedicated exact-read inspection principals are optional and unconfigured by
+  default; ordinary HTTP/MCP contracts remain unchanged. See `docs/http-inspection.md` before
+  provisioning a principal: it is refused on every ordinary HTTP/MCP route, including usage reads.
+  Inspection uses read-only transactions and does not write usage metadata. No dashboard, browser
+  authentication, Helm workload, extra database/model or public exposure is enabled.
+
 ## [0.7.0] - 2026-11-06
 
 ### Security

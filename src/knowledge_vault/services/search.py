@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import Select, Text, and_, cast, func, or_, select
 from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import raiseload, selectinload
 
 from knowledge_vault.config import Settings
 from knowledge_vault.domain.enums import (
@@ -195,7 +195,7 @@ def _query_hash(query: str, filters: SearchFilters) -> str:
     return hashlib.sha256(value.encode()).hexdigest()[:24]
 
 
-def _view(row: AssertionRow) -> AssertionView:
+def assertion_view(row: AssertionRow, *, include_related: bool = True) -> AssertionView:
     return AssertionView(
         **{name: getattr(row, name) for name in KnowledgeMetadata.model_fields},
         revision=row.revision,
@@ -223,7 +223,11 @@ def _view(row: AssertionRow) -> AssertionView:
                 publisher=source.publisher,
                 retrieved_at=source.retrieved_at,
             )
-            for source in sorted(row.sources, key=lambda source: source.url)[:_MAX_SOURCES_PER_VIEW]
+            for source in (
+                sorted(row.sources, key=lambda source: source.url)[:_MAX_SOURCES_PER_VIEW]
+                if include_related
+                else []
+            )
         ],
         artifacts=[
             ArtifactRef(
@@ -233,7 +237,11 @@ def _view(row: AssertionRow) -> AssertionView:
                 size_bytes=artifact.size_bytes or 0,
                 description=artifact.description,
             )
-            for artifact in sorted(row.artifacts, key=lambda artifact: str(artifact.id))
+            for artifact in (
+                sorted(row.artifacts, key=lambda artifact: str(artifact.id))
+                if include_related
+                else []
+            )
         ],
     )
 
@@ -251,7 +259,7 @@ class SearchService:
         self._cursors = CursorCodec(settings.token_pepper or "development-only-cursor-key")
 
     @staticmethod
-    def _filtered(filters: SearchFilters) -> Select[tuple[AssertionRow]]:
+    def filtered(filters: SearchFilters) -> Select[tuple[AssertionRow]]:
         statement = select(AssertionRow)
         conditions = [AssertionRow.confidence >= filters.minimum_confidence]
         if filters.kinds:
@@ -303,6 +311,7 @@ class SearchService:
         purpose: Purpose = "normal",
         event_id: UUID | None = None,
         principal: str = "retrieval",
+        include_related: bool = True,
     ) -> SearchPage:
         started = time.perf_counter()
         query = " ".join(query.split())
@@ -332,7 +341,9 @@ class SearchService:
             if alias in topic_values or canonical in topic_values:
                 topic_values.update((alias, canonical))
         expanded = effective_filters.model_copy(update={"topics": sorted(topic_values)})
-        base = self._filtered(expanded)
+        base = self.filtered(expanded)
+        if not include_related:
+            base = base.options(raiseload("*"))
         candidate_limit = min(max(limit * 5, 50), 250)
         lexical_query = query
         if query.casefold() in aliases:
@@ -432,7 +443,10 @@ class SearchService:
         has_more = len(page_items) > limit
         page_items = page_items[:limit]
         results = [
-            SearchHit(assertion=_view(rows_by_id[item.item]), score=item.score)
+            SearchHit(
+                assertion=assertion_view(rows_by_id[item.item], include_related=include_related),
+                score=item.score,
+            )
             for item in page_items
         ]
         await self._account(
@@ -594,7 +608,7 @@ class SearchService:
             )
         if not row:
             raise NotFoundError("assertion was not found")
-        view = _view(row)
+        view = assertion_view(row)
         view.temporal_identities = [
             StateIdentity.model_validate(value) for value in identities[:32]
         ]

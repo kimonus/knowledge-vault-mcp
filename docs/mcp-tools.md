@@ -1,5 +1,10 @@
 # MCP tool reference
 
+The separate [HTTP inspection API](http-inspection.md) introduces no MCP tools or schema changes.
+Dedicated inspection principals are refused at MCP authentication and on ordinary HTTP routes;
+retain separate ordinary scoped credentials for MCP clients. Inspection's all-status enumeration
+must not be confused with existing ranked `search_knowledge` pagination or its usage accounting.
+
 ## Constructing valid assertion metadata
 
 Start with `content`, `kind` and `origin`; optional metadata must be source-supported. Known

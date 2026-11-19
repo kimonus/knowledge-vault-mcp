@@ -11,6 +11,7 @@ from knowledge_vault.persistence.database import Database
 from knowledge_vault.services.administration import AdministrationService
 from knowledge_vault.services.artifacts import ArtifactService
 from knowledge_vault.services.ingestion import IngestionService
+from knowledge_vault.services.inspection import InspectionService
 from knowledge_vault.services.maintenance import MaintenanceService, UsageService
 from knowledge_vault.services.operations import OperationsService
 from knowledge_vault.services.search import SearchService
@@ -33,6 +34,7 @@ class Container:
     maintenance: MaintenanceService
     usage: UsageService
     temporal: TemporalService
+    inspection: InspectionService
     tracer: Any | None = None
 
 
@@ -75,5 +77,6 @@ def build_container(
         maintenance=MaintenanceService(database.sessions),
         usage=UsageService(database.sessions),
         temporal=TemporalService(database.sessions),
+        inspection=InspectionService(database.read_sessions, settings, effective_embedder),
         tracer=tracer,
     )

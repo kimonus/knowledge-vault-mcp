@@ -29,9 +29,10 @@ identity provider, or managed MCP transport. Any alternative must preserve origi
 authentication, scoped authorization, TLS, private bearer-token boundaries, and fail-closed
 configuration.
 
-The [optional read-only Web UI design](docs/design/web-ui/README.md) proposes a Knowledge Explorer
-and deterministic thematic Portal. It is a design proposal only; no dashboard is implemented or
-enabled by these documents.
+The [accepted optional Web UI design](docs/design/web-ui/README.md) specifies a Knowledge Explorer
+and deterministic thematic Portal. Its [core inspection API](docs/http-inspection.md) supplies
+non-recording, exhaustive reads for dedicated service credentials. No dashboard or public route
+is implemented or enabled by this core API.
 
 ## Quick start
 

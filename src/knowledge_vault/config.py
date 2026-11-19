@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://knowledge_vault@localhost/knowledge_vault"
     token_pepper: str = Field(default="", repr=False)
     bootstrap_tokens: str = Field(default="", repr=False)
+    inspection_principals: str = Field(default="", max_length=4096)
     cors_origins: str = ""
     public_base_url: str = "https://knowledge-vault.invalid"
     auth_issuer_url: str = "https://knowledge-vault.invalid"
@@ -168,6 +169,12 @@ class Settings(BaseSettings):
         if public_hosts & private_hosts:
             raise ValueError("a hostname cannot be both a Cloudflare public and a private host")
         return self
+
+    @property
+    def inspection_principal_set(self) -> frozenset[str]:
+        return frozenset(
+            item.strip() for item in self.inspection_principals.split(",") if item.strip()
+        )
 
     @property
     def cors_origin_list(self) -> list[str]:

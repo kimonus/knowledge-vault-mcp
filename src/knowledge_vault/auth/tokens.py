@@ -80,3 +80,22 @@ class TokenAuthenticator:
         if match is None:
             return None
         return Principal(match.principal_id, match.scopes)
+
+    def validate_inspection_principals(self, principals: frozenset[str]) -> None:
+        for principal in principals:
+            records = [record for record in self._records if record.principal_id == principal]
+            if (
+                not records
+                or principal.startswith("cloudflare:")
+                or len(principal) > 128
+                or any(record.scopes != frozenset({Scope.READ}) for record in records)
+            ):
+                raise ValueError("inspection principals require dedicated exact-read token records")
+        # A shared raw token must not also authenticate as an unrestricted principal.
+        restricted = [r.digest for r in self._records if r.principal_id in principals]
+        if any(
+            r.principal_id not in principals
+            and any(hmac.compare_digest(r.digest, digest) for digest in restricted)
+            for r in self._records
+        ):
+            raise ValueError("inspection credentials cannot be shared with ordinary principals")

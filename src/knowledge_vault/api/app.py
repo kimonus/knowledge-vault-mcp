@@ -17,6 +17,7 @@ from knowledge_vault.api.middleware import (
     OriginValidationMiddleware,
     RequestSizeLimitMiddleware,
 )
+from knowledge_vault.api.read import register_read_routes
 from knowledge_vault.api.schemas import (
     AppendArtifactChunkRequest,
     AppendPartRequest,
@@ -28,6 +29,7 @@ from knowledge_vault.api.schemas import (
     ForgetPreviewRequest,
     SearchRequest,
 )
+from knowledge_vault.auth.inspection import InspectionBoundaryMiddleware
 from knowledge_vault.auth.tokens import Principal, Scope
 from knowledge_vault.container import Container
 from knowledge_vault.domain.maintenance import Purpose
@@ -58,6 +60,9 @@ from knowledge_vault.services.errors import KnowledgeVaultError, RateLimitedErro
 
 
 def create_app(container: Container) -> FastAPI:
+    container.authenticator.validate_inspection_principals(
+        container.settings.inspection_principal_set
+    )
     mcp_server = create_mcp_server(container)
     mcp_app = mcp_server.streamable_http_app(
         streamable_http_path="/mcp",
@@ -115,6 +120,11 @@ def create_app(container: Container) -> FastAPI:
             allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
             allow_credentials=False,
         )
+    app.add_middleware(
+        InspectionBoundaryMiddleware,
+        authenticator=container.authenticator,
+        principals=container.settings.inspection_principal_set,
+    )
 
     @app.exception_handler(KnowledgeVaultError)
     async def domain_error(request: Request, exc: KnowledgeVaultError) -> JSONResponse:
@@ -415,6 +425,7 @@ def create_app(container: Container) -> FastAPI:
         return StatisticsResponse.model_validate(await container.administration.statistics())
 
     register_maintenance_routes(app, container)
+    register_read_routes(app, container)
     # Keep this catch-all mount last so ordinary HTTP routes remain authoritative.
     app.mount("/", mcp_app)
     return app

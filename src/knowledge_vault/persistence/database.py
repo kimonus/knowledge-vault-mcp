@@ -1,12 +1,24 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+from sqlalchemy import Connection, event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.orm import Session, SessionTransaction
+
+
+class _InspectionSession(Session):
+    """Every transaction, including implicit service transactions, is read-only."""
+
+
+@event.listens_for(_InspectionSession, "after_begin")
+def _read_only(session: Session, transaction: SessionTransaction, connection: Connection) -> None:
+    del session, transaction
+    connection.exec_driver_sql("SET TRANSACTION READ ONLY")
 
 
 def async_database_url(url: str) -> str:
@@ -25,6 +37,9 @@ class Database:
             hide_parameters=True,
         )
         self._sessions = async_sessionmaker(self.engine, expire_on_commit=False)
+        self.read_sessions = async_sessionmaker(
+            self.engine, expire_on_commit=False, sync_session_class=_InspectionSession
+        )
 
     @property
     def sessions(self) -> async_sessionmaker[AsyncSession]:

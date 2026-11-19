@@ -149,6 +149,7 @@ Response outline:
 ```text
 AssertionPageResponse {
   items: AssertionSummary[],
+  page_size: integer,
   next_cursor: string|null,
   consistency: "live",
   evaluated_at: timestamp,
@@ -175,6 +176,11 @@ the BFF treats them as opaque and never needs the core signing key/pepper. Brows
 be reauthorized before forwarding each page request. The single-user design deliberately shares
 one core read view between sessions; this is not a per-session data permission boundary. Ranked
 cursors reuse core ranking semantics; reset on core rollout and keep page size fixed.
+
+Implemented core inspection page models expose `page_size`, including detail's `source_page`,
+`artifact_page` and `identity_page`. Continue those preview cursors with their returned page size,
+which can differ from the route default. See [the core API reference](../../http-inspection.md)
+for exact runtime names, limits and error semantics; the future browser DTO names here remain design.
 
 This is a **live** scan: a fixed dataset is visited exactly once to exhaustion; page queries use
 statement snapshots, not a transaction spanning HTTP requests. Concurrent additions with smaller

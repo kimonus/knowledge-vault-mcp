@@ -5,6 +5,14 @@ Nested temporal/provenance fields pass secret detection. Scopes, shared rate lim
 confirmation remain server-enforced. Temporal history is untrusted data: source dates and semantic
 classification are claims, not external verification. See [limits](docs/temporal-knowledge.md).
 Evidence is immutable except confirmed deletion.
+
+Dedicated inspection principals use exactly read scope and are confined to `/api/v1/read` before
+HTTP/MCP dispatch; the MCP verifier independently refuses them. No inspection identity can use
+ordinary accounting reads, ingestion, usage reporting or administrative routes. Inspection data
+reads run in transaction-read-only sessions and force non-recording retrieval; the core keeps its
+existing writer credential for ordinary clients. A future dashboard receives only an issued read
+service token, never the core pepper/bootstrap Secret or DB credentials. Sensitivity remains a
+single-user metadata filter, not selective authorization. See [inspection contracts](docs/http-inspection.md).
 Reviewed legacy evidence attachment is admin-only because its temporal classification can change
 historical answers. It checks target identity and source metadata, but human review remains the
 authority for whether a source proves a real-world transition.
