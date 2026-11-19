@@ -1,11 +1,11 @@
 # Optional Web UI implementation plan
 
-Status: proposed; revised for [PR #126](https://github.com/kimonus/knowledge-vault-mcp/pull/126).
+Status: accepted staged plan with implementation verification gates; revised for [PR #126](https://github.com/kimonus/knowledge-vault-mcp/pull/126).
 Four future implementation PRs; no application implementation, deployment or merge in this phase.
 Read the [assessment](assessment.md), [ADR 0009](../../decisions/0009-optional-read-only-dashboard.md),
 [API/UI contract](api-ui-contract.md), [security design](deployment-security.md) and
-[review disposition](review-response.md). **Do not begin PR1 until the revised ADR is re-reviewed
-and accepted.**
+[review disposition](review-response.md). The maintainer accepted the revised ADR on 2026-11-19;
+PR1 may start after the accepted design is merged under the operator's instruction.
 
 ## Sequence and ownership
 
@@ -180,9 +180,9 @@ This revision runs **documentation validation only**: local links, Markdown fenc
 whitespace/diff, proposal consistency and review-finding traceability. No implementation, browser,
 performance, Helm render, image or deployment gate is claimed as executed for this design.
 
-Re-review/ADR acceptance is required before PR1. Before enabling, operator supplies private
+ADR acceptance is recorded in its decision section. Before enabling, operator supplies private
 hostname/TLS, dashboard-only login/pepper/session keys, exact-read core inspection identity and
 compatible API version, and accepts live traversal, all-sensitivity access and coarse session
 revocation. Access/public DNS/tunnel changes require separate approval. Current authorization is
-only to update/commit/push design documents and post the PR follow-up; no deploy, implementation
-or merge. All review findings are tracked in [review-response.md](review-response.md).
+to merge the accepted design after checks and implement/open PR1 for review; no deployment,
+infrastructure changes or PR1 merge. All review findings are tracked in [review-response.md](review-response.md).

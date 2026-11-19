@@ -1,12 +1,24 @@
 # ADR 0009: Optional, private, read-only Knowledge Vault dashboard
 
-- Status: Proposed; implementation and deployment are not authorized by this ADR
+- Status: Accepted for staged implementation; no deployment or public exposure authorization
 - Date: 2026-11-19
 - Assessed baseline: `39b6af7c27950a7e57159b59cc7157ff8728f248` in
   `kimonus/knowledge-vault-mcp` (local `main`)
-- Scope: design only; supersedes the original brief's exclusion of a web UI only if accepted
+- Scope: architecture decision; supersedes the original brief's exclusion of a web UI
 - Revision: addresses the [PR #126 architecture review](https://github.com/kimonus/knowledge-vault-mcp/pull/126#issuecomment-7003860752)
-  of `59c789b`; ADR remains Proposed and requires re-review before PR1
+  of `59c789b`; accepted after re-review of `56ec98a34cacae4c212343db96e199af9973e43d`
+
+## Acceptance decision and implementation gates
+
+Maintainer kimonus accepted this architecture on 2026-11-19 in
+[PR #126 comment 7007172193](https://github.com/kimonus/knowledge-vault-mcp/pull/126#issuecomment-7007172193).
+Acceptance authorizes staged implementation, not runtime security certification or deployment.
+PR1 must prove inspection-principal confinement across every HTTP/MCP route, no usage writes,
+bounded traversal and existing-client compatibility. PR2 must validate BFF/browser isolation
+before UI exposure. PR4 must prove zero-resource disabled rendering and unchanged core Pods;
+`--no-hooks` requires verified core/schema compatibility. No public Cloudflare/DNS/tunnel changes,
+live credentials or deployment follow from this decision. The implementation PRs require review;
+the design PR may merge after required checks under the operator's explicit instruction.
 
 ## Context and evidence
 
@@ -19,7 +31,7 @@ gaps. No running deployment, private knowledge, unmerged worktree implementation
 was used as evidence of supported functionality. Proposed paths and settings below do not exist
 in the assessed baseline.
 
-## Decision proposal
+## Decision
 
 Build a client-rendered React/TypeScript application with Vite, native browser fetch, a small
 route library, and ordinary CSS. Build static assets once and serve them under `/dashboard/`
@@ -147,7 +159,7 @@ The existing full-chart migration hook runs on every ordinary Helm upgrade. Dash
 upgrades use the render-verified `--no-hooks` procedure on a compatible unchanged core release;
 actual core/schema upgrades retain normal migration hooks. See the deployment lifecycle design.
 
-Accept this ADR before implementation. Operator choices before enabling are the private hostname,
+This ADR is accepted; operator choices before enabling are the private hostname,
 TLS Secret, dashboard-only read credential/pepper, separate session-signing Secret, exact-read
 core service credential, compatible core read API version, session lifetime,
 and all-sensitivity visibility. Selecting Access/public routing is a separate explicit exposure

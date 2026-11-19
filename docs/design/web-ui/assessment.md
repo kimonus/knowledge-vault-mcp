@@ -2,7 +2,7 @@
 
 Design assessment, 2026-11-19, baseline `39b6af7c27950a7e57159b59cc7157ff8728f248`.
 Facts below are verified from this checkout, not proof of live deployment behavior. The
-[ADR](../../decisions/0009-optional-read-only-dashboard.md) is **proposed**. This package implements
+[ADR](../../decisions/0009-optional-read-only-dashboard.md) is **accepted for staged implementation**. This package implements
 no application, endpoint, Helm setting or authentication change.
 The revision responds to [PR #126's review](https://github.com/kimonus/knowledge-vault-mcp/pull/126#issuecomment-7003860752)
 of `59c789b`. Verified facts below retain the original baseline; the separate dashboard runtime

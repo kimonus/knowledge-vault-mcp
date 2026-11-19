@@ -1,6 +1,7 @@
 # Proposed dashboard API and UI contracts
 
-Status: proposed, design only. Read with [ADR 0009](../../decisions/0009-optional-read-only-dashboard.md),
+Status: accepted design for staged implementation; capabilities are not implemented by this document.
+Read with [ADR 0009](../../decisions/0009-optional-read-only-dashboard.md),
 the [assessment](assessment.md), and [security design](deployment-security.md).
 All paths/settings/models here are proposals unless explicitly called existing. Public MCP and
 existing `/api/v1` contracts remain compatible. Shared additions go in `domain/responses.py`;

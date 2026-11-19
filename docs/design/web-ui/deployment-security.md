@@ -1,6 +1,7 @@
 # Proposed deployment, security and risks
 
-Status: proposed; revised for the [PR #126 review](https://github.com/kimonus/knowledge-vault-mcp/pull/126#issuecomment-7003860752).
+Status: accepted architecture for staged implementation, with ADR 0009's verification gates;
+revised for the [PR #126 review](https://github.com/kimonus/knowledge-vault-mcp/pull/126#issuecomment-7003860752).
 No application, runtime configuration, ingress, Secret or cloud resource was changed. Read with
 [ADR 0009](../../decisions/0009-optional-read-only-dashboard.md), the
 [API/UI contract](api-ui-contract.md) and [review disposition](review-response.md).
@@ -270,8 +271,8 @@ builds and remove only review images afterward. No build/deploy is performed in 
 | Exposure/configuration | Dedicated private hostname, opt-in ingress, no implicit tunnel changes; DNS/TLS/private reachability are operator responsibilities |
 | Sensitive data visibility | All classes visible to authenticated owner; selective denial needs a new server policy |
 
-Before implementation: re-review and accept ADR, independent BFF/core-read interface, route-bound
-inspection credentials, live browsing and plain-text rendering. Before enabling: operator chooses
+The accepted design requires independent BFF/core-read interface, route-bound inspection
+credentials, live browsing and plain-text rendering. Before enabling: operator chooses
 hostname/TLS/ingress, all-sensitivity visibility/session lifetime, dedicated dashboard login/pepper/
 signing Secrets, read-only core service identity and supported core read API version. Defaults are
 provided; this design phase needs no operator response. Public Access/tunnel/DNS modification is
@@ -280,4 +281,4 @@ a separate explicit exposure decision. Direct DB access is not an unresolved imp
 Measured questions for implementation: corpus/query/resource budgets and indexes, cold search
 timeout, maintained Chromium/Firefox matrix, compatible core/dashboard version policy and whether
 standalone support has merged. Defaults: protocol version 1 with capability check, one BFF replica,
-bounded live paging, no export, and no additional infrastructure. ADR stays Proposed until re-reviewed.
+bounded live paging, no export, and no additional infrastructure. Acceptance does not certify runtime security.

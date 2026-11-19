@@ -6,7 +6,7 @@ No application, authentication, schema, deployment or stored knowledge changed.
 Read in order:
 
 1. [Repository assessment](assessment.md): verified services, endpoints, security, paging and gaps.
-2. [Proposed ADR 0009](../../decisions/0009-optional-read-only-dashboard.md): architecture and alternatives.
+2. [Accepted ADR 0009](../../decisions/0009-optional-read-only-dashboard.md): architecture and alternatives.
 3. [API/UI contract](api-ui-contract.md): bounded operations, routes/components, deterministic grouping.
 4. [Deployment and security](deployment-security.md): browser login, Helm, risks and open decisions.
 5. [Four-PR implementation plan](implementation-plan.md): dependencies, acceptance and verification.
@@ -19,5 +19,6 @@ renders zero dashboard resources. Core builds/runtime do not need dashboard asse
 BFF has no DB credentials or embedding model. Ingress remains a separate private-by-default
 opt-in. No Compose profile is assumed: none is tracked in this assessed checkout.
 
-The ADR remains Proposed and must be re-reviewed before PR1. Operator configuration/approval is
-required before enabling or exposing a future dashboard, not to read or review this design.
+The [maintainer acceptance](https://github.com/kimonus/knowledge-vault-mcp/pull/126#issuecomment-7007172193)
+approves staged implementation with the ADR's verification gates. Operator configuration/approval
+is still required before enabling or exposing a future dashboard.

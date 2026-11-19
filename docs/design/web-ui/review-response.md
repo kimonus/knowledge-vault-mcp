@@ -1,11 +1,12 @@
 # PR #126 architecture review disposition
 
-Status: documentation resolutions proposed for re-review; not reviewer acceptance or implemented
-security proof. Review source: [comment 7003860752](https://github.com/kimonus/knowledge-vault-mcp/pull/126#issuecomment-7003860752)
+Status: accepted at architecture level by the maintainer in
+[comment 7007172193](https://github.com/kimonus/knowledge-vault-mcp/pull/126#issuecomment-7007172193);
+not implemented security proof. Review source: [comment 7003860752](https://github.com/kimonus/knowledge-vault-mcp/pull/126#issuecomment-7003860752)
 on original design commit `59c789b`, retrieved 2026-11-19. All PR conversation comments, submitted
 reviews and inline threads were requested: one conversation review comment, zero submitted
-reviews and zero inline threads at assessment time. ADR remains **Proposed**; do not begin PR1
-until the revised design is re-reviewed and accepted. This revision does not merge the PR.
+reviews and zero inline threads at initial assessment time. The subsequent maintainer re-review
+accepted `56ec98a` with the staged verification gates now recorded in ADR 0009.
 
 ## Findings and documentation resolutions
 
@@ -25,7 +26,7 @@ until the revised design is re-reviewed and accepted. This revision does not mer
 | Separate assertion status/evidence/workflow | Preserve independent enum fields, labels, kinds, confirmation metadata and resolver outcomes; no inferred confirmed truth | [epistemic presentation table](api-ui-contract.md), PR3 semantic fixture tests |
 | Session revocation limitations explicit | Absolute 30-minute expiry, active login-record check, dashboard-only record/key rotation; logout alone does not revoke copied cookies; Access revocation belongs to provider | [session lifecycle](deployment-security.md), PR2 expiry/revocation tests |
 | Sensitivity visibility explicit | Authenticated single user/service can read all classes; UI sensitivity filter is not an authorization boundary; selective denial needs new server policy | [risks/visibility](deployment-security.md), assumptions in [assessment](assessment.md) |
-| Design-only and ADR not accepted | Only Markdown changes; no code/chart/deploy; four future PRs remain gated on re-review | [implementation plan](implementation-plan.md), git diff and PR status |
+| Design-only; acceptance required before implementation | Design revision is Markdown-only; maintainer acceptance is now recorded, with implementation review/verification still required | [implementation plan](implementation-plan.md), ADR acceptance decision |
 
 ## Remaining risks and decisions
 
@@ -36,7 +37,7 @@ single-user vault; it cannot be granted write/DB authority. Stateless logout has
 revocation; metadata cannot repair missing history or make live pagination a snapshot. No direct
 DB fallback, additional database, LLM or dashboard model is proposed.
 
-Maintainer must re-review/accept the ADR before implementation. Before enabling, operator supplies
+Maintainer accepted the ADR for staged implementation, not deployment. Before enabling, operator supplies
 private hostname/TLS, separate browser credential/pepper/signing Secrets, exact-read core inspection
 identity and compatible core version, and accepts all-sensitivity visibility and session lifecycle.
 Public Access/tunnel exposure remains a separate approval. Resource/query/cold-load budgets require
