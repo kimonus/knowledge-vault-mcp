@@ -142,3 +142,72 @@ record final finding dispositions before an independent approval verdict.
 
 Next: implementation agent `/root` publishes this initial assessment and remediates R1/R2;
 independent reviewer verifies the resulting exact head.
+
+
+## Final independent verification — 2026-11-19
+
+Reviewed remediation head: **`89546bccff9aed4ec92d6fbe31339dfa97a66aca`**.
+The initial assessment above is retained as the historical original-head verdict. It was
+[published on PR #128](https://github.com/kimonus/knowledge-vault-mcp/pull/128#issuecomment-7015524054)
+and committed as `57df4a6` before application remediation. The same independent reviewer
+inspected the complete `57df4a6..89546bc` diff, including implementation, tests and synchronized
+security/client/deployment documentation. The reviewer did not implement these fixes.
+
+**Final verdict: APPROVE for PR2's implemented security scope.** Both findings are resolved;
+there is no remaining confirmed merge-blocking security finding from this review. This verdict
+does not authorize merge/deployment and does not certify future UI rendering or live Access/TLS.
+
+| Finding | Disposition | Independently verified behavior |
+| --- | --- | --- |
+| R1 Medium | Resolved at `89546bc` | Readiness caches safe success/failure for five seconds, admits at most one uncached dependency check, charges a fixed separate 60/minute work budget, and bounds shared-slot occupancy to two seconds including queueing. Other probes fail promptly rather than taking more slots. Cached state never authorizes data. |
+| R2 Low | Resolved at `89546bc` | Runbook and API contract scope JSON/no-redirect guarantees to origin; specify provider AJAX header and same-origin credentials; require safe handling of non-JSON denial/redirect/network failures. PR3/PR4 explicitly retain actual browser/edge expiry gates. |
+
+Independent adversarial retests used fresh reviewer-written fixed-expectation probes in
+`/tmp/knowledge-vault-pr2-review/dashboard/tests/test_independent_fixed.py`, with explicit
+`PYTHONPATH=/tmp/knowledge-vault-pr2-remediation/dashboard/src`. The candidate checkout was
+confirmed clean and at the exact SHA above. These tests supplement rather than rely solely on
+the implementation agent's new regression tests:
+
+1. **Healthy burst:** 605 anonymous probes with varying wrong Host and spoofed forwarding
+   addresses all returned cached 204, producing **one** core call. A valid browser read then
+   returned 200 and made its own fresh capabilities + data calls. The old 605-call amplification
+   and shared browser-budget exhaustion do not reproduce.
+2. **Stalled dependency:** one anonymous probe held a fake-core response. Three additional
+   probes returned 503 promptly, generated no additional core work, and a valid browser read
+   returned 200 within a 0.5s deadline before releasing that probe. The old four-slot starvation
+   does not reproduce.
+3. **Real deadline and failure cache:** without monkeypatching timeout constants, a stalled
+   dependency failed at approximately two seconds with safe 504. An immediate second probe
+   reused the failure without another call. All four semaphore slots were then acquirable.
+4. **Authority isolation:** after caching healthy readiness, the fake core began returning 403.
+   The cached readiness remained available, while a data read performed a fresh authority check
+   and failed safely with 503. Readiness cache cannot become an authentication bypass.
+
+Command: `PYTHONPATH=<candidate>/dashboard/src <dashboard-python> -m pytest
+<review>/dashboard/tests/test_independent_fixed.py -q -s`: **4 passed in 2.19s**.
+The reviewer independently reran the entire candidate dashboard suite with the same explicit
+source selection: **154 passed in 0.66s**. This includes the new cache expiry/recovery,
+cancellation and interrupted-work admission regressions as well as the original authentication,
+scope, path, CSRF, serialization and upstream-error checks. Only pytest dependency deprecation
+warnings were emitted.
+
+The reviewer independently exported exact candidate Git objects with `git archive`, extracted
+them into `/tmp/kv-pr128-candidate`, and ran `uv 0.13.7 build --project dashboard --offline`:
+**source distribution and wheel both built successfully**. This checks inclusion of the new
+`errors.py`/`limits.py` modules from an isolated tracked-source tree.
+
+Separately attributed coordinator execution: the reviewer-selected original-source real
+pgvector compatibility command completed **1 passed, 1 deprecation warning in 2.33s**, exit 0,
+with Docker/socket escalation. The coordinator also reported the candidate full core suite
+**694 passed** and unchanged Helm profiles passing. Those are coordinator execution reports,
+not claimed as the reviewer's independent local runs, and do not replace the independent
+adversarial results above.
+
+Residual limits remain those accepted above: process-local single-replica budgets, five-second
+readiness staleness, coarse session revocation, copied-cookie replay until expiry/revocation,
+all-sensitivity single-user access and future ingress probe isolation. There is no new live
+browser/Access deployment proof. PR3 must test inert rendering and real browser auth handling;
+PR4 must exercise authorized deployed paths, probe isolation and true provider-session expiry.
+
+Next: coordinator `/root` integrates and publishes this final verification record, verifies that
+any final documentation-only commit preserves the reviewed application tree, and reports CI.
