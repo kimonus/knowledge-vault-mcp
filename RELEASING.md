@@ -121,3 +121,10 @@ verified off-host backup into a disposable database, and follow
 
 Never delete a published tag or silently replace an image under an existing version. Publish a new
 patch version for corrections.
+
+## Staged dashboard package
+
+The [PR2 Dashboard BFF](docs/runbooks/dashboard.md) has an independent Python manifest/lock and
+wheel tests. It is disabled by default and is not part of core/API/worker images or release
+artifacts. PR3/PR4 will add its image and release/deployment integration; no dashboard image,
+credentials or workload should be published/enabled from the core release procedure yet.

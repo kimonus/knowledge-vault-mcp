@@ -94,3 +94,10 @@ To recover from a bad model, set `config.embeddingModel` back and rerun the rebu
 overwritten per assertion as each job completes, so the previous model's vectors are not kept
 side by side; keep the previous cache until the rollback window and a verified backup have
 passed.
+
+## Dashboard model isolation
+
+The [PR2 Dashboard BFF](dashboard.md) has no model loader, embedding dependencies or model mount.
+Ranked queries use the core inspection API and its existing embedder. Browse/catalogs require no
+model. The BFF has no database fallback or second Container, and its removal does not affect the
+API/worker model lifecycle.

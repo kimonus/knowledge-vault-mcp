@@ -109,3 +109,16 @@ knowledge_vault_usage_events_total{outcome="failed"} counts optional accounting 
 continue with usage.available=false; those zero counters are not authoritative. Inspect database
 lock pressure before retrying. Disable normal accounting via config.usageTrackingEnabled if needed.
 Worker maintenance purges expired retry/audit records before recording its existing heartbeat.
+
+## Dashboard dependency health
+
+The separate [BFF](dashboard.md) has process liveness and authenticated protocol-capability
+readiness probes. Disabled/incompatible/unavailable-core readiness is 503/502/504; these statuses
+disclose no credentials or payload. Core readiness never depends on the BFF. No new background
+duty or heartbeat exists. Use the shipped entrypoint to disable access/URL logs; do not enable
+request headers, bodies or query-string logging. PR4 supplies deployment monitoring resources.
+Uncached readiness dependency checks are limited separately to 60/minute; cache hits keep their
+known health result without consuming admission. Exhausted dependency admission returns 429. Dependency
+success/failure is cached for five seconds, and only one check can run with a two-second deadline.
+A concurrent check returns 503 promptly. These short bounded probes cannot occupy all browser
+upstream slots. Liveness remains dependency-free; restrict probe paths at future ingress.
