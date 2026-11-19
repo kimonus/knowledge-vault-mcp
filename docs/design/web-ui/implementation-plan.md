@@ -1,172 +1,188 @@
 # Optional Web UI implementation plan
 
-Status: proposed; four future implementation PRs, no application implementation in this phase.
-Baseline and verified capabilities: [assessment](assessment.md). Decision:
-[ADR 0009](../../decisions/0009-optional-read-only-dashboard.md). Contracts:
-[API/UI](api-ui-contract.md). Operational design: [deployment/security](deployment-security.md).
+Status: proposed; revised for [PR #126](https://github.com/kimonus/knowledge-vault-mcp/pull/126).
+Four future implementation PRs; no application implementation, deployment or merge in this phase.
+Read the [assessment](assessment.md), [ADR 0009](../../decisions/0009-optional-read-only-dashboard.md),
+[API/UI contract](api-ui-contract.md), [security design](deployment-security.md) and
+[review disposition](review-response.md). **Do not begin PR1 until the revised ADR is re-reviewed
+and accepted.**
 
-## Delivery sequence and review boundaries
+## Sequence and ownership
 
-Accept ADR 0009 first. Recommended dependency chain is **PR1 → PR2 → PR3 → PR4**. Each PR must
-be independently reviewable and pass applicable gates; no PR depends on unmerged code. Keep
-the application flag false throughout. Intermediate PRs do not publish a partially secured UI.
-Implementation owners are the backend, security/browser, frontend and deployment maintainers
-respectively; in this single-maintainer project these roles may be the same person.
+Recommended chain: **PR1 → PR2 → PR3 → PR4**. Review/merge each independently with applicable
+checks passing; no dependency on unmerged branches. Roles below may be one maintainer. No PR
+publishes or enables a dashboard by default. Core read API can ship/usefully operate without
+building or deploying dashboard; BFF/SPA use their own image and runtime.
 
-### PR1 — Bounded read services and shared contracts
+### PR1 — Core read services and least-privilege HTTP interface
 
-Dependencies: accepted ADR. Add service/query models and shared response DTOs for exhaustive
-assertion browsing/strict lexical matching, catalogs, paged source/artifact/identity collections,
-direct relations including reverse supersession/conflicts, and raw evidence history. Factor bounded
-detail projection and a transaction-read-only session seam; retain existing MCP and HTTP behavior.
-Add reviewed contract fixtures/OpenAPI definitions in tests; production dashboard routes remain
-unregistered until PR2. No schema migration unless query-plan evidence justifies a new index.
-
-Acceptance:
-
-- A static corpus larger than every existing ranked candidate cap is visited exactly once to
-  cursor exhaustion in all/lexical modes, with all statuses, missing classifications and Unicode.
-  Invalid/expired/cross-filter/cross-principal cursors fail; deleting the boundary row still works.
-- Catalog counts match distinct eligible IDs over the whole fixture, including aliases, overlap,
-  null buckets, contexts/facets and evidence/workflow filters. Input normalization/order and
-  alias-change invalidation are deterministic. No hidden “top N” replaces exhaustive catalogs.
-- Child pages traverse beyond 32 sources/identities, 100 relations and preview artifact limits;
-  query loading and response sizes remain bounded. No ORM eager-loading of an entire high-degree
-  collection simply to slice it afterward. No N+1 query growth with list page size.
-- Raw evidence inspection works beyond 1,000 records while existing resolution still refuses
-  overflow; no partial winner, edit-history reconstruction or deleted-content resurrection.
-- With usage tracking enabled, dashboard-style reads make no knowledge/usage/maintenance writes.
-  An attempted write in a read-only session fails; pooled writer sessions still write normally.
-  Existing search ranking/default scopes/MCP schemas and non-dashboard usage accounting pass.
-- SQL plans/timings for representative synthetic small/large corpora are recorded; proposed
-  initial budget is p95 under 500 ms for a 50-item browse/catalog query over 50,000 synthetic
-  assertions on documented hardware. This is a proposed gate, not a measured guarantee; narrow
-  or revise the target with evidence. No embedding timing is folded into that SQL budget.
-
-Rollback: revert new query methods/DTOs; no data change. Any measured index addition is additive
-and has its own migration/rollback discussion; never edit an old migration.
-
-### PR2 — Feature gate, hostname isolation and browser authentication
-
-Dependencies: PR1. Add disabled config, host/path dispatcher and dashboard router. Register the
-explicit read operations, private credential exchange/session lifecycle and optional Access
-profile, with Origin/CSRF/CSP/no-store protections. Reuse shared services/rate guard/embedder.
-Security handlers are usable with test clients before the SPA exists. Reject enabled startup
-without packaged test/production assets rather than providing a public scaffold page.
+Owner: backend maintainer. Dependency: revised ADR accepted. Add shared query/input/response
+models and bounded services for exhaustive browsing/strict lexical matching, catalogs, paged
+sources/artifact refs/identities, direct links/reverse supersession/conflicts and raw evidence.
+Factor a bounded detail projection and read-only session factory. Add core `/api/v1/read` handlers
+with explicit operation allowlist, exact-read bearer/inspection-principal restriction, forced
+maintenance purpose and shared rate guard. Reject inspection identities outside this interface
+in both HTTP and MCP auth; other clients' existing contracts/behavior remain unchanged. Core
+inspection config is independent of `dashboard.enabled`, not browser auth or a feature toggle.
 
 Acceptance:
 
-- Dashboard disabled: routes unavailable, no keys/hosts/assets required, existing MCP/HTTP
-  initialization, auth, readiness and ingestion fully operational. Python-only installs work.
-- Private mode accepts only a dedicated exactly-read credential. Write/admin/mixed-scope tokens
-  are rejected at login. Invalid/expired/tampered/wrong-audience cookies fail; removing a token
-  record or rotating the signing key revokes sessions after rollout. Absolute expiry survives
-  requests; logout clears local cookie without claiming server-side single-session revocation.
-- Public/private MCP and private/Access dashboard host matrices pass, including wrong/repeated
-  Host/Origin, spoofed forwarded headers, valid admin bearer, Access with write scope, encoded
-  paths and catch-all behavior. Dashboard identities cannot invoke writes through any path.
-- Access mode validates issuer/signature/audience/expiry/exact identity per request and rejects
-  private cookie/bearer fallback. Existing public MCP assertion requirements remain unchanged.
-- Cross-origin form/JSON/login/logout attempts, sibling-origin requests, framing and simple-CORS
-  requests fail. Cookies have required attributes; GET does not mutate knowledge; POST query
-  routes remain non-recording. Security and knowledge data never appear in logs or trace output.
-- A spy/integration assertion proves one embedding provider object is shared and plain Portal
-  queries never call it. Database is still accessible only from server services.
+- A static synthetic corpus larger than every ranked candidate cap is visited exactly once to
+  exhaustion in all/lexical mode, across all four statuses and unclassified/Unicode data. Cursor
+  tampering, expiry, wrong principal/filter/query/alias version fail; deleted boundaries work.
+  Concurrent mutation tests document live-scan misses/membership shifts, not snapshot completeness.
+- Catalog counts match distinct eligible assertion IDs across the full fixture, canonical aliases,
+  overlapping topics, missing classifications and evidence/workflow filters. No hidden top-N cap.
+- Detail child pages traverse beyond 32 sources/identities and 100 relations/artifacts; bound DB
+  loading as well as output, and demonstrate no list-size-dependent N+1 query behavior.
+- Raw evidence remains pageable beyond 1,000 records; resolution still refuses overflow without
+  choosing a partial winner. No full edit-history/deleted-content recovery claim.
+- Exact-read inspection token succeeds only on named `/api/v1/read` routes. Write/admin/mixed-scope
+  tokens and Access identities fail there. Inspection token fails on all ordinary read, usage,
+  write/admin and MCP routes, including encoded/alternate paths. Normal clients remain compatible.
+- With usage tracking enabled, every inspection operation leaves knowledge/usage/maintenance data
+  unchanged; attempted SQL write in its read transaction fails. Pooled normal writers still work.
+- Ranked reads use the existing API embedder object; no new Container/model. Browse/catalog calls
+  need no embeddings. Shared responses/OpenAPI have reviewed fixtures and future BFF compatibility
+  contracts. No browser assets/dependencies/routes/session settings enter core build/runtime.
+- Record SQL plans/timings on documented hardware. Initial proposed gate: 50-item browse/catalog
+  p95 under 500 ms over 50,000 synthetic assertions, excluding embeddings; revise only with evidence.
+  Any justified index needs a new explicit Alembic revision, never edits to an existing revision.
 
-Rollback: disable flag/remove dashboard routes; core identity behavior remains compatible.
-Update `SECURITY.md`, threat model and authentication/runbook proposals alongside code.
+Rollback: additive core API/service release can be reverted with ordinary core release procedure;
+no knowledge rewrite. Once a BFF depends on this version, disable/rollback BFF first. Disabling a
+dashboard does not roll back this core release, remove service records or restart core Pods.
 
-### PR3 — Explorer and deterministic Portal
+### PR2 — Separate Python BFF and browser security boundary
 
-Dependencies: PR2. Add locked React/TypeScript/Vite package, static asset integration, narrow
-OpenAPI-derived client and route/components defined in the API/UI proposal. Implement login,
-all/lexical/ranked browsing, filters, complete detail collection navigation, contexts/topics/facets,
-explicit relations, as-of/known-at resolution and raw evidence fallback. No editor, export,
-generated summary, remote content fetch, LLM or browser token store.
-
-Acceptance:
-
-- Browser can start at all-retained Explorer and reach every fixture assertion and every retained
-  child page; Portal links map to the same filtered results. Ungrouped items remain reachable.
-- Fixtures distinguish current/uncertain/disputed/superseded, proposed plans and temporal proposals,
-  considered/rejected options, verified evidence and ingestion confirmations. No badge/rank/date
-  promotes a proposal or rejected option to confirmed truth. Resolver conflict/ambiguous/unknown,
-  missing classifications, precision and overflow remain visible.
-- Source titles, malicious HTML/script/Markdown, command/file locators and executable-looking
-  text artifacts render inertly; no external preview request occurs. Browser XSS/security tests
-  and network request assertions pass.
-- Component/Playwright tests exercise filter resets, next/back page navigation, stale-request
-  cancellation, empty/degraded/error/401/429 states, session expiry/logout, temporal history
-  continuation, mobile layout and keyboard/focus/label accessibility. Do not add snapshot-only
-  tests that merely mirror component markup.
-- `npm ci`, frontend formatting/lint, `tsc --noEmit`, production build, behavioral tests and
-  Playwright pass with locked dependencies. Generated API types have no drift. No Node runtime,
-  secrets, knowledge, public source maps or service worker is shipped.
-
-Rollback: disable dashboard or revert static package; no database/data rollback needed.
-
-### PR4 — Helm, release packaging and operational proof
-
-Dependencies: PR3. Add `dashboard.enabled: false`, schema/env/Secret mapping, optional private
-TLS Ingress, image build stage/core-only target, release/CI supply-chain integration and operator
-documentation. Reassess actual merged Compose support before changing any standalone packaging;
-none exists at this design baseline, so adding a Compose stack/profile is outside these PRs.
+Owner: security/backend maintainer. Dependency: PR1. Create dashboard-only Python package/lock,
+entrypoint and tests for a standalone FastAPI app. Use fixed httpx operation mapping to core read
+API, no generic proxy/core Container/SQL/model dependencies. Add separate browser HMAC records/
+pepper, exact-read login, signed sessions, Access alternative, Host/Origin/CSRF/CSP/no-store rules,
+local browser rate guard and bounded upstream client. No core browser routes. Package test assets
+for boundary tests without publishing a partial SPA or enabling Helm resources yet.
 
 Acceptance:
 
-- Default render has no dashboard routing/Secret requirements and no new public exposure. Enabled
-  without ingress also has no outside route. Valid private and Access test configurations render;
-  unsafe/overlapping hosts, incomplete secrets/TLS and auth downgrades fail closed.
-- Helm lint/template, strict kubeconform and rendered-number checks pass for disabled/private/
-  Access modes, default and reference values, and enabled/disabled existing Cloudflare profiles.
-  Static/read-only-rootfs, resources/probes/capabilities/NetworkPolicies and core-only image work.
-- Both application and backup images build, scan and satisfy existing release policy. Run the
-  required backup/restore retention rehearsal because container/chart packaging changed. Before
-  builds check shared Docker storage; afterward remove only new review images.
-- Run full existing Python/pgvector/MCP/Inspector gates and new browser gates. At least 90%
-  statement and 85% branch application coverage; no broad exclusions. Core flag-off behavior
-  continues to pass. Locked builds include frontend dependencies in inventory/audits.
-- Before any authorized live apply: server-side dry-run in Minikube. After authorized deployment:
-  a real browser signs in through private TLS, browses all/Portal, opens sources/relationships,
-  resolves temporal state and pages evidence. Concurrent first ranked searches share a single
-  model load. Direct write attempts through dashboard fail while an existing authorized MCP
-  client can still read/write on its own endpoint. Read API logs safely and check restart counts.
-  Rollout/readiness or an in-Pod call alone is not proof. Report pending browser/deployment proof
-  explicitly if operator authorization/configuration is unavailable.
+- BFF starts without a core DB URL, core token pepper, core bootstrap records, model volume or
+  weights; none can be required/mounted. Its issued core service token is exact-read only. Reject
+  missing upstream credential/config; never fall back to browser or privileged credentials.
+- Browser token and BFF service token are distinct. Browser login token/session cannot authenticate
+  at core; BFF does not forward browser Authorization/Cookie/Access/Origin/client IDs. Outbound
+  requests use fixed ClusterIP URL/private core Host and explicit path/method; redirects, caller
+  upstream/headers, oversized responses, timeout/retry storms and arbitrary proxy paths fail.
+- Browser/private and Access authentication reject wrong/repeated Host/Origin, spoofed forwarding,
+  wrong audience/expiry/signature, admin/write/mixed scopes, cross-site/sibling-site CSRF and
+  encoded-path bypasses. Access mode has no private fallback. App API returns JSON auth errors.
+- Cookie has Secure/HttpOnly/Strict/no Domain, 30-minute absolute expiry; login record removal or
+  signing-key rotation revokes after BFF-only rollout. Logout expires local cookie but explicitly
+  does not revoke a copied cookie before expiry. No session DB/browser credential storage.
+- BFF credential compromise cannot gain write authority or direct DB access. Tests exercise core
+  inspection route confinement with the actual upstream token; browser auth alone is insufficient.
+- Upstream 401/403 (service misconfiguration) becomes safe 503, not a user-login loop; 429 preserves
+  safe Retry-After; timeouts/dependency failure show bounded 503/504 and no DB fallback.
+- Core unavailable/restarted: BFF reports degradation; BFF absent/crashed: core readiness/clients
+  continue normally. Version/capability check refuses incompatible read protocol without silently
+  calling ordinary routes. No second model load is possible from dashboard imports/runtime.
 
-Synchronize README, CHANGELOG, `docs/runbooks/minikube.md`, `cloudflare-access.md`,
-`client-setup.md`, `monitoring.md`, `embeddings.md`, SECURITY/threat model and RELEASING where
-their behavior changes. Add a dashboard runbook and independent security review/finding status
-under `docs/reviews/`. Existing MCP docs/contract tests change only if a genuinely shared public
-contract changes; no new MCP tools/flush behavior are planned. Keep Helm the deployment definition.
+Rollback: stop/remove only BFF; prior core read API and clients keep operating. Update security/
+threat-model proposals alongside auth design; no change to stored knowledge.
 
-Rollback: disable dashboard flag and remove only its explicitly enabled routing, roll out the
-previous verified image if needed, and preserve all core/worker/backup configuration. Sessions
-may be invalidated by key rotation; no destructive migration rollback or knowledge rewrite.
+### PR3 — Explorer/Portal and independent dashboard image
 
-## Verification strategy and evidence
+Owner: frontend maintainer. Dependency: PR2. Add locked React/TypeScript/Vite UI, OpenAPI-derived
+fetch client, routes/components from contract. Implement login; all/lexical/ranked Explorer;
+complete detail/provenance/relations/history; context/topic/facet Portal; as-of/known-at and raw
+evidence fallback. Build a separate dashboard image using pinned Node builder and minimal Python
+runtime. Core/API/worker Dockerfile, build graph and runtime remain independent of web/BFF assets.
 
-Run narrow relevant tests first, then required gates from AGENTS.md: `uv lock --check`, Ruff
-format/check, Pyright, unit/property/contract and real disposable pgvector integration/e2e tests,
-coverage, Helm lint/render, strict kubeconform, rendered-number checks, supply-chain and Inspector.
-Container/chart changes also require both image builds and backup/restore retention test.
-New frontend/browser tests supplement rather than replace these gates. Tests never download
-embedding models or read local `.env`; use explicit settings, deterministic embeddings and
-synthetic knowledge. Reserve real client-path tests for an explicitly authorized deployment.
+Acceptance:
 
-Property tests target cursor traversal/grouping invariants and scope/state separation. Integration
-tests target actual SQL/filter behavior, read-only transactions/pool reuse, temporal overflow and
-concurrent changes. Contract tests compare shared Python models, dashboard OpenAPI and generated
-TypeScript; existing MCP/HTTP contracts remain unchanged. Browser tests target behavior, security,
-authentication and accessibility across maintained Chromium/Firefox.
+- Browser reaches every retained fixture assertion/child page; Portal matches equivalent filters;
+  all-status and unclassified buckets remain accessible. Ranked exhaustion is labelled bounded.
+- Fixtures distinguish current/uncertain/disputed/superseded, proposed workflow/temporal proposal,
+  considered/rejected kinds, verified evidence and ingestion confirmations. No UI/rank/recency
+  promotes an option/proposal to truth. Precision, unknown/ambiguous/conflict and overflow visible.
+- Malicious HTML/JS/Markdown/source locators/artifacts render inertly; safe links only, no previews
+  or external network fetches. Browser XSS/CSP/security tests assert actual behavior.
+- Component and Chromium/Firefox Playwright flows exercise filters/page/reset/back, stale requests,
+  empty/degraded/401/429 states, temporal continuation, session expiry/logout, mobile/keyboard/focus/
+  labels. Tests verify behavior rather than merely mirroring markup.
+- `npm ci`, frontend lint/format, `tsc --noEmit`, build/tests/Playwright pass. Shared core read/BFF
+  OpenAPI/generated TypeScript have no drift; fake upstream contracts remain backward compatible.
+- Dashboard artifact has no Node runtime/model/DB engine requirement/core Container or secret,
+  content, public source map/service worker. Core builds/installs work without Node, web directory,
+  BFF dependencies or frontend build artifacts. Reuse pure auth helper source without installing
+  the full core runtime in BFF or maintaining a separate copied auth implementation.
 
-This design phase runs documentation/link/diff checks only. None of the above implementation,
-browser, image, cluster, performance or security gates is claimed to have passed yet.
+Rollback: dashboard image version rollback only, subject to core read protocol compatibility.
 
-## Decision checkpoints
+### PR4 — Conditional Helm resources, release integration and operational proof
 
-Maintainer accepts the proposed ADR before PR1. Confirm the bounded live-read scope (no complete
-historical edit archive/snapshot export), exact-read login and separate hostname before PR2.
-Before PR4 activation, operator supplies DNS/TLS/credentials/signing key and chooses private
-deployment or explicitly approved Access exposure. Publishing, committing/pushing, cloud changes
-and deployment are separate authorized actions; drafting this plan grants none of them.
+Owner: deployment maintainer. Dependency: PR3. Add `dashboard.enabled: false`, separate image
+values/schema, conditional Dashboard Deployment/ClusterIP Service/ServiceAccount/ConfigMap/
+NetworkPolicies, optional TLS Ingress and Secret refs. Add conditional additive core-ingress
+NetworkPolicy only if needed, leaving original core policies/templates unchanged. Dashboard-only
+settings/checksums never enter shared core ConfigMaps or Pod templates. Add dashboard release
+artifact/SBOM/signature/audit/CI workflow and runbooks. No Compose profile: reassess actual merged
+standalone support first; none is tracked at the design baseline.
+
+Acceptance:
+
+- Disabled render produces **zero dashboard resources**, requires no dashboard credentials/image/
+  hostname and leaves core resources/checksums unchanged. Enabled without ingress creates only
+  private ClusterIP dashboard resources. Ingress points at dashboard Service, never core.
+- Compare full non-dashboard manifests (including Pod-template checksums, hooks, Services, policy,
+  DB, worker/backup) for false/true/false, BFF version update and BFF Secret changes; no differences
+  attributable to dashboard. Explicitly test chart's shared checksum helper to prevent coupling.
+- A disposable Minikube upgrade true→false removes exactly dashboard-owned resources, including
+  optional ingress/additive policy, while all core clients/Pods keep functioning without restart.
+  External Secrets, DNS/TLS and core inspection token records are not deleted by the toggle.
+  The existing migration hook runs on ordinary full-chart upgrades: for dashboard-only changes,
+  compare unchanged core image/schema/config first, then rehearse `helm upgrade --no-hooks` so
+  UI removal does not rerun core migrations. Do not skip hooks for a real core/schema upgrade.
+- DB NetworkPolicy never admits dashboard; BFF egress only DNS/core and opted-in Access JWKS,
+  ingress restricted to controller/opted-in tunnel peers. No NodePort, public route, hostPort,
+  privileged token/DB/core-auth mounts. Validate least-privilege resource contexts/probes/limits.
+- Helm lint/template, strict kubeconform/rendered-number checks pass disabled/private/Access,
+  default/reference values and existing Cloudflare enabled/disabled profiles. Invalid host overlaps,
+  missing enabled-only values/TLS/keys/upstream and downgrade configurations fail closed.
+- Build/scan existing app+backup and new dashboard images; required backup/restore retention
+  rehearsal still passes for chart changes. Check shared Docker storage first; clean only new
+  review images. Locked SBOM/security gates inventory bundled frontend/BFF independently.
+- Full Python/real pgvector/MCP/Inspector and new BFF/browser gates pass, maintaining at least
+  90% statements/85% branches without exclusions. Future authorized Minikube apply uses server-side
+  dry-run first. A real browser verifies private TLS/auth, all/Portal/provenance/relations/state/
+  history, concurrent cold ranked use (only existing API model), failed direct writes and dashboard
+  removal, while authorized existing MCP still reads/writes. Read safe API/BFF logs and restart
+  counts afterward. Readiness/rollout/in-Pod calls alone are not proof; report missing proof.
+
+Sync README/CHANGELOG, SECURITY/threat model, minikube/Cloudflare/client-setup/monitoring/embedding
+runbooks, RELEASING and new dashboard runbook. Add independent review/finding status under
+`docs/reviews/`. Existing MCP docs/flush skill change only if their public contracts actually
+change; none are planned. Keep one chart as deployment definition.
+
+Rollback: disable dashboard and remove its resources only, or roll back only its image. Do not
+roll back core/worker/database to remove UI. If actual public routing was explicitly provisioned,
+operator removes that dashboard-only route separately. No destructive migration/data rewrite.
+
+## Verification and decisions
+
+Run narrow tests then applicable full gates from AGENTS.md: uv lock, Ruff format/lint, Pyright,
+unit/property/contract and real disposable pgvector integration/e2e/coverage, Helm/kubeconform/
+rendered-number, supply-chain and Inspector. Container/chart work adds existing two-image and
+dashboard-image builds and backup/restore retention. Tests never download models/read local `.env`;
+use explicit settings/synthetic knowledge/fake embeddings. Property tests cover deterministic
+grouping/keysets; integration covers core read route confinement/SQL/pool reuse; browser tests
+cover actual security and user flows. No new persistent DB, LLM or coordination service.
+
+This revision runs **documentation validation only**: local links, Markdown fences/JSON examples,
+whitespace/diff, proposal consistency and review-finding traceability. No implementation, browser,
+performance, Helm render, image or deployment gate is claimed as executed for this design.
+
+Re-review/ADR acceptance is required before PR1. Before enabling, operator supplies private
+hostname/TLS, dashboard-only login/pepper/session keys, exact-read core inspection identity and
+compatible API version, and accepts live traversal, all-sensitivity access and coarse session
+revocation. Access/public DNS/tunnel changes require separate approval. Current authorization is
+only to update/commit/push design documents and post the PR follow-up; no deploy, implementation
+or merge. All review findings are tracked in [review-response.md](review-response.md).

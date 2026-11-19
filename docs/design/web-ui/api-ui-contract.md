@@ -5,20 +5,25 @@ the [assessment](assessment.md), and [security design](deployment-security.md).
 All paths/settings/models here are proposals unless explicitly called existing. Public MCP and
 existing `/api/v1` contracts remain compatible. Shared additions go in `domain/responses.py`;
 transport-independent inputs/filters belong in domain modules, not React or route handlers.
+The browser API runs in a separate dashboard Python BFF Deployment/ClusterIP Service; the core
+does not serve SPA assets, sessions or browser routes.
 
 ## HTTP conventions
 
 Base: `https://DASHBOARD_HOST/dashboard/api/v1`. JSON bodies use snake_case, timestamps are
 RFC 3339 UTC, IDs are UUID strings, enums retain their stored values. Reject unknown input fields.
-Every data route requires an authenticated, exactly read-only dashboard principal and charges the
-shared read budget. Login is separately rate limited before authentication. No browser credential
+Every data route requires an authenticated, exactly read-only dashboard principal and charges a
+local per-browser-principal read budget. Core separately charges the BFF's exact-read service
+principal against its shared guard; do not describe this aggregate budget as browser-user attribution.
+Login is separately rate limited before authentication. No browser credential
 authenticates ordinary `/api/v1` or MCP. All responses containing knowledge use `Cache-Control:
 no-store`, `Vary: Cookie`, and `untrusted_data: true`; no cross-origin read permissions.
 
 Errors use existing RFC 9457-style `ProblemDetail` and `KnowledgeVaultError` subclasses: 401
 missing/expired identity, 403 forbidden origin/authority, 404 absent retained resource, 405
 disallowed method, 413 body too large, 422 invalid inputs/cursor, 429 with `Retry-After`, 503
-unavailable database. Never interpolate submitted content, search text or credential into errors.
+unavailable core/database, 502 invalid/upstream failure and 504 upstream timeout. Never interpolate
+submitted content, search text, upstream exception details or credentials into errors.
 API 401 is JSON, not an HTML login redirect; top-level navigation may redirect to login/Access.
 SPA fallback is restricted to known page routes and never handles `/api/`, static misses or auth.
 
@@ -34,10 +39,56 @@ No endpoint accepts table names, SQL fragments, arbitrary sort columns, caller-s
 browser adapter. GET is used for small identifiers; POST queries avoid placing private text and
 filters in access-log URLs. POST here does not authorize a mutation.
 
+There are two interfaces with one shared data contract:
+
+- Browser → BFF: `https://DASHBOARD_HOST/dashboard/api/v1` (table below).
+- BFF → existing core ClusterIP Service: `/api/v1/read` plus **the same listed data path and
+  method**, e.g. browser `POST /dashboard/api/v1/catalog/query` maps only to core
+  `POST /api/v1/read/catalog/query`. Session operations exist only in the BFF and never map upstream.
+
+Core-only `GET /api/v1/read/capabilities` returns `{protocol_version:"1", operations:[fixed names],
+max_page_size, untrusted_data:true}` under the same service authentication. The BFF uses it for
+dependency/compatibility readiness, not a browser-selected proxy target. Unknown/incompatible
+protocol or missing operations means dashboard data is unavailable; core remains operational.
+Within protocol 1, additions are compatible; removing/renaming required fields/operations requires
+a new protocol and explicit overlapping core compatibility before upgrading BFF.
+
+The core read interface is a proposed additive, authenticated HTTP adapter over existing/shared
+services, available to designated exact-read inspection clients even without a dashboard. It
+does not require a dashboard flag, browser dependencies or extra model. It enforces a fixed read
+operation allowlist, exact `{knowledge:read}` authority, forced maintenance purpose and read-only
+DB transactions. Existing `/api/v1` and MCP behaviors remain unchanged for ordinary clients.
+
+Configure designated inspection principal IDs independently of `dashboard.enabled`; only exact-read
+bearer records for those IDs can use this interface. Core rejects those principals on every other
+HTTP/MCP route, including ordinary reads that can record usage. Apply this check before normal
+HTTP/MCP scope handling. Overlapping rotating records for an ID must all be exact-read. Access
+identities and admin/write bearer records are not accepted by this service-only interface.
+This is a route-bound use of existing scopes, not a new persisted scope or data model.
+
+The BFF holds only its dedicated service bearer. It sends that bearer in a server-generated
+Authorization header, with a fixed core Host, and never forwards browser cookies, Access JWTs,
+Authorization, Origin, arbitrary headers or caller IDs. Core base URL and Host are operator
+configuration, not browser input. Use the existing private core Host policy; internal HTTP stays
+inside ClusterIP networking, HTTPS is required if this hop ever leaves the cluster. Do not use
+the public Access hostname or disable core Host checks to make the BFF connection work.
+
+Map each operation explicitly, validate bounded inputs/outputs on both sides, URL-encode UUIDs
+and allowlisted path segments, disable upstream redirects, and never forward Set-Cookie/Location
+or arbitrary upstream headers. Set a 2-second connect timeout, a bounded 60-second request budget
+(including cold ranked search), bounded concurrency (initially 4) and a 2 MB JSON response cap.
+Abort stale requests where possible; no unbounded retries/fan-out. Initial policy is no automatic
+retry: propagate safe error/Retry-After and let the user retry. Core unavailability gives 503/504,
+never direct DB fallback. These initial budgets require measurement before acceptance.
+Page limits are upper bounds: core must return a smaller nonempty page with a valid continuation
+when required to stay within the byte cap, especially for full temporal evidence payloads. Test
+maximum-sized retained records; an oversized single item yields an explicit bounded error rather
+than silent omission/truncation. Do not conflate an empty page with a transport-size failure.
+
 | Method/path | Input | Response / reuse |
 |---|---|---|
 | `GET /session` | None | `{principal_id, auth_mode, expires_at, csrf_token, capabilities}`; capabilities enumerate fixed read operations, not privileged token/scopes; no knowledge |
-| `POST /session/login` | `{credential}` plus same-origin login defenses | Private mode only: exact-read token verification, Set-Cookie; returns session metadata; never echoes token |
+| `POST /session/login` | `{credential}` plus same-origin login defenses | Private mode only: dashboard-local exact-read token verification, Set-Cookie; credential is never sent to core or echoed |
 | `POST /session/logout` | CSRF header, no body | Private mode: 204 and expired cookie; Access mode: 204 with provider-logout guidance supplied by session metadata, not an invented local revocation claim |
 | `POST /assertions/query` | `BrowseRequest` | New `AssertionPageResponse`; exhaustive enumeration or exhaustive strict lexical match mode |
 | `POST /search` | `{query, filters, limit, cursor}` | Existing search service with forced maintenance purpose; map to bounded `RankedAssertionPageResponse`, retain score and degradation; explicitly limited ranked candidate universe |
@@ -117,6 +168,12 @@ new cursor is signed and versioned, binds operation, normalized filters, alias m
 query mode/text hash, page size, principal, host audience and final immutable ID. Expire after
 30 minutes. Reject tampering, other-query reuse, alias changes, unknown versions and expiry;
 prompt a refresh. Never put assertion content in a cursor.
+
+Core signs and validates data cursors using the designated service principal and core audience;
+the BFF treats them as opaque and never needs the core signing key/pepper. Browser sessions must
+be reauthorized before forwarding each page request. The single-user design deliberately shares
+one core read view between sessions; this is not a per-session data permission boundary. Ranked
+cursors reuse core ranking semantics; reset on core rollout and keep page size fixed.
 
 This is a **live** scan: a fixed dataset is visited exactly once to exhaustion; page queries use
 statement snapshots, not a transaction spanning HTTP requests. Concurrent additions with smaller
@@ -252,7 +309,9 @@ web/
     shared/              # StatusBadges, EvidenceBadges, EmptyState, ErrorState, LoadingState
     styles/
   tests/                 # component/behavior tests and Playwright flows
-src/knowledge_vault/api/dashboard/     # proposed host/auth/query adapters
+dashboard/                            # separate Python package, lockfile, tests and Dockerfile
+  src/knowledge_vault_dashboard/       # FastAPI BFF, host/auth/session and fixed HTTP client
+src/knowledge_vault/api/read.py        # proposed core inspection adapter, no browser routes
 src/knowledge_vault/services/browse.py # proposed shared bounded queries/catalog projections
 ```
 
@@ -268,6 +327,10 @@ Keep auth/query data only in memory, clear it on logout/401, abort stale request
 and never persist a service worker, offline cache, telemetry payload or vault snapshot. Minimal
 React state/hooks and fetch suffice; add a query-state library only for a demonstrated need.
 Generate TypeScript shapes from reviewed dashboard OpenAPI during build/CI, not at runtime.
+Core read and BFF data schemas must agree; compatibility tests detect drift. Package the BFF with
+only its minimal Python HTTP/auth/runtime dependencies, reusing the existing conventions and
+reviewed pure auth helpers; never import/build the core Container or model/DB dependencies to
+serve the dashboard. Node and browser dependencies stay in the dashboard build, not core builds.
 
 ## Epistemic presentation acceptance
 

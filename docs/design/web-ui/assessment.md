@@ -4,6 +4,9 @@ Design assessment, 2026-11-19, baseline `39b6af7c27950a7e57159b59cc7157ff8728f24
 Facts below are verified from this checkout, not proof of live deployment behavior. The
 [ADR](../../decisions/0009-optional-read-only-dashboard.md) is **proposed**. This package implements
 no application, endpoint, Helm setting or authentication change.
+The revision responds to [PR #126's review](https://github.com/kimonus/knowledge-vault-mcp/pull/126#issuecomment-7003860752)
+of `59c789b`. Verified facts below retain the original baseline; the separate dashboard runtime
+and core read interface described afterward are proposals, not existing capabilities.
 
 ## Verified repository capabilities
 
@@ -23,6 +26,7 @@ no application, endpoint, Helm setting or authentication change.
 | Persistence/history | [tables.py](../../../src/knowledge_vault/persistence/tables.py), [data model](../../data-model.md) | PostgreSQL source of truth, immutable temporal evidence/retirements, explicit supersedes pointer, mutable assertion metadata/revision. Revision is not an event log or recoverable snapshot of every prior edit. Hard deletion removes knowledge/evidence; UI cannot show forgotten content. |
 | Packaging | [pyproject.toml](../../../pyproject.toml), [Dockerfile](../../../Dockerfile) | Python/uv project, one application image for API/worker; no tracked frontend package manifest or JavaScript lockfile. The API's first semantic search can load a model, with memory implications. |
 | Helm | [values.yaml](../../../charts/knowledge-vault/values.yaml), [templates](../../../charts/knowledge-vault/templates) | Single chart; API/worker/migration, optional internal PostgreSQL, backups, Access and tunnel. ClusterIP origin; ingress/tunnel disabled by default. Ingress defaults expose `/mcp`, `/api/v1`, `/.well-known`, not `/`. No dashboard value exists. `extraObjects` is the environment-specific extension seam. |
+| Upgrade hooks | [job-migration.yaml](../../../charts/knowledge-vault/templates/job-migration.yaml) | Migration Job is an unconditional `post-install,post-upgrade` hook. A normal full-chart upgrade re-runs it even if only UI values change. Dashboard-only changes need the documented render-verified `--no-hooks` procedure on an already compatible core release. |
 | Isolation | [networkpolicy.yaml](../../../charts/knowledge-vault/templates/networkpolicy.yaml), [API Deployment](../../../charts/knowledge-vault/templates/deployment-api.yaml) | NetworkPolicies, non-root/read-only rootfs, dropped capabilities and resource limits exist. Default API ingress peers include any namespace; this is not a browser authorization boundary. Shared origin DB access does not imply browser DB access. |
 | Checks | [ci.yml](../../../.github/workflows/ci.yml), [AGENTS.md](../../../AGENTS.md) | Ruff, Pyright, real PostgreSQL tests, coverage, supply-chain, Kubernetes and Inspector gates. No frontend gate exists yet. Maintain 90% statements/85% branches. |
 
@@ -54,11 +58,32 @@ OpenAPI. These do not become dashboard routes. No additional MCP tool is necessa
    endpoints cannot enumerate all of these. No recursive graph service is necessary.
 4. Raw evidence pagination by exact identity independent of the resolver's 1,000-item bound, so
    history remains inspectable when state cannot be resolved. Existing resolver remains authoritative.
-5. Browser session boundary, server-controlled non-recording reads and bounded dashboard DTOs.
+5. A service-authenticated core read HTTP interface with route-bound exact-read inspection
+   principals, non-recording reads and bounded shared DTOs; independently useful without a UI.
+6. A separate Python dashboard BFF/image/Deployment/Service, local browser session boundary and
+   fixed client for that core interface; no DB credentials, model or core privileged auth material.
 
 Existing context detail, alias rules, artifact text paging and temporal resolution can be adapted
 without new business semantics. Do not add a summary writer, topic editor, public sharing, bulk
 export, arbitrary SQL endpoint, global graph traversal, live policy API or metadata editing.
+
+## Revised component boundary (proposal)
+
+PR #126 rejected core-process route registration as insufficient optionality. The chosen
+dashboard is an independently versioned static-SPA/Python-BFF image with its own conditional
+Deployment, ClusterIP Service, ServiceAccount, ConfigMap and NetworkPolicies. An opt-in private
+TLS Ingress targets that Service. All its resources disappear on disable; core resource renders
+and Pod-template checksums are invariant across dashboard values. External Secrets/core service
+records remain operator-owned. Core builds/runtimes do not require the frontend/BFF.
+
+The proposed core `/api/v1/read` interface reuses existing services and API embedder. It accepts
+only designated exact-read inspection bearers and confines them to non-recording read operations.
+The BFF uses one issued read bearer, separate browser credential/pepper/session Secrets, and a
+fixed HTTP operation mapping. It has neither an unrestricted nor a SELECT-only DB role: no DB
+connection is supplied. This chooses the review's least-privilege-interface alternative; the
+rejected direct-DB alternative would require database-enforced SELECT-only privileges. New
+inspection API/route restrictions are not verified repository facts. See the
+[review disposition](review-response.md) for every finding and its documentation resolution.
 
 ## Compose assessment and assumptions
 

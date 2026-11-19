@@ -10,10 +10,14 @@ Read in order:
 3. [API/UI contract](api-ui-contract.md): bounded operations, routes/components, deterministic grouping.
 4. [Deployment and security](deployment-security.md): browser login, Helm, risks and open decisions.
 5. [Four-PR implementation plan](implementation-plan.md): dependencies, acceptance and verification.
+6. [PR #126 review disposition](review-response.md): each finding, resolution and remaining gates.
 
-Recommended sequence: read contracts/services → browser auth/isolation → Explorer/Portal →
-packaging/Helm and authorized operational verification. Every stage keeps the dashboard disabled
-by default. No Compose profile is assumed: none is tracked in this assessed checkout.
+Recommended sequence: core read contracts/services/interface → independent Python BFF/browser
+auth → Explorer/Portal and separate image → conditional Helm resources/operational verification.
+The Dashboard Deployment and ClusterIP Service exist only when `dashboard.enabled=true`; false
+renders zero dashboard resources. Core builds/runtime do not need dashboard assets/dependencies.
+BFF has no DB credentials or embedding model. Ingress remains a separate private-by-default
+opt-in. No Compose profile is assumed: none is tracked in this assessed checkout.
 
-The ADR is proposed, not accepted. Operator configuration/approval is required before enabling
-or exposing a future dashboard, not to read or review this design.
+The ADR remains Proposed and must be re-reviewed before PR1. Operator configuration/approval is
+required before enabling or exposing a future dashboard, not to read or review this design.
