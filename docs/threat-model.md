@@ -67,3 +67,24 @@ expiry and assertion-deletion cascades, not prior private values. Usage records 
 not query text or a permanent click stream; counters cannot establish truth, raise confidence or
 drive deletion. Read-only retrieval tools may maintain incidental operational aggregates. They
 cannot change claim meaning, evidence or verification. Explicit actual-use reports require write.
+
+## Dashboard browser boundary (PR2)
+
+The isolated, disabled-by-default [Dashboard BFF](runbooks/dashboard.md) holds only an issued
+inspection bearer and dashboard-local browser auth material. It has no database credentials,
+core pepper/records, model runtime or writer authority. The core rejects its designated exact-read
+principal outside the fixed inspection API; browser credentials/cookies cannot authenticate core.
+Fixed operation mapping, UUID parsing, schema/size validation, no redirects/retries, bounded
+concurrency and fixed upstream Host prevent arbitrary proxy/SSRF and authority forwarding.
+
+Cookie tampering/expiry, wrong audience and revoked credential records fail closed. Key rotation
+or record removal requires BFF-only rollout; local logout cannot revoke a copied cookie.
+Exact Host/Origin, Fetch Metadata, JSON/custom-header requirements and logout CSRF protect the
+browser boundary. CSP/no-store/nosniff/no-referrer reduce stored-content and cache risks, but actual
+inert UI rendering/browser enforcement remains PR3 work. Optional Access validates each RS256
+assertion and has no private fallback. BFF compromise exposes all retained sensitivity classes
+through read authority; it does not imply selective secrecy or protect browser-visible data from
+a compromised browser. Rate budgets are bounded process-local memory and reset on restart.
+
+No dashboard Helm resource, ingress, public route, credential provisioning or deployment is
+included in PR2. Deployment/NetworkPolicy and actual browser verification remain PR4 gates.

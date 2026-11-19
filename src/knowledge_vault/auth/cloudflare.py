@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -9,7 +10,7 @@ import httpx
 import jwt
 from jwt.exceptions import PyJWTError
 
-from knowledge_vault.auth.tokens import Principal, Scope
+from .tokens import Principal, Scope
 
 
 class CloudflareAccessError(Exception):
@@ -136,14 +137,23 @@ class CloudflareJWKSClient:
 
     async def _refresh(self) -> None:
         try:
-            async with httpx.AsyncClient(
-                timeout=self._timeout,
-                follow_redirects=False,
-                transport=self._transport,
-            ) as client:
-                response = await client.get(self._url)
+            async with (
+                httpx.AsyncClient(
+                    timeout=self._timeout,
+                    follow_redirects=False,
+                    transport=self._transport,
+                    trust_env=False,
+                ) as client,
+                asyncio.timeout(self._timeout),
+                client.stream("GET", self._url) as response,
+            ):
                 response.raise_for_status()
-                payload = response.json()
+                data = bytearray()
+                async for chunk in response.aiter_bytes(chunk_size=65536):
+                    data.extend(chunk)
+                    if len(data) > 128_000:
+                        raise ValueError("JWKS response exceeds its byte budget")
+                payload = json.loads(data)
             if not isinstance(payload, dict):
                 raise ValueError("JWKS body is not an object")
             key_set = jwt.PyJWKSet.from_dict(payload)
@@ -154,7 +164,7 @@ class CloudflareJWKSClient:
             }
             if not keys:
                 raise ValueError("JWKS contains no signing keys")
-        except (httpx.HTTPError, PyJWTError, ValueError, TypeError, KeyError) as exc:
+        except (httpx.HTTPError, PyJWTError, ValueError, TypeError, KeyError, TimeoutError) as exc:
             raise CloudflareAccessError("Cloudflare Access signing keys are unavailable") from exc
         self._keys = keys
         self._expires_at = time.monotonic() + self._lifespan

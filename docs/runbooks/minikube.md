@@ -237,3 +237,9 @@ Run the migration checks before upgrading. Never delete the PostgreSQL PVC, PV, 
 underlying storage until an encrypted off-host backup has been restored successfully into a
 disposable PostgreSQL instance. Follow [backup-restore.md](backup-restore.md) before claiming a
 deployment is production-ready.
+
+## Dashboard staging
+
+The [PR2 Dashboard BFF](dashboard.md) is a separate disabled-by-default package. It has no Helm
+resources in this stage. Do not add it to core Pods or mount DB/core auth/model Secrets into it.
+Conditional deployment and TLS/browser proof belong to ADR 0009 PR4; no live change is implied.

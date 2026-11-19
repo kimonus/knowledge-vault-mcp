@@ -10,6 +10,14 @@ stable release.
 
 ### Security
 
+- Add an isolated, disabled-by-default Dashboard BFF with exact-read inspection adapter,
+  separate browser HMAC credentials, absolute 30-minute signed sessions, per-request revocation,
+  optional origin-validated Access identity, Host/Origin/CSRF/CSP controls and bounded HTTP.
+  No live credentials, cloud changes, UI assets, image or Helm resources. No upgrade action is
+  required for existing core clients. See `docs/runbooks/dashboard.md` before future enablement.
+- Bound shared Access JWKS downloads to 128 KB and an absolute timeout; disable environment
+  proxy inheritance. Core and dashboard use the same pure auth source, bundled independently.
+
 - Rebuild the backup helper with digest-pinned Go 1.26.11 to remove CVE-2026-97054 from the restic
   binary. The existing supply-chain gate detected the older toolchain while validating inspection
   PR1. No live image or deployment is changed by this source update.

@@ -155,3 +155,10 @@ ingress because that bypasses the Access boundary.
 - [Cloudflare Access JWT validation](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)
 - [Cloudflare Tunnel on Kubernetes](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/deployment-guides/kubernetes/)
 - [Cloudflare Google identity provider](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/google/)
+
+## Dashboard Access boundary
+
+The optional [Dashboard BFF](dashboard.md) has its own Access verifier settings and exact-read
+projection, with no private-login fallback. Existing MCP Managed OAuth does not configure a
+browser application for the dashboard hostname. PR2 changes no Access application, DNS, tunnel,
+public ingress or deployment; public dashboard routing requires separate operator authorization.

@@ -31,8 +31,10 @@ configuration.
 
 The [accepted optional Web UI design](docs/design/web-ui/README.md) specifies a Knowledge Explorer
 and deterministic thematic Portal. Its [core inspection API](docs/http-inspection.md) supplies
-non-recording, exhaustive reads for dedicated service credentials. No dashboard or public route
-is implemented or enabled by this core API.
+non-recording, exhaustive reads for dedicated service credentials. The separate
+[Dashboard BFF](docs/runbooks/dashboard.md) implements the browser authentication/security boundary
+and fixed read adapter. It is disabled by default; Explorer/Portal assets, dashboard image and
+Helm resources remain later stages. No public route is enabled.
 
 ## Quick start
 

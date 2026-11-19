@@ -81,6 +81,11 @@ class TokenAuthenticator:
             return None
         return Principal(match.principal_id, match.scopes)
 
+    @property
+    def records(self) -> tuple[TokenRecord, ...]:
+        """Immutable records for explicit configuration validation by isolated adapters."""
+        return self._records
+
     def validate_inspection_principals(self, principals: frozenset[str]) -> None:
         for principal in principals:
             records = [record for record in self._records if record.principal_id == principal]

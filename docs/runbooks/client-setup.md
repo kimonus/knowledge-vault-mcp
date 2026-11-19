@@ -205,3 +205,10 @@ After upgrading, reconnect MCP clients and update the installed flush skill so t
 maintenance tools and fields. Use purpose=maintenance for audits, reconciliation and readback.
 Existing compatibility search/fetch remain usable but default to normal access accounting.
 See [maintenance examples](../knowledge-maintenance.md) for evidence, context, repair and actual use.
+
+## Dashboard browser credentials
+
+The [Dashboard BFF](dashboard.md) uses separate browser credential records/pepper and session
+cookies. These never authenticate core HTTP/MCP, and the core inspection service bearer must
+never be pasted into browser login. PR2 supplies the disabled BFF boundary only; browser UI and
+deployment follow in PR3/PR4. Existing MCP client configuration is unchanged.
