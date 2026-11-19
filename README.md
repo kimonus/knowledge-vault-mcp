@@ -29,6 +29,10 @@ identity provider, or managed MCP transport. Any alternative must preserve origi
 authentication, scoped authorization, TLS, private bearer-token boundaries, and fail-closed
 configuration.
 
+The [optional read-only Web UI design](docs/design/web-ui/README.md) proposes a Knowledge Explorer
+and deterministic thematic Portal. It is a design proposal only; no dashboard is implemented or
+enabled by these documents.
+
 ## Quick start
 
 Prerequisites: Python 3.12+, [uv](https://docs.astral.sh/uv/), Docker, and a Docker daemon.
