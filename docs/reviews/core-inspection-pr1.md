@@ -46,7 +46,7 @@ security certification. Exact gate results and coverage are reported in the impl
   dependencies had no known audit vulnerabilities; the local project itself is not a PyPI package.
 - Helm lint/render for reference defaults and Cloudflare-enabled safe test values passed;
   strict kubeconform validated 28 resources across both renders, and rendered-number checks passed.
-  No templates/images/migrations changed; no live server-side apply or deployment was attempted.
+  No templates/migrations changed; no live server-side apply or deployment was attempted.
 - Documentation links/fences/JSON and diff whitespace passed; no frontend/dashboard/chart files
   were added. CI still supplies its independent image/backup, secret and Inspector gates.
 
@@ -63,3 +63,13 @@ of per-group correlated scans; ordinary core transactions retain their planner s
 credential-record validation runs at HTTP app construction, preserving workers that receive the
 shared principal-list setting without mounting API bearer records. Both corrections are covered
 by the final suite; no core/worker deployment configuration was changed.
+
+## CI-discovered backup toolchain remediation
+
+PR1's initial quality, Inspector and Kubernetes gates passed. The supply-chain gate reported
+CVE-2026-97054 in the **unchanged** backup image's Go 1.26.10 standard library. The
+[Go advisory](https://pkg.go.dev/vuln/GO-2026-6859) identifies Go 1.26.11 as fixed on this release
+line. A separate commit updates only the backup builder version/digest and its documentation;
+the OCI index digest was fetched from the official Docker registry and checked against its bytes.
+No vulnerability exclusion or gate weakening is introduced. Local image/backup validation and
+the rerun CI gates are recorded in the PR after completion; no deployment is authorized.

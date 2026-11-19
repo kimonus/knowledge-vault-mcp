@@ -8,6 +8,12 @@ stable release.
 
 ## [Unreleased]
 
+### Security
+
+- Rebuild the backup helper with digest-pinned Go 1.26.11 to remove CVE-2026-97054 from the restic
+  binary. The existing supply-chain gate detected the older toolchain while validating inspection
+  PR1. No live image or deployment is changed by this source update.
+
 ### Added
 
 - Core protocol-1 inspection API at `/api/v1/read`: exhaustive all-status/strict lexical browsing,
