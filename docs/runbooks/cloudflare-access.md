@@ -158,6 +158,12 @@ ingress because that bypasses the Access boundary.
 
 ## Dashboard Access boundary
 
+The PR3 frontend sends `X-Requested-With: XMLHttpRequest` and same-origin cookies for API
+requests, refuses redirects and handles non-JSON edge denials without rendering returned HTML.
+Its local tests simulate the edge with real RS256 assertions; they do not change or verify a live
+Access application. PR4 still must verify provider-session expiry and top-level reauthentication
+through the authorized dashboard hostname. See the [Dashboard runbook](dashboard.md).
+
 The optional [Dashboard BFF](dashboard.md) has its own Access verifier settings and exact-read
 projection, with no private-login fallback. Existing MCP Managed OAuth does not configure a
 browser application for the dashboard hostname. PR2 changes no Access application, DNS, tunnel,

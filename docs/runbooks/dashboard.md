@@ -1,9 +1,9 @@
-# Dashboard BFF (PR2)
+# Optional Knowledge Dashboard
 
 The separate `dashboard/` Python package implements ADR 0009's browser security boundary.
-It is disabled by default. PR2 supplies no Explorer/Portal, public assets, dashboard image,
-Helm workload or ingress. Do not deploy or provision credentials from this runbook yet:
-PR3 supplies the reviewed UI/image and PR4 supplies conditional deployment resources and
+It is disabled by default. PR3 adds the React/TypeScript Explorer and Portal and a separate
+dashboard image. There is no Helm workload or ingress. Do not deploy or provision credentials
+from this runbook yet: PR4 supplies conditional deployment resources and
 operator verification. Existing core HTTP/MCP clients and readiness do not depend on this process.
 
 ## Runtime and authority
@@ -36,7 +36,8 @@ than queue. Its two-second absolute deadline includes waiting for one of the fou
 slots. Thus probes can occupy at most one slot, and a burst cannot multiply authenticated core
 checks or drain browser admission. Cancellation does not cache a false success. Liveness does
 no dependency work. Future ingress must keep probe paths internal.
-No API/docs/static/SPA catch-all, CORS, redirect or generic proxy exists.
+Only explicitly named dashboard document routes and built `.js`/`.css` files are served.
+There is no API/docs/static/SPA catch-all, CORS, redirect or generic proxy.
 
 Input/output schemas are generated from PR1 with `scripts/export_dashboard_contract.py`;
 CI checks drift. Private input text stays in JSON bodies. Query parameters are accepted only for
@@ -96,7 +97,7 @@ All POSTs require JSON, exact Origin and the custom header; logout additionally 
 `X-CSRF-Token` and `{}`. Access CSRF is bound to the verified assertion and its expiry.
 BFF-originated API errors are JSON and do not redirect to a login page. Access can reject an
 expired provider session at the edge before the BFF sees the request; the edge response is not
-the BFF ProblemDetail contract. PR3's same-origin fetch client must send
+the BFF ProblemDetail contract. The same-origin fetch client sends
 `credentials: "same-origin"` and `X-Requested-With: XMLHttpRequest` in addition to the BFF's
 required headers. Cloudflare documents that AJAX header for expired-session 401 behavior.
 The client must also handle non-JSON 401/403, an edge login redirect or fetch/network failure as
@@ -108,7 +109,7 @@ its response format and reauthentication flow; origin tests cannot prove that be
 Knowledge is returned only as JSON untrusted data;
 CSP disallows inline/eval/remote scripts, objects, framing and remote connections. Responses
 include no-store, nosniff, no-referrer, restrictive Permissions-Policy and HSTS.
-Actual inert rendering and browser CSP enforcement are PR3 acceptance gates.
+Component and Chromium/Firefox tests verify inert rendering and actual browser CSP enforcement.
 
 Remove a browser record or rotate the signing key and roll out **only BFF** to revoke sessions.
 Unchanged settings preserve sessions across restart. Overlapping records preserve sessions of
@@ -159,4 +160,82 @@ test uses real disposable pgvector and the actual core ASGI stack; it verifies i
 no accounting changes, service/browser separation and existing writer functionality.
 No test loads embedding weights or reads local `.env`. All-sensitivity access, live pagination,
 coarse revocation, and a single process remain accepted limits. Independent security review,
-PR3 actual browser rendering and PR4 deployment/client proof remain required before enabling.
+PR4 deployment/client proof remains required before enabling. See the
+[PR3 verification record](../reviews/web-ui-pr3.md) for coverage and remaining review requirements.
+
+## Explorer and Portal
+
+The Explorer defaults to **All retained**, including every status. Exact text browsing also
+uses exhaustive keyset pages; ranked search is explicitly a bounded candidate set. Filters cover
+topics, context IDs, kinds, status, sensitivity, evidence, workflow, origins, temporal role,
+confidence and available dates. Unclassified topic/context/facet filters apply to exhaustive
+browsing, not ranked search. Reset and applying new filters reset the cursor. Previous pages
+retain at most 100 cursor boundaries in session memory. A live scan is not a snapshot: concurrent
+changes can affect membership and order. Always follow the returned continuation even when a
+byte-limited page contains fewer rows than requested.
+
+Details display complete assertion text, stored metadata, source provenance, paged sources,
+artifact references/text chunks, relationships in both directions and temporal identities.
+An absent timestamp or unavailable usage is shown explicitly; the UI never invents a modified
+time. Source links accept only HTTP(S), open separately with no referrer/opener and never fetch
+previews. Markdown, HTML, source locators and artifacts are plain inert text. Sensitivity is
+visible but is not a redaction boundary: this is a single-user, all-sensitivity reader.
+
+Portal navigation comes from stored topic/context/facet catalogs, counts and aliases. Topic
+and context pages link directly to Explorer records. Facts, decisions, proposals, considered and
+rejected options remain distinct; status and historical role remain explicit independent filters.
+Ingestion confirmation is not epistemic verification. No LLM, summaries or inferred links exist.
+Temporal views use exact identity, applicable `as_of` and receipt `known_at` cutoffs. Unknown,
+ambiguous and conflicting outcomes remain unresolved. Resolver overflow offers independently
+paged immutable raw evidence, including more than 1,000 entries, without selecting a partial winner.
+
+Filter/cursor/facet state exists only in the authenticated React tree. Logout or auth expiry
+unmounts it and aborts outstanding requests. There is no local/session storage, service worker,
+source map or embedded knowledge corpus in production assets. URLs contain only record/context
+IDs and encoded topic resource names, never search text, credential or temporal values. Topics
+are UTF-8 base64url path segments, an encoding rather than encryption; history still reveals
+which topic was visited. A reload starts a new filter view.
+
+## Frontend development and packaging
+
+Use Node 24.15.0 and locked dependencies. From `web/`, run:
+
+```bash
+npm ci
+npm run check:contract
+npm run typecheck
+npm run lint
+npm run format:check
+npm test
+npm run build
+npx playwright install --with-deps --no-shell chromium firefox
+npm run test:browser
+```
+
+Install both Python projects with `uv sync --locked` and `uv sync --locked --project dashboard`
+first. Browser tests bind only loopback HTTPS with ephemeral certificates; they require Docker
+for a disposable digest-pinned pgvector database. One suite uses actual BFF/schema validation
+and a large synthetic upstream; another runs the actual core inspection services and database.
+The Access edge is simulated with real local RS256 signatures. It is not proof of live provider
+session expiry. No test reads operator credentials, `.env`, live data or model weights.
+
+`npm run generate` regenerates TypeScript from the BFF contract exported by the core. `build`
+copies only compiled index/JS/CSS into the ignored Python package `static/` directory. Build
+before building the Python wheel if browser assets are wanted in that wheel. API-only wheels
+remain valid and return 404 for absent browser assets. Vite's dev server is only a local asset
+tool; authenticated integration uses the HTTPS BFF. Never expose the Vite dev server publicly.
+
+Build the independent image from the repository root with a BuildKit-capable Docker client:
+
+```bash
+docker build -f dashboard/Dockerfile -t knowledge-vault-dashboard:review .
+sh scripts/ci/test_dashboard_image.sh knowledge-vault-dashboard:review
+```
+
+The Dockerfile-specific ignore file includes frontend sources only for that build. The core
+Docker context excludes both `web/` and `dashboard/`; its image has no frontend build dependency.
+The digest-pinned Node builder is discarded; the final non-root Python image holds the locked
+BFF wheel, compiled public assets and frontend SBOM. It has no Node, core package, PostgreSQL
+client, model or writer authority. It starts disabled without an explicit config. PR4 must add
+conditional Helm resources, resource/security/network boundaries, signed release artifacts and
+authorized browser proof through the chosen ingress/Access path. Nothing here enables them.

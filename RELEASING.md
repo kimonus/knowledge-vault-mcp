@@ -124,7 +124,9 @@ patch version for corrections.
 
 ## Staged dashboard package
 
-The [PR2 Dashboard BFF](docs/runbooks/dashboard.md) has an independent Python manifest/lock and
-wheel tests. It is disabled by default and is not part of core/API/worker images or release
-artifacts. PR3/PR4 will add its image and release/deployment integration; no dashboard image,
-credentials or workload should be published/enabled from the core release procedure yet.
+The [Dashboard](docs/runbooks/dashboard.md) has independent Python/frontend locks, wheel tests,
+browser tests and `dashboard/Dockerfile`. Its final image includes compiled assets and a frontend
+SBOM, with no Node or core runtime. CI builds/scans it separately. It is disabled by default and
+is not part of core/API/worker images or published release artifacts. PR4 must add signed image
+publication, release SBOM/audit integration and conditional deployment resources. Do not publish
+or enable it from the core release procedure yet.

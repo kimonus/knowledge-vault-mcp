@@ -13,6 +13,14 @@ reads run in transaction-read-only sessions and force non-recording retrieval; t
 existing writer credential for ordinary clients. A future dashboard receives only an issued read
 service token, never the core pepper/bootstrap Secret or DB credentials. The separate PR2
 [BFF runtime](docs/runbooks/dashboard.md) is disabled by default and has no deployment resources.
+
+The optional Explorer/Portal uses only same-origin BFF requests with browser credentials,
+CSRF/custom headers and Cloudflare's documented AJAX header. Non-JSON denials and redirects
+clear private views; returned edge HTML is never rendered. Stored text and artifacts are inert,
+links are HTTP(S)-only, and CSP prohibits inline/eval/remote scripts. Production assets contain
+no service bearer, knowledge fixtures, source maps, browser storage or external asset dependencies.
+Chromium/Firefox tests cover XSS, actual CSP, private/Access flows and accessibility. Real
+Access-edge expiration and deployment isolation still require PR4 operator verification.
 Its browser-only credentials and HS256 cookies are refused at core HTTP/MCP; its fixed adapter
 never forwards browser identity. Removing a browser record or rotating its session key revokes
 sessions after BFF-only rollout. Logout alone cannot revoke a copied cookie. Access mode verifies

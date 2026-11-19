@@ -74,8 +74,9 @@ def core_transport():
 
 
 @pytest.fixture
-async def client(settings, core_transport):
-    app = create_app(settings, transport=core_transport)
+async def client(settings, core_transport, tmp_path):
+    # API-only tests never depend on a developer's locally generated frontend build.
+    app = create_app(settings, transport=core_transport, static_directory=tmp_path)
     async with (
         app.router.lifespan_context(app),
         httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="https://" + HOST) as client,

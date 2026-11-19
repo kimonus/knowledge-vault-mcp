@@ -29,6 +29,14 @@ stable release.
 
 ### Added
 
+- Optional React/TypeScript Knowledge Explorer and deterministic Knowledge Portal, with all-status
+  exhaustive browsing, filters, complete paged provenance/artifacts/relationships, temporal
+  resolution and raw evidence. All stored content renders inertly through the same-origin BFF.
+  Add private/Access browser flows, accessible responsive navigation, locked frontend contracts,
+  component/browser security coverage and an independent non-root dashboard image. The image is
+  disabled by default; no existing core client upgrade action, deployment, live credential or
+  Helm resource change. PR4 must supply conditional deployment and release integration.
+
 - Core protocol-1 inspection API at `/api/v1/read`: exhaustive all-status/strict lexical browsing,
   deterministic catalogs, paged provenance/artifact/relationship/temporal inspection and bounded
   ranked reads. Dedicated exact-read inspection principals are optional and unconfigured by

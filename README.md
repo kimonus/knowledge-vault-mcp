@@ -33,8 +33,10 @@ The [accepted optional Web UI design](docs/design/web-ui/README.md) specifies a 
 and deterministic thematic Portal. Its [core inspection API](docs/http-inspection.md) supplies
 non-recording, exhaustive reads for dedicated service credentials. The separate
 [Dashboard BFF](docs/runbooks/dashboard.md) implements the browser authentication/security boundary
-and fixed read adapter. It is disabled by default; Explorer/Portal assets, dashboard image and
-Helm resources remain later stages. No public route is enabled.
+and fixed read adapter. The React/TypeScript Explorer provides exhaustive browsing, complete
+evidence inspection and temporal views; the Portal groups actual topics and contexts without
+generated summaries. They ship in an independent dashboard image, disabled by default.
+Conditional Helm resources and release/deployment integration remain PR4. No public route is enabled.
 
 ## Quick start
 

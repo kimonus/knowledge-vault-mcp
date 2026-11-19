@@ -97,7 +97,7 @@ passed.
 
 ## Dashboard model isolation
 
-The [PR2 Dashboard BFF](dashboard.md) has no model loader, embedding dependencies or model mount.
+The [Dashboard image](dashboard.md), including Explorer/Portal, has no model loader, embedding dependencies or model mount.
 Ranked queries use the core inspection API and its existing embedder. Browse/catalogs require no
 model. The BFF has no database fallback or second Container, and its removal does not affect the
 API/worker model lifecycle.

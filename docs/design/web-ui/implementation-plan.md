@@ -2,6 +2,11 @@
 
 Status: accepted staged plan with implementation verification gates; revised for [PR #126](https://github.com/kimonus/knowledge-vault-mcp/pull/126).
 Four future implementation PRs; no application implementation, deployment or merge in this phase.
+
+Implementation tracking: PR1 and PR2 are merged. PR3 supplies Explorer/Portal and the independent
+image; its [verification record](../../reviews/web-ui-pr3.md) tracks review readiness. PR4 remains
+unimplemented. The phase/authorization descriptions below record the accepted design baseline;
+they do not authorize deployment or replace later explicit operator instructions.
 Read the [assessment](assessment.md), [ADR 0009](../../decisions/0009-optional-read-only-dashboard.md),
 [API/UI contract](api-ui-contract.md), [security design](deployment-security.md) and
 [review disposition](review-response.md). The maintainer accepted the revised ADR on 2026-11-19;
