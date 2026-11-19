@@ -117,3 +117,8 @@ readiness probes. Disabled/incompatible/unavailable-core readiness is 503/502/50
 disclose no credentials or payload. Core readiness never depends on the BFF. No new background
 duty or heartbeat exists. Use the shipped entrypoint to disable access/URL logs; do not enable
 request headers, bodies or query-string logging. PR4 supplies deployment monitoring resources.
+Uncached readiness dependency checks are limited separately to 60/minute; cache hits keep their
+known health result without consuming admission. Exhausted dependency admission returns 429. Dependency
+success/failure is cached for five seconds, and only one check can run with a two-second deadline.
+A concurrent check returns 503 promptly. These short bounded probes cannot occupy all browser
+upstream slots. Liveness remains dependency-free; restrict probe paths at future ingress.

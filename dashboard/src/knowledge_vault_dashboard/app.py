@@ -4,8 +4,6 @@ import asyncio
 import hashlib
 import hmac
 import re
-import time
-from collections import OrderedDict
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -21,6 +19,7 @@ from .auth.cloudflare import CloudflareAccessAuthenticator, CloudflareAccessErro
 from .auth.hosts import canonical_host
 from .auth.tokens import Scope as Authority
 from .config import Settings, valid_host
+from .limits import RateGuard
 from .sessions import COOKIE, LIFETIME, Identity, Sessions
 from .upstream import SCHEMAS, BoundaryError, CoreClient, parse_json
 
@@ -53,23 +52,6 @@ def problem(error: BoundaryError) -> JSONResponse:
         media_type="application/problem+json",
         headers=headers,
     )
-
-
-class RateGuard:
-    """Single-process bounded LRU; global budget prevents key-churn bypass."""
-
-    def __init__(self) -> None:
-        self.buckets: OrderedDict[str, tuple[int, int]] = OrderedDict()
-
-    def check(self, key: str, limit: int) -> None:
-        minute = int(time.monotonic() // 60)
-        epoch, count = self.buckets.pop(key, (minute, 0))
-        count = count + 1 if epoch == minute else 1
-        self.buckets[key] = (minute, count)
-        if len(self.buckets) > 1024:
-            self.buckets.popitem(last=False)
-        if count > limit:
-            raise BoundaryError(429, "rate_limited", "60")
 
 
 class BrowserBoundary:

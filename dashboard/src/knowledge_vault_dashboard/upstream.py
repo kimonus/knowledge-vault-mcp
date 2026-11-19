@@ -3,6 +3,7 @@
 import asyncio
 import json
 import re
+import time
 from importlib.resources import files
 from typing import Any
 from uuid import UUID
@@ -11,10 +12,14 @@ import httpx
 from jsonschema import Draft202012Validator, FormatChecker
 
 from .config import Settings
+from .errors import BoundaryError as BoundaryError
+from .limits import RateGuard
 
 CONTRACT = json.loads(files(__package__).joinpath("contract.json").read_text())
 SCHEMAS = CONTRACT["schemas"]
 MAX_RESPONSE = 2_000_000
+PROBE_CACHE_SECONDS = 5
+PROBE_TIMEOUT_SECONDS = 2
 
 
 def parse_json(raw: bytes | bytearray) -> Any:
@@ -30,14 +35,6 @@ def parse_json(raw: bytes | bytearray) -> Any:
         return result
 
     return json.loads(raw, parse_constant=reject_constant, object_pairs_hook=unique_object)
-
-
-class BoundaryError(Exception):
-    def __init__(self, status: int, code: str, retry_after: str | None = None) -> None:
-        super().__init__(code)
-        self.status = status
-        self.code = code
-        self.retry_after = retry_after
 
 
 def validate(value: Any, schema: dict[str, Any], *, upstream: bool = False) -> None:
@@ -67,6 +64,11 @@ class CoreClient:
             transport=transport,
         )
         self.slots = asyncio.Semaphore(4)
+        self._probe_inflight = False
+        self._probe_expires_at = 0.0
+        # Store only safe values, never an exception/traceback that can retain response data.
+        self._probe_failure: tuple[int, str, str | None] | None = None
+        self._probe_rates = RateGuard()
 
     async def close(self) -> None:
         await self.client.aclose()
@@ -126,11 +128,35 @@ class CoreClient:
         return result
 
     async def ready(self) -> None:
+        if time.monotonic() < self._probe_expires_at:
+            if self._probe_failure is not None:
+                raise BoundaryError(*self._probe_failure)
+            return
+        if self._probe_inflight:
+            raise BoundaryError(503, "readiness_busy")
+        # Charge dependency work, not cached health responses: a cheap HTTP burst must not
+        # turn a known healthy Pod unready merely by exhausting a response admission budget.
+        self._probe_rates.check("dependency", 60)
+        # No await separates this check/set. At most one probe can occupy a shared slot;
+        # other anonymous probes fail promptly rather than queue behind dependency work.
+        self._probe_inflight = True
         try:
-            async with asyncio.timeout(60), self.slots:
+            async with asyncio.timeout(PROBE_TIMEOUT_SECONDS), self.slots:
                 await self.capabilities()
         except TimeoutError:
+            self._probe_failure = (504, "core_timeout", None)
+            self._probe_expires_at = time.monotonic() + PROBE_CACHE_SECONDS
             raise BoundaryError(504, "core_timeout") from None
+        except BoundaryError as error:
+            self._probe_failure = (error.status, error.code, error.retry_after)
+            self._probe_expires_at = time.monotonic() + PROBE_CACHE_SECONDS
+            raise
+        else:
+            self._probe_failure = None
+            self._probe_expires_at = time.monotonic() + PROBE_CACHE_SECONDS
+        finally:
+            # Cancellation must release admission without caching an uncompleted success.
+            self._probe_inflight = False
 
     async def read(self, operation: str, path: str, body: Any, params: dict[str, str]) -> Any:
         if operation not in SCHEMAS or operation == "capabilities":

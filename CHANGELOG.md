@@ -10,6 +10,11 @@ stable release.
 
 ### Security
 
+- Address independent Dashboard PR2 review: bound anonymous readiness admission and dependency
+  work with a separate probe budget, cached results, single-check admission and a short deadline.
+  Clarify that Access edge expiry responses precede origin JSON handling and add PR3/PR4 client
+  and real-browser verification requirements. No deployment or live credential changes.
+
 - Add an isolated, disabled-by-default Dashboard BFF with exact-read inspection adapter,
   separate browser HMAC credentials, absolute 30-minute signed sessions, per-request revocation,
   optional origin-validated Access identity, Host/Origin/CSRF/CSP controls and bounded HTTP.

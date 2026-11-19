@@ -108,6 +108,9 @@ Acceptance:
 - Component and Chromium/Firefox Playwright flows exercise filters/page/reset/back, stale requests,
   empty/degraded/401/429 states, temporal continuation, session expiry/logout, mobile/keyboard/focus/
   labels. Tests verify behavior rather than merely mirroring markup.
+- Access-mode fetches send same-origin credentials and `X-Requested-With: XMLHttpRequest` as
+  well as the BFF headers. Treat non-JSON edge 401/403, login redirects and network failures as
+  authentication failures without rendering response HTML; origin JSON guarantees end at BFF.
 - `npm ci`, frontend lint/format, `tsc --noEmit`, build/tests/Playwright pass. Shared core read/BFF
   OpenAPI/generated TypeScript have no drift; fake upstream contracts remain backward compatible.
 - Dashboard artifact has no Node runtime/model/DB engine requirement/core Container or secret,
@@ -156,6 +159,9 @@ Acceptance:
   history, concurrent cold ranked use (only existing API model), failed direct writes and dashboard
   removal, while authorized existing MCP still reads/writes. Read safe API/BFF logs and restart
   counts afterward. Readiness/rollout/in-Pod calls alone are not proof; report missing proof.
+- In the opted-in Access profile, expire the real provider browser session and verify edge
+  rejection, non-JSON/redirect handling and top-level reauthentication. A fake origin JWT is
+  insufficient evidence of Access edge expiry behavior. Keep health probe paths internal.
 
 Sync README/CHANGELOG, SECURITY/threat model, minikube/Cloudflare/client-setup/monitoring/embedding
 runbooks, RELEASING and new dashboard runbook. Add independent review/finding status under

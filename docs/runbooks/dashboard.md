@@ -28,6 +28,14 @@ excluding core-only `capabilities`. See [inspection API](../http-inspection.md) 
 `GET /session`, `POST /session/login` and `POST /session/logout` are BFF-only operations.
 `GET /health/live` returns 204; readiness returns 204 only when enabled with a compatible core.
 Disabled readiness is 503, and all browser routes return 404. Probes have no browser identity.
+Readiness dependency work has a separate 60/minute process-wide admission budget, independent
+of Host/client headers and browser budgets. Cache hits do not consume this budget or turn a
+known healthy Pod unready after an HTTP burst. Results are cached for five seconds, including failures.
+Only one uncached readiness check may run; concurrent probes fail promptly with safe 503 rather
+than queue. Its two-second absolute deadline includes waiting for one of the four total upstream
+slots. Thus probes can occupy at most one slot, and a burst cannot multiply authenticated core
+checks or drain browser admission. Cancellation does not cache a false success. Liveness does
+no dependency work. Future ingress must keep probe paths internal.
 No API/docs/static/SPA catch-all, CORS, redirect or generic proxy exists.
 
 Input/output schemas are generated from PR1 with `scripts/export_dashboard_contract.py`;
@@ -86,7 +94,18 @@ record. Token digests and raw credentials never enter the payload.
 `GET /session` returns identity, integer Unix expiry, capabilities and session-bound CSRF token.
 All POSTs require JSON, exact Origin and the custom header; logout additionally requires
 `X-CSRF-Token` and `{}`. Access CSRF is bound to the verified assertion and its expiry.
-No API error redirects to a login page. Knowledge is returned only as JSON untrusted data;
+BFF-originated API errors are JSON and do not redirect to a login page. Access can reject an
+expired provider session at the edge before the BFF sees the request; the edge response is not
+the BFF ProblemDetail contract. PR3's same-origin fetch client must send
+`credentials: "same-origin"` and `X-Requested-With: XMLHttpRequest` in addition to the BFF's
+required headers. Cloudflare documents that AJAX header for expired-session 401 behavior.
+The client must also handle non-JSON 401/403, an edge login redirect or fetch/network failure as
+an authentication failure, clear private in-memory state, and offer top-level reauthentication.
+It must never render returned edge HTML as application content. See
+[Cloudflare session management](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/).
+PR4 must test an actually expired Access browser session through the configured edge, including
+its response format and reauthentication flow; origin tests cannot prove that behavior.
+Knowledge is returned only as JSON untrusted data;
 CSP disallows inline/eval/remote scripts, objects, framing and remote connections. Responses
 include no-store, nosniff, no-referrer, restrictive Permissions-Policy and HSTS.
 Actual inert rendering and browser CSP enforcement are PR3 acceptance gates.

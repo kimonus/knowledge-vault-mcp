@@ -162,3 +162,7 @@ The optional [Dashboard BFF](dashboard.md) has its own Access verifier settings 
 projection, with no private-login fallback. Existing MCP Managed OAuth does not configure a
 browser application for the dashboard hostname. PR2 changes no Access application, DNS, tunnel,
 public ingress or deployment; public dashboard routing requires separate operator authorization.
+The BFF's JSON errors describe origin responses only. Before origin, an expired Access session
+can trigger an edge login response. PR3 fetches must use same-origin credentials and the provider's
+`X-Requested-With: XMLHttpRequest` AJAX header, and safely handle non-JSON denial/redirect/network
+errors. PR4 must verify actual browser-session expiry through Access; see the Dashboard runbook.

@@ -88,3 +88,10 @@ a compromised browser. Rate budgets are bounded process-local memory and reset o
 
 No dashboard Helm resource, ingress, public route, credential provisioning or deployment is
 included in PR2. Deployment/NetworkPolicy and actual browser verification remain PR4 gates.
+
+The [independent PR2 review](reviews/pr128-independent-security.md) found anonymous readiness
+amplification/shared-slot starvation. Readiness now has a separate fixed admission budget,
+five-second result cache and single-check admission with a two-second deadline; a probe cannot
+occupy all four upstream slots. Future routing must still keep probe paths internal. Access can
+answer session expiry before origin, so origin JSON/no-redirect guarantees do not cover edge
+responses. PR3 handles provider AJAX/non-JSON failures; PR4 verifies actual edge expiry behavior.

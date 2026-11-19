@@ -25,7 +25,12 @@ missing/expired identity, 403 forbidden origin/authority, 404 absent retained re
 disallowed method, 413 body too large, 422 invalid inputs/cursor, 429 with `Retry-After`, 503
 unavailable core/database, 502 invalid/upstream failure and 504 upstream timeout. Never interpolate
 submitted content, search text, upstream exception details or credentials into errors.
-API 401 is JSON, not an HTML login redirect; top-level navigation may redirect to login/Access.
+BFF-originated API 401 is JSON, not an HTML login redirect; top-level navigation may redirect to
+login/Access. Access may answer an expired browser session before a request reaches the BFF.
+PR3 fetches use same-origin credentials and `X-Requested-With: XMLHttpRequest` alongside BFF
+headers to request Cloudflare's AJAX 401 behavior. Non-JSON edge 401/403, redirect and network
+failures must enter the authentication-failure flow, never render edge HTML or be assumed to
+have the BFF ProblemDetail shape. PR4 tests actual provider-session expiry through the edge.
 SPA fallback is restricted to known page routes and never handles `/api/`, static misses or auth.
 
 Default page size 50, maximum `min(100, settings.max_page_size)`; reject out-of-range sizes.

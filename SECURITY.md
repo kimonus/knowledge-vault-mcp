@@ -17,8 +17,13 @@ Its browser-only credentials and HS256 cookies are refused at core HTTP/MCP; its
 never forwards browser identity. Removing a browser record or rotating its session key revokes
 sessions after BFF-only rollout. Logout alone cannot revoke a copied cookie. Access mode verifies
 each assertion and provides no private fallback. Actual browser rendering and deployment remain
-later review gates. Sensitivity remains a
-single-user metadata filter, not selective authorization. See [inspection contracts](docs/http-inspection.md).
+later review gates. Sensitivity remains a single-user metadata filter, not selective
+authorization. Anonymous Dashboard readiness dependency work uses a
+separate admission budget, five-second dependency cache and at most one two-second upstream
+check, preserving browser capacity. Edge Access failures can precede BFF JSON handling; the
+future client must handle those failures without rendering edge HTML. See the
+[independent PR2 review](docs/reviews/pr128-independent-security.md).
+See [inspection contracts](docs/http-inspection.md).
 Reviewed legacy evidence attachment is admin-only because its temporal classification can change
 historical answers. It checks target identity and source metadata, but human review remains the
 authority for whether a source proves a real-world transition.
