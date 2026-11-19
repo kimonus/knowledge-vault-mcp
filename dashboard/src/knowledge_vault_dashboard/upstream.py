@@ -158,6 +158,13 @@ class CoreClient:
             # Cancellation must release admission without caching an uncompleted success.
             self._probe_inflight = False
 
+    async def page_limit(self) -> int:
+        try:
+            async with asyncio.timeout(60), self.slots:
+                return int((await self.capabilities())["max_page_size"])
+        except TimeoutError:
+            raise BoundaryError(504, "core_timeout") from None
+
     async def read(self, operation: str, path: str, body: Any, params: dict[str, str]) -> Any:
         if operation not in SCHEMAS or operation == "capabilities":
             raise BoundaryError(404, "unknown_operation")
@@ -177,12 +184,16 @@ class CoreClient:
         try:
             async with asyncio.timeout(60), self.slots:
                 capabilities = await self.capabilities()
-                limit = (
-                    body.get("limit", 50)
-                    if isinstance(body, dict)
-                    else int(params.get("limit", "50"))
-                )
-                if operation != "artifacts/{id}" and limit > capabilities["max_page_size"]:
+                limit = None
+                if isinstance(body, dict):
+                    limit = (
+                        body.get("history_limit", 20)
+                        if operation == "state/resolve"
+                        else body.get("limit", 50)
+                    )
+                elif operation.endswith(("/sources", "/artifacts", "/identities", "/relations")):
+                    limit = int(params.get("limit", "50"))
+                if limit is not None and limit > capabilities["max_page_size"]:
                     raise BoundaryError(422, "invalid_input")
                 result = await self._call(
                     "POST" if schema["input"] is not None else "GET",

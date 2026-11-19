@@ -483,6 +483,26 @@ describe("Deterministic Portal and temporal projections", () => {
 });
 
 describe("Browser authentication and safe presentation", () => {
+  it("removes private content immediately while server logout is still pending", async () => {
+    let complete!: (value: Response) => void;
+    api((path) =>
+      path === "session/logout"
+        ? new Promise<Response>((resolve) => {
+            complete = resolve;
+          })
+        : undefined,
+    );
+    await ready();
+    await screen.findByRole("link", { name: fixtures.summaries[0].excerpt });
+    await user().click(screen.getByRole("button", { name: "Sign out" }));
+    try {
+      expect(
+        screen.queryByText(fixtures.summaries[0].excerpt),
+      ).not.toBeInTheDocument();
+    } finally {
+      complete(response(null, 204));
+    }
+  });
   it("exchanges a transient private credential and clears the password input", async () => {
     let logged = false;
     api((path) =>

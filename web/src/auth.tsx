@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { FormEvent, ReactNode } from "react";
@@ -25,29 +26,42 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState<unknown>();
   const [credential, setCredential] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
+  const generation = useRef(0);
+  const invalidate = useCallback(() => {
+    generation.current++;
+  }, []);
   const privateMode =
     document.getElementById("root")?.dataset.authMode === "privateSession";
   const client = useMemo(
     () =>
       new Client(() => {
+        invalidate();
         setSession(null);
+        setLoading(false);
+        setError(undefined);
         setReason(
           "Your session expired or could not be verified. Private data has been cleared.",
         );
       }),
-    [],
+    [invalidate],
   );
   const refresh = useCallback(
     async (signal?: AbortSignal) => {
+      const epoch = generation.current;
       setLoading(true);
       setError(undefined);
       try {
-        setSession(await client.session(signal));
-        setReason("");
+        const current = await client.session(signal);
+        if (generation.current === epoch) {
+          setSession(current);
+          setReason("");
+        }
       } catch (failure) {
-        if (!isAbort(failure)) setError(failure);
+        if (!isAbort(failure) && generation.current === epoch)
+          setError(failure);
       } finally {
-        if (!signal?.aborted) setLoading(false);
+        if (!signal?.aborted && generation.current === epoch) setLoading(false);
       }
     },
     [client],
@@ -57,14 +71,17 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
     void refresh(controller.signal);
     return () => {
       controller.abort();
+      invalidate();
       client.clear();
     };
-  }, [refresh, client]);
+  }, [refresh, client, invalidate]);
   useEffect(() => {
     if (!session) return;
     const expire = () => {
+      invalidate();
       client.clear();
       setSession(null);
+      setLoading(false);
       setReason("Your session expired. Sign in again to continue.");
     };
     const timer = window.setTimeout(
@@ -79,9 +96,10 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
       clearTimeout(timer);
       window.removeEventListener("focus", focused);
     };
-  }, [session, client, refresh]);
+  }, [session, client, refresh, invalidate]);
   async function login(event: FormEvent) {
     event.preventDefault();
+    invalidate();
     const transient = credential;
     setCredential("");
     setLoading(true);
@@ -95,6 +113,12 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
     }
   }
   async function logout() {
+    invalidate();
+    setSession(null);
+    setCredential("");
+    setError(undefined);
+    setSigningOut(true);
+    setLoading(true);
     try {
       await client.logout();
       setReason(
@@ -110,13 +134,18 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
       client.clear();
       setSession(null);
       setLoading(false);
+      setSigningOut(false);
       setError(undefined);
     }
   }
   if (loading && !session)
     return (
       <main className="login-screen">
-        <Loading />
+        {signingOut ? (
+          <p role="status">Signing out. Private data has been cleared.</p>
+        ) : (
+          <Loading />
+        )}
       </main>
     );
   if (!session)

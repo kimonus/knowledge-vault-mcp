@@ -317,6 +317,8 @@ def create_app(
     async def session(request: Request) -> JSONResponse:
         if request.query_params:
             raise BoundaryError(422, "invalid_input")
+        if core is None:
+            raise BoundaryError(503, "disabled")
         identity: Identity = request.state.identity
         return JSONResponse(
             {
@@ -325,6 +327,7 @@ def create_app(
                 "expires_at": identity.expires,
                 "csrf_token": request.state.csrf,
                 "capabilities": [p for p in SCHEMAS if p != "capabilities"],
+                "max_page_size": await core.page_limit(),
             }
         )
 

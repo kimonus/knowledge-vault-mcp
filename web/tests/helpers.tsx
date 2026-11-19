@@ -13,6 +13,7 @@ export const session = () => ({
   expires_at: Math.floor(Date.now() / 1000) + 1800,
   csrf_token: "synthetic-csrf",
   capabilities: [],
+  max_page_size: 50,
 });
 export const response = (
   data: unknown,

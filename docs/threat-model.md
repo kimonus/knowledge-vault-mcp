@@ -96,6 +96,11 @@ without embedded credentials. No preview fetch, unsafe HTML sink, external asset
 or source map exists. CSP blocks inline scripts/styles and remote connections. Resource IDs and
 encoded topic names can appear in browser history; filter text and credentials stay out of URLs.
 Filters/cursors live in the authenticated component tree and are discarded on expiry/logout.
+Logout discards that tree before any network wait, cancels in-flight reads and uses a separate
+five-second CSRF-aware exchange. A generation guard prevents older session refreshes from
+restoring the discarded tree. Authenticated session bootstrap obtains the validated public
+page cap under the existing upstream concurrency/deadline budget; clients clamp page/history
+requests, while unpaged reads and artifact character offsets retain their separate semantics.
 The client aborts stale requests and treats edge redirects/non-JSON auth refusals as authentication
 failure, never returned HTML. A top-level named document GET may arrive cross-site for Access
 return navigation; this exemption never covers API or script reads and never bypasses Origin,

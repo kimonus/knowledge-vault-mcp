@@ -302,6 +302,8 @@ table {
 }
 .topbar nav {
   display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
   gap: 0.8rem;
   align-items: center;
   font-size: 0.85rem;
@@ -1117,6 +1119,11 @@ main#main {
   }
   .topbar {
     padding: 0 1rem;
+    gap: 0.5rem;
+  }
+  .topbar-actions,
+  .mobile-menu {
+    flex: none;
   }
   .topbar nav {
     font-size: 0.8rem;

@@ -4,6 +4,93 @@ import { label, safeUrl, topicKey, topicValue, when } from "../src/shared";
 import { response, session } from "./helpers";
 
 describe("fixed same-origin client", () => {
+  it.each([1, 10, 100])(
+    "honors advertised page cap %s without applying it to artifact characters",
+    async (maximum) => {
+      const fetcher = vi
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve(response({ ...session(), max_page_size: maximum })),
+        );
+      vi.stubGlobal("fetch", fetcher);
+      const client = new Client(vi.fn());
+      await client.session();
+      fetcher.mockImplementation(() =>
+        Promise.resolve(response({ untrusted_data: true })),
+      );
+      await client.post("catalog/query", { dimension: "topics" });
+      expect(JSON.parse(fetcher.mock.calls.at(-1)![1].body).limit).toBe(
+        Math.min(50, maximum),
+      );
+      await client.post("state/resolve", {
+        identity: {
+          subject: "homelab",
+          property: "backup",
+          scope: "personal",
+          state_type: "configuration",
+        },
+      });
+      expect(JSON.parse(fetcher.mock.calls.at(-1)![1].body).history_limit).toBe(
+        Math.min(20, maximum),
+      );
+      await client.get("assertions/{id}/sources", "0".repeat(36), {
+        limit: 20,
+      });
+      expect(fetcher.mock.calls.at(-1)![0]).toContain(
+        "limit=" + Math.min(20, maximum),
+      );
+      await client.get("artifacts/{id}", "0".repeat(36), { limit: 8000 });
+      expect(fetcher.mock.calls.at(-1)![0]).toContain("limit=8000");
+    },
+  );
+  it("aborts old reads immediately and bounds an isolated CSRF-aware logout exchange", async () => {
+    const deadline = new AbortController();
+    const timeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(deadline.signal);
+    const fetcher = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new TypeError("transport cancelled")),
+          );
+        }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const expired = vi.fn();
+    const client = new Client(expired);
+    client.csrf = "synthetic-csrf";
+    const read = expect(client.get("topic-aliases")).rejects.toSatisfy(isAbort);
+    const logout = expect(client.logout()).rejects.toSatisfy(isAbort);
+    expect(timeout).toHaveBeenCalledWith(5000);
+    expect(fetcher.mock.calls.at(-1)?.[1].headers).toMatchObject({
+      "X-CSRF-Token": "synthetic-csrf",
+    });
+    expect(client.csrf).toBe("");
+    deadline.abort();
+    await Promise.all([read, logout]);
+    expect(expired).not.toHaveBeenCalled();
+  });
+  it("discards a late response even when its transport ignores cancellation", async () => {
+    let complete!: (value: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            complete = resolve;
+          }),
+      ),
+    );
+    const expired = vi.fn();
+    const client = new Client(expired);
+    const pending = expect(client.session()).rejects.toSatisfy(isAbort);
+    client.clear();
+    complete(response(session()));
+    await pending;
+    expect(expired).not.toHaveBeenCalled();
+    expect(client.csrf).toBe("");
+  });
   it("uses only browser credentials and both JSON/Access CSRF defenses", async () => {
     const fetcher = vi.fn().mockResolvedValue(response(session()));
     vi.stubGlobal("fetch", fetcher);

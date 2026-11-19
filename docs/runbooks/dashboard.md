@@ -93,6 +93,11 @@ signature, audience, expiry and the still-configured exact-read
 record. Token digests and raw credentials never enter the payload.
 
 `GET /session` returns identity, integer Unix expiry, capabilities and session-bound CSRF token.
+It also returns the core's validated public `max_page_size`, with the capability call sharing
+the four-slot upstream budget and absolute timeout. An unavailable core can therefore make
+session bootstrap temporarily unavailable; retry does not require replacing browser credentials.
+The client respects this cap for every page/history request. Unpaged details/context/aliases
+and artifact character offsets do not consume a page-size allowance.
 All POSTs require JSON, exact Origin and the custom header; logout additionally requires
 `X-CSRF-Token` and `{}`. Access CSRF is bound to the verified assertion and its expiry.
 BFF-originated API errors are JSON and do not redirect to a login page. Access can reject an
@@ -112,6 +117,10 @@ include no-store, nosniff, no-referrer, restrictive Permissions-Policy and HSTS.
 Component and Chromium/Firefox tests verify inert rendering and actual browser CSP enforcement.
 
 Remove a browser record or rotate the signing key and roll out **only BFF** to revoke sessions.
+Sign out immediately unmounts private views and aborts reads, before a separate CSRF-aware
+logout exchange completes. That exchange has a five-second client deadline; login remains
+blocked until it finishes or times out, and a late refresh cannot restore the old session tree.
+Failure is reported as unconfirmed server logout after local data clearing.
 Unchanged settings preserve sessions across restart. Overlapping records preserve sessions of
 the still-enabled record. Logout deletes the local cookie; a copied cookie remains valid until
 expiry or this coarse revocation. Access logout is local data clearing only: provider logout

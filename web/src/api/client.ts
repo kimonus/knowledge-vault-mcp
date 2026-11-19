@@ -6,6 +6,7 @@ export type Session = {
   expires_at: number;
   csrf_token: string;
   capabilities: string[];
+  max_page_size: number;
 };
 export type Filters = NonNullable<ReadRequests["assertions/query"]["filters"]>;
 export type Summary = ReadResponses["assertions/query"]["items"][number];
@@ -58,11 +59,13 @@ export const isAbort = (error: unknown) =>
 export class Client {
   private pending = new AbortController();
   csrf = "";
+  pageLimit = 50;
   constructor(private expired: () => void) {}
   clear() {
     this.pending.abort();
     this.pending = new AbortController();
     this.csrf = "";
+    this.pageLimit = 50;
   }
   private failAuth(): never {
     this.clear();
@@ -84,6 +87,10 @@ export class Client {
       if (this.csrf) headers["X-CSRF-Token"] = this.csrf;
     }
     let response: Response;
+    const requestSignal = AbortSignal.any([
+      this.pending.signal,
+      ...(signal ? [signal] : []),
+    ]);
     try {
       response = await fetch("/dashboard/api/v1/" + path, {
         method: body === undefined ? "GET" : "POST",
@@ -92,15 +99,16 @@ export class Client {
         credentials: "same-origin",
         cache: "no-store",
         redirect: "error",
-        signal: AbortSignal.any([
-          this.pending.signal,
-          ...(signal ? [signal] : []),
-        ]),
+        signal: requestSignal,
       });
     } catch (error) {
+      if (requestSignal.aborted)
+        throw new DOMException("Request cancelled", "AbortError");
       if (isAbort(error)) throw error;
       return this.failAuth();
     }
+    if (requestSignal.aborted)
+      throw new DOMException("Request cancelled", "AbortError");
     if (
       response.redirected ||
       response.status === 401 ||
@@ -161,17 +169,27 @@ export class Client {
     if (
       typeof session.expires_at !== "number" ||
       typeof session.csrf_token !== "string" ||
+      !Number.isInteger(session.max_page_size) ||
+      session.max_page_size < 1 ||
+      session.max_page_size > 100 ||
       !["privateSession", "cloudflareAccess"].includes(session.auth_mode)
     )
       throw new ApiError(502, "invalid_session");
     this.csrf = session.csrf_token;
+    this.pageLimit = session.max_page_size;
     return session;
   }
   login(credential: string) {
     return this.request<void>("session/login", { credential });
   }
   logout() {
-    return this.request<void>("session/logout", {});
+    // Detach logout from cancelled reads without retaining a credential-bearing client.
+    const exchange = new Client(() => {});
+    exchange.csrf = this.csrf;
+    this.clear();
+    return exchange
+      .request<void>("session/logout", {}, AbortSignal.timeout(5000))
+      .finally(() => exchange.clear());
   }
   post<O extends keyof ReadRequests>(
     operation: O,
@@ -180,7 +198,13 @@ export class Client {
   ): Promise<ReadResponses[O]> {
     if (!(POSTS as readonly string[]).includes(operation))
       throw new ApiError(404, "unknown_operation");
-    return this.request(operation, input, signal);
+    const payload: Record<string, unknown> = { ...input };
+    const key = operation === "state/resolve" ? "history_limit" : "limit";
+    payload[key] = Math.min(
+      Number(payload[key] ?? (key === "history_limit" ? 20 : 50)),
+      this.pageLimit,
+    );
+    return this.request(operation, payload, signal);
   }
   get<O extends Get>(
     operation: O,
@@ -193,6 +217,17 @@ export class Client {
     if (operation.includes("{id}") && !/^[0-9a-fA-F-]{36}$/.test(id ?? ""))
       throw new ApiError(422, "invalid_identifier");
     const path = operation.replace("{id}", id ?? "");
+    if (
+      operation.endsWith("/sources") ||
+      operation.endsWith("/artifacts") ||
+      operation.endsWith("/identities") ||
+      operation.endsWith("/relations")
+    ) {
+      query = {
+        ...query,
+        limit: Math.min(Number(query.limit ?? 50), this.pageLimit),
+      };
+    }
     const params = new URLSearchParams(
       Object.entries(query).map(([key, val]) => [key, String(val)]),
     );

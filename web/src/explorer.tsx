@@ -71,17 +71,19 @@ export type BrowseSpec = {
   limit: number;
 };
 export function Explorer() {
+  const { session } = useAuth();
+  const maximum = Math.min(50, session.max_page_size);
   const [mode, setMode] = useMemory<BrowseSpec["mode"]>("explorerMode", "all");
   const [query, setQuery] = useMemory("explorerQuery", "");
   const [filters, setFilters] = useMemory<Record<string, string>>(
     "explorerFilters",
     {},
   );
-  const [limit, setLimit] = useMemory("explorerLimit", 50);
+  const [limit, setLimit] = useMemory("explorerLimit", maximum);
   const [applied, setApplied] = useMemory<BrowseSpec>("explorerApplied", {
     mode: "all",
     filters: { statuses: [] },
-    limit: 50,
+    limit: maximum,
   });
   const [, clearPage] = useMemory<unknown>("pagination:browse-explorer", null);
   const field = (name: string, value: string) =>
@@ -138,7 +140,7 @@ export function Explorer() {
     setApplied({
       mode,
       filters: next,
-      limit,
+      limit: Math.min(limit, maximum),
       ...(mode !== "all" ? { query: query.trim() } : {}),
     });
   }
@@ -351,12 +353,14 @@ export function Explorer() {
           <label className="compact-field">
             Page size
             <select
-              value={limit}
+              value={Math.min(limit, maximum)}
               onChange={(e) => setLimit(Number(e.target.value))}
             >
-              {[10, 25, 50].map((v) => (
-                <option key={v}>{v}</option>
-              ))}
+              {[...new Set([10, 25, 50].map((v) => Math.min(v, maximum)))].map(
+                (v) => (
+                  <option key={v}>{v}</option>
+                ),
+              )}
             </select>
           </label>
           <button className="button primary">Apply filters</button>
@@ -367,8 +371,12 @@ export function Explorer() {
               setFilters({});
               setQuery("");
               setMode("all");
-              setLimit(50);
-              setApplied({ mode: "all", filters: { statuses: [] }, limit: 50 });
+              setLimit(maximum);
+              setApplied({
+                mode: "all",
+                filters: { statuses: [] },
+                limit: maximum,
+              });
               clearPage(null);
             }}
           >
