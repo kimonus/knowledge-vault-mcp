@@ -55,6 +55,8 @@ class Sessions:
         )
 
     def verify(self, cookie: str) -> Identity | None:
+        if len(cookie) > 4096:
+            return None
         try:
             claims = jwt.decode(
                 cookie,
@@ -78,7 +80,7 @@ class Sessions:
             ):
                 return None
             return Identity(claims["sub"], claims["exp"], claims["nonce"])
-        except (jwt.PyJWTError, ValueError, TypeError):
+        except (jwt.PyJWTError, ValueError, TypeError, RecursionError):
             return None
 
     def csrf(self, identity: Identity) -> str:

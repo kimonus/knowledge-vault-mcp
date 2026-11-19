@@ -171,3 +171,28 @@ async def test_request_upload_deadline(settings, monkeypatch):
 
     with pytest.raises(BoundaryError, match="request_timeout"):
         await boundary.authorize(scope, receive)
+
+
+async def test_non_ascii_headers_fail_closed(logged):
+    headers = [(key.encode(), value.encode()) for key, value in HEADERS.items()]
+    response = await logged.post(
+        PREFIX + "session/logout", json={}, headers=[*headers, (b"x-csrf-token", b"\xff")]
+    )
+    assert response.status_code == 403
+    for length in [b"\xb2", b"9" * 5000]:
+        response = await logged.get(PREFIX + "session", headers=[(b"content-length", length)])
+        assert response.status_code == 413
+
+
+async def test_non_ascii_retry_after_not_relayed(settings):
+    core = CoreClient(
+        settings,
+        httpx.MockTransport(
+            lambda r: httpx.Response(429, headers=[(b"Retry-After", b"\xb2")], json={})
+        ),
+    )
+    with pytest.raises(BoundaryError) as result:
+        await core.ready()
+    assert result.value.status == 429
+    assert result.value.retry_after is None
+    await core.close()

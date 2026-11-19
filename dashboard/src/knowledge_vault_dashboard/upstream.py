@@ -85,7 +85,7 @@ class CoreClient:
                     raise BoundaryError(
                         429,
                         "core_rate_limited",
-                        retry if retry.isdigit() and len(retry) <= 5 else None,
+                        retry if re.fullmatch(r"[0-9]{1,5}", retry) else None,
                     )
                 if status in {401, 403} or status >= 500:
                     raise BoundaryError(503, "core_unavailable")

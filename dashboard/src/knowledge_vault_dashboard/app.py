@@ -195,11 +195,13 @@ class BrowserBoundary:
             self.rates.check("read:" + identity.principal, 120)
             scope.setdefault("state", {}).update(identity=identity, csrf=csrf)
             if path == PREFIX + "session/logout" and (
-                not hmac.compare_digest(one(b"x-csrf-token"), csrf)
+                not hmac.compare_digest(
+                    one(b"x-csrf-token").encode("latin-1"), csrf.encode("ascii")
+                )
             ):
                 raise BoundaryError(403, "csrf_refused")
         lengths = one(b"content-length")
-        if lengths and (not lengths.isdigit() or int(lengths) > MAX_REQUEST):
+        if lengths and (not re.fullmatch(r"[0-9]{1,10}", lengths) or int(lengths) > MAX_REQUEST):
             raise BoundaryError(413, "request_too_large")
         body = bytearray()
         try:

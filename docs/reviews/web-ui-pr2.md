@@ -14,7 +14,7 @@ Local verification uses synthetic data only:
 
 - Full core suite: 694 passed against disposable pgvector, including actual BFF/core compatibility.
   Application coverage: 98.01% statements, 93.05% branches.
-- Independent installed BFF package: 144 passed; 97.79% statements, 93.50% branches, including
+- Independent installed BFF package: 148 passed; 97.80% statements, 93.56% branches, including
   bundled auth helpers and entrypoint. Separate CI enforces both thresholds without exclusions.
 - Lock checks, Ruff formatting/lint, strict core/BFF Pyright, schema drift check and Bandit pass.
 - Source distribution and wheel build with the repository's pinned uv 0.13.7; both bundle regular
@@ -28,6 +28,8 @@ copied-cookie limitation; Host/Origin/repeated header/Fetch Metadata/CSRF/encode
 Access signature/algorithm/issuer/audience/expiry/email and no private fallback; inert JSON plus
 CSP/security headers; no service credential echo; route confinement; no browser identity
 forwarding; redirect refusal, bounded upload/response/concurrency/deadline/rates and safe errors.
+Malformed non-ASCII headers, oversized/nested session JWTs and nested Access JWT headers fail
+closed without an unhandled encoding, integer-conversion or JSON-recursion error.
 Core inspection reads leave usage/maintenance counts unchanged; normal writer clients still work.
 
 Remaining accepted limits: all-sensitivity read access, live pagination, process-local single-replica

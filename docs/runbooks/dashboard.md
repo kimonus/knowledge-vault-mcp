@@ -79,7 +79,8 @@ The client must keep them out of JavaScript storage and clear the login input af
 The `__Host-kv_dashboard` cookie is Secure, HttpOnly, SameSite=Strict, Path=/, without Domain.
 Its HS256 payload contains only principal, audience, issue/expiry, random nonce and an opaque
 keyed reference to the matched credential record. Absolute lifetime is 1,800 seconds with no
-renewal. Every request verifies signature, audience, expiry and the still-configured exact-read
+renewal. Cookies over 4 KB and malformed/nested JWT payloads are refused. Every request verifies
+signature, audience, expiry and the still-configured exact-read
 record. Token digests and raw credentials never enter the payload.
 
 `GET /session` returns identity, integer Unix expiry, capabilities and session-bound CSRF token.

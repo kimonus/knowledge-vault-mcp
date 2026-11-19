@@ -65,7 +65,7 @@ class CloudflareAccessAuthenticator:
             return self._authenticate(assertion, signing_key)
         except CloudflareAccessError:
             raise
-        except (PyJWTError, ValueError, TypeError, KeyError) as exc:
+        except (PyJWTError, ValueError, TypeError, KeyError, RecursionError) as exc:
             raise CloudflareAccessError("Cloudflare Access assertion is invalid") from exc
 
     def _authenticate(self, assertion: str, signing_key: Any) -> Principal:
@@ -164,7 +164,15 @@ class CloudflareJWKSClient:
             }
             if not keys:
                 raise ValueError("JWKS contains no signing keys")
-        except (httpx.HTTPError, PyJWTError, ValueError, TypeError, KeyError, TimeoutError) as exc:
+        except (
+            httpx.HTTPError,
+            PyJWTError,
+            ValueError,
+            TypeError,
+            KeyError,
+            TimeoutError,
+            RecursionError,
+        ) as exc:
             raise CloudflareAccessError("Cloudflare Access signing keys are unavailable") from exc
         self._keys = keys
         self._expires_at = time.monotonic() + self._lifespan

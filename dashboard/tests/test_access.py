@@ -120,6 +120,20 @@ async def test_access_wrong_signature_algorithm_and_context(key):
     assert current_cloudflare_principal() is None
 
 
+async def test_deeply_nested_access_header_is_unauthorized():
+    from jwt.utils import base64url_encode
+
+    header = base64url_encode(b'{"kid":' + b"[" * 1100 + b"0" + b"]" * 1100 + b"}").decode()
+    verifier = CloudflareAccessAuthenticator(
+        issuer_url="https://team.cloudflareaccess.com",
+        audience="dashboard",
+        allowed_emails=frozenset({"owner@example.test"}),
+        scopes=frozenset({Scope.READ}),
+    )
+    with pytest.raises(CloudflareAccessError):
+        await verifier.authenticate(header + ".e30.signature")
+
+
 async def test_jwks_cache_refresh_and_outage(key):
     import json
 

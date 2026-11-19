@@ -33,6 +33,16 @@ def test_session_revocation_and_key_rotation(settings):
     assert record.digest.hex() not in json.dumps(claims)
 
 
+def test_malformed_cookie_recursion_and_size_are_unauthorized(settings):
+    from jwt.utils import base64url_encode
+
+    sessions = Sessions(settings)
+    header = base64url_encode(b'{"alg":"HS256"}').decode()
+    payload = base64url_encode(b'{"sub":' + b"[" * 1100 + b"0" + b"]" * 1100 + b"}").decode()
+    assert sessions.verify(header + "." + payload + ".signature") is None
+    assert sessions.verify("x" * 4097) is None
+
+
 @pytest.mark.parametrize(
     "override",
     [
