@@ -10,10 +10,10 @@ async function signIn(page: Page) {
   await page.goto("/dashboard/");
   await page.getByLabel("Dashboard read-only credential").fill(CREDENTIAL);
   await page.getByRole("button", { name: "Open your vault" }).click();
+  await expect(page.locator(".record-card")).toHaveCount(50);
   await expect(
     page.getByRole("heading", { name: "Knowledge Explorer" }),
   ).toBeVisible();
-  await expect(page.locator(".record-card")).toHaveCount(50);
 }
 test.beforeEach(async ({ request }) => {
   await request.post(ORIGIN + "/__test__/reset");
