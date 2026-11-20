@@ -1,0 +1,83 @@
+{{- if .Values.dashboard.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-dashboard
+  labels: {{- include "knowledge-vault.dashboard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "knowledge-vault.dashboard.selector" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    {{- with .Values.dashboard.networkPolicy.ingressFrom }}
+    - from: {{- toYaml . | nindent 8 }}
+      ports: [{protocol: TCP, port: 8080}]
+    {{- end }}
+    {{- if .Values.dashboard.networkPolicy.allowCloudflared }}
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "knowledge-vault.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: cloudflared
+      ports: [{protocol: TCP, port: 8080}]
+    {{- else if not .Values.dashboard.networkPolicy.ingressFrom }}
+    []
+    {{- end }}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "knowledge-vault.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: api
+      ports: [{protocol: TCP, port: 8000}]
+    {{- if eq .Values.dashboard.mode "cloudflareAccess" }}
+    - to:
+        {{- range .Values.dashboard.access.jwksEgressCidrs }}
+        - ipBlock: {cidr: {{ . | quote }}}
+        {{- end }}
+      ports: [{protocol: TCP, port: 443}]
+    {{- end }}
+---
+# Additive allowance; the original core policy and Pod checksums remain unchanged.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-dashboard-core
+  labels: {{- include "knowledge-vault.dashboard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "knowledge-vault.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {{- include "knowledge-vault.dashboard.selector" . | nindent 14 }}
+      ports: [{protocol: TCP, port: 8000}]
+{{- if .Values.dashboard.networkPolicy.allowCloudflared }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-dashboard-tunnel
+  labels: {{- include "knowledge-vault.dashboard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "knowledge-vault.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: cloudflared
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {{- include "knowledge-vault.dashboard.selector" . | nindent 14 }}
+      ports: [{protocol: TCP, port: 8080}]
+{{- end }}
+{{- end }}

@@ -35,6 +35,13 @@ stable release.
 
 ### Added
 
+- Optional Dashboard Helm workload, ClusterIP Service, separate ConfigMap/Secret references,
+  TLS-only opt-in ingress and explicit least-privilege NetworkPolicies. The default remains
+  disabled and renders no Dashboard resources; dashboard-only updates do not change core Pod
+  templates. Add independent signed image/SBOM release integration and installation, upgrade,
+  rollback, removal and real Access-session verification procedures. Existing deployments
+  require no action. Enablement, credentials and public routing require operator approval.
+
 - Optional React/TypeScript Knowledge Explorer and deterministic Knowledge Portal, with all-status
   exhaustive browsing, filters, complete paged provenance/artifacts/relationships, temporal
   resolution and raw evidence. All stored content renders inertly through the same-origin BFF.

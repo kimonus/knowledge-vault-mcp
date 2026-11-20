@@ -161,14 +161,18 @@ ingress because that bypasses the Access boundary.
 The PR3 frontend sends `X-Requested-With: XMLHttpRequest` and same-origin cookies for API
 requests, refuses redirects and handles non-JSON edge denials without rendering returned HTML.
 Its local tests simulate the edge with real RS256 assertions; they do not change or verify a live
-Access application. PR4 still must verify provider-session expiry and top-level reauthentication
-through the authorized dashboard hostname. See the [Dashboard runbook](dashboard.md).
+Access application. Provider-session expiry and top-level reauthentication must be verified
+through the authorized dashboard hostname using the precise
+[real-provider procedure](dashboard.md#real-cloudflare-access-provider-verification).
 
 The optional [Dashboard BFF](dashboard.md) has its own Access verifier settings and exact-read
 projection, with no private-login fallback. Existing MCP Managed OAuth does not configure a
-browser application for the dashboard hostname. PR2 changes no Access application, DNS, tunnel,
-public ingress or deployment; public dashboard routing requires separate operator authorization.
+browser application for the dashboard hostname. Helm does not create an Access application, DNS
+or tunnel route; public dashboard routing requires separate operator authorization. Ingress/tunnel
+must preserve the dashboard Host and `/dashboard` path and target its own ClusterIP Service.
+Opt-in tunnel peer policies do not authorize a public route. Keep probes private.
 The BFF's JSON errors describe origin responses only. Before origin, an expired Access session
 can trigger an edge login response. PR3 fetches must use same-origin credentials and the provider's
 `X-Requested-With: XMLHttpRequest` AJAX header, and safely handle non-JSON denial/redirect/network
-errors. PR4 must verify actual browser-session expiry through Access; see the Dashboard runbook.
+errors. Do not label fake JWTs or mocked edge responses as actual Access session-expiry evidence.
+If verification needs a live setting change, stop at that exact object/action until approved.

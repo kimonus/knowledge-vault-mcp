@@ -10,6 +10,65 @@
     "internalPostgresql"
   ],
   "properties": {
+    "dashboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "image", "host", "coreHost", "mode", "serviceTokenSecret", "privateSession", "access", "secretRevision", "ingress", "networkPolicy", "resources"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "image": {
+          "allOf": [
+            {"$ref": "#/$defs/image"},
+            {"properties": {"digest": {"pattern": "^(|sha256:[a-f0-9]{64})$"}}}
+          ]
+        },
+        "host": {"type": "string", "pattern": "^$|^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$", "maxLength": 253},
+        "coreHost": {"type": "string", "pattern": "^$|^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\\.?(:[0-9]{1,5})?$", "maxLength": 259},
+        "mode": {"enum": ["privateSession", "cloudflareAccess"]},
+        "serviceTokenSecret": {
+          "type": "object", "additionalProperties": false,
+          "required": ["name", "key"],
+          "properties": {"name": {"type": "string"}, "key": {"type": "string", "minLength": 1}}
+        },
+        "privateSession": {
+          "type": "object", "additionalProperties": false,
+          "required": ["existingSecret", "pepperKey", "recordsKey", "signingSecret", "signingKey"],
+          "properties": {
+            "existingSecret": {"type": "string"}, "signingSecret": {"type": "string"},
+            "pepperKey": {"type": "string", "minLength": 1}, "recordsKey": {"type": "string", "minLength": 1},
+            "signingKey": {"type": "string", "minLength": 1}
+          }
+        },
+        "access": {
+          "type": "object", "additionalProperties": false,
+          "required": ["issuerUrl", "audience", "allowedEmails", "jwksEgressCidrs"],
+          "properties": {
+            "issuerUrl": {"type": "string", "pattern": "^$|^https://[a-z0-9-]+\\.cloudflareaccess\\.com$"},
+            "audience": {"type": "string"},
+            "allowedEmails": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "jwksEgressCidrs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[0-9]{1,3}(\\.[0-9]{1,3}){3}/([89]|[12][0-9]|3[0-2])$"}}
+          }
+        },
+        "secretRevision": {"type": "string", "minLength": 1, "maxLength": 128},
+        "ingress": {
+          "type": "object", "additionalProperties": false,
+          "required": ["enabled", "className", "tlsSecret"],
+          "properties": {"enabled": {"type": "boolean"}, "className": {"type": "string"}, "tlsSecret": {"type": "string"}}
+        },
+        "networkPolicy": {
+          "type": "object", "additionalProperties": false,
+          "required": ["ingressFrom", "allowCloudflared"],
+          "properties": {"ingressFrom": {"type": "array", "items": {"type": "object"}}, "allowCloudflared": {"type": "boolean"}}
+        },
+        "resources": {
+          "type": "object", "additionalProperties": false, "required": ["requests", "limits"],
+          "properties": {
+            "requests": {"type": "object", "required": ["cpu", "memory"], "properties": {"cpu": {"type": "string", "minLength": 1}, "memory": {"type": "string", "minLength": 1}}},
+            "limits": {"type": "object", "required": ["cpu", "memory"], "properties": {"cpu": {"type": "string", "minLength": 1}, "memory": {"type": "string", "minLength": 1}}}
+          }
+        }
+      }
+    },
     "replicaCount": {
       "type": "integer",
       "const": 1

@@ -10,9 +10,10 @@ Dedicated inspection principals use exactly read scope and are confined to `/api
 HTTP/MCP dispatch; the MCP verifier independently refuses them. No inspection identity can use
 ordinary accounting reads, ingestion, usage reporting or administrative routes. Inspection data
 reads run in transaction-read-only sessions and force non-recording retrieval; the core keeps its
-existing writer credential for ordinary clients. A future dashboard receives only an issued read
-service token, never the core pepper/bootstrap Secret or DB credentials. The separate PR2
-[BFF runtime](docs/runbooks/dashboard.md) is disabled by default and has no deployment resources.
+existing writer credential for ordinary clients. The dashboard receives only an issued read
+service token, never the core pepper/bootstrap Secret or DB credentials. Its conditional
+[BFF workload](docs/runbooks/dashboard.md) is disabled by default, non-root, read-only and isolated
+by explicit ingress/core/DNS NetworkPolicies. It has no database egress or service-account token.
 
 The optional Explorer/Portal uses only same-origin BFF requests with browser credentials,
 CSRF/custom headers and Cloudflare's documented AJAX header. Non-JSON denials and redirects
@@ -20,16 +21,17 @@ clear private views; returned edge HTML is never rendered. Stored text and artif
 links are HTTP(S)-only, and CSP prohibits inline/eval/remote scripts. Production assets contain
 no service bearer, knowledge fixtures, source maps, browser storage or external asset dependencies.
 Chromium/Firefox tests cover XSS, actual CSP, private/Access flows and accessibility. Real
-Access-edge expiration and deployment isolation still require PR4 operator verification.
+Access-edge expiration and deployment isolation require actual operator-approved verification;
+the runbook distinguishes disposable proof from live provider acceptance.
 Its browser-only credentials and HS256 cookies are refused at core HTTP/MCP; its fixed adapter
 never forwards browser identity. Removing a browser record or rotating its session key revokes
 sessions after BFF-only rollout. Logout alone cannot revoke a copied cookie. Access mode verifies
-each assertion and provides no private fallback. Actual browser rendering and deployment remain
-later review gates. Sensitivity remains a single-user metadata filter, not selective
+each assertion and provides no private fallback. Actual deployed ingress/browser verification
+remains a deployment acceptance gate. Sensitivity remains a single-user metadata filter, not selective
 authorization. Anonymous Dashboard readiness dependency work uses a
 separate admission budget, five-second dependency cache and at most one two-second upstream
 check, preserving browser capacity. Edge Access failures can precede BFF JSON handling; the
-future client must handle those failures without rendering edge HTML. See the
+client handles those failures without rendering edge HTML. See the
 [independent PR2 review](docs/reviews/pr128-independent-security.md).
 See [inspection contracts](docs/http-inspection.md).
 Reviewed legacy evidence attachment is admin-only because its temporal classification can change

@@ -1,0 +1,69 @@
+{{- if .Values.dashboard.enabled }}
+{{- $d := .Values.dashboard -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-dashboard
+  labels: {{- include "knowledge-vault.dashboard.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels: {{- include "knowledge-vault.dashboard.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "knowledge-vault.dashboard.selector" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "knowledge-vault.dashboard.config" . | sha256sum }}
+        dashboard/secret-revision: {{ $d.secretRevision | quote }}
+    spec:
+      serviceAccountName: {{ include "knowledge-vault.fullname" . }}-dashboard
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: dashboard
+          image: {{ include "knowledge-vault.image" $d.image }}
+          imagePullPolicy: {{ $d.image.pullPolicy }}
+          args: ["--config", "/etc/dashboard/config.json"]
+          ports: [{name: http, containerPort: 8080, protocol: TCP}]
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+          resources: {{- toYaml $d.resources | nindent 12 }}
+          volumeMounts:
+            - {name: config, mountPath: /etc/dashboard, readOnly: true}
+            - {name: service-token, mountPath: /run/secrets/service, readOnly: true}
+            {{- if eq $d.mode "privateSession" }}
+            - {name: browser, mountPath: /run/secrets/browser, readOnly: true}
+            - {name: session, mountPath: /run/secrets/session, readOnly: true}
+            {{- end }}
+          startupProbe: {httpGet: {path: /health/live, port: http}, periodSeconds: 2, failureThreshold: 30}
+          livenessProbe: {httpGet: {path: /health/live, port: http}, periodSeconds: 10, timeoutSeconds: 3}
+          readinessProbe: {httpGet: {path: /health/ready, port: http}, periodSeconds: 5, timeoutSeconds: 5}
+      volumes:
+        - name: config
+          configMap: {name: {{ include "knowledge-vault.fullname" . }}-dashboard}
+        - name: service-token
+          secret:
+            secretName: {{ $d.serviceTokenSecret.name | quote }}
+            defaultMode: 0440
+            items: [{key: {{ $d.serviceTokenSecret.key | quote }}, path: token}]
+        {{- if eq $d.mode "privateSession" }}
+        - name: browser
+          secret:
+            secretName: {{ $d.privateSession.existingSecret | quote }}
+            defaultMode: 0440
+            items:
+              - {key: {{ $d.privateSession.pepperKey | quote }}, path: pepper}
+              - {key: {{ $d.privateSession.recordsKey | quote }}, path: records}
+        - name: session
+          secret:
+            secretName: {{ $d.privateSession.signingSecret | quote }}
+            defaultMode: 0440
+            items: [{key: {{ $d.privateSession.signingKey | quote }}, path: key}]
+        {{- end }}
+      terminationGracePeriodSeconds: 30
+{{- end }}

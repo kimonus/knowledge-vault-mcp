@@ -36,7 +36,10 @@ non-recording, exhaustive reads for dedicated service credentials. The separate
 and fixed read adapter. The React/TypeScript Explorer provides exhaustive browsing, complete
 evidence inspection and temporal views; the Portal groups actual topics and contexts without
 generated summaries. They ship in an independent dashboard image, disabled by default.
-Conditional Helm resources and release/deployment integration remain PR4. No public route is enabled.
+The Helm chart keeps `dashboard.enabled=false`; enabling adds an isolated workload and policy,
+with TLS ingress as a separate opt-in. Signed releases include the independent dashboard image
+and SBOM. Follow the [deployment and real-provider verification runbook](docs/runbooks/dashboard.md)
+before operator-approved enablement. No public route is enabled by default.
 
 ## Quick start
 
