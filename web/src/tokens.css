@@ -1,0 +1,10 @@
+:root {
+  --canvas: #f7f9f8;
+  --ink: #243830;
+  --muted: #63746c;
+  --accent: #1e7055;
+  --nav: #193a30;
+  --line: #dfe7e2;
+  --focus: #268563;
+  color-scheme: light;
+}

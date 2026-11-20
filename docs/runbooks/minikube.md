@@ -240,6 +240,6 @@ deployment is production-ready.
 
 ## Dashboard staging
 
-The [PR2 Dashboard BFF](dashboard.md) is a separate disabled-by-default package. It has no Helm
+The [Dashboard](dashboard.md) now includes Explorer/Portal and a separate image, disabled by default. It has no Helm
 resources in this stage. Do not add it to core Pods or mount DB/core auth/model Secrets into it.
 Conditional deployment and TLS/browser proof belong to ADR 0009 PR4; no live change is implied.

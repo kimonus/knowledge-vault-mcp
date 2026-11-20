@@ -112,6 +112,10 @@ Worker maintenance purges expired retry/audit records before recording its exist
 
 ## Dashboard dependency health
 
+Explorer/Portal show safe degraded-service and rate-limit states with manual retry. Auth
+expiry discards private views. No knowledge, search text or credentials enter browser telemetry;
+no frontend telemetry service is installed. Browser availability remains separate from core.
+
 The separate [BFF](dashboard.md) has process liveness and authenticated protocol-capability
 readiness probes. Disabled/incompatible/unavailable-core readiness is 503/502/504; these statuses
 disclose no credentials or payload. Core readiness never depends on the BFF. No new background

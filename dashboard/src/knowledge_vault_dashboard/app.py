@@ -6,6 +6,7 @@ import hmac
 import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from fastapi import FastAPI, Request
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from .assets import PAGES, Assets
 from .auth.cloudflare import CloudflareAccessAuthenticator, CloudflareAccessError
 from .auth.hosts import canonical_host
 from .auth.tokens import Scope as Authority
@@ -61,9 +63,11 @@ class BrowserBoundary:
         settings: Settings,
         sessions: Sessions,
         access: CloudflareAccessAuthenticator | None,
+        assets: Assets | None = None,
     ) -> None:
         self.app, self.settings, self.sessions, self.access = app, settings, sessions, access
         self.rates = RateGuard()
+        self.assets = assets or Assets()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -125,15 +129,29 @@ class BrowserBoundary:
         if not valid_host(host) or canonical_host(host) != canonical_host(self.settings.host):
             raise BoundaryError(403, "invalid_host")
         origin = one(b"origin")
+        is_page = self.assets.is_page(path)
+        # A normal external link or Access callback may navigate to a public app shell.
+        navigation = (
+            is_page
+            and scope["method"] == "GET"
+            and not origin
+            and one(b"sec-fetch-mode") == "navigate"
+            and one(b"sec-fetch-dest") == "document"
+        )
         if (origin and origin != "https://" + self.settings.host) or (
-            one(b"sec-fetch-site") not in {"", "same-origin", "none"}
+            one(b"sec-fetch-site") not in {"", "same-origin", "none"} and not navigation
         ):
             raise BoundaryError(403, "invalid_origin")
         # Never interpret or forward arbitrary identity/transport assertions.
         if one(b"authorization"):
             raise BoundaryError(403, "browser_authorization_refused")
-        if not path.startswith(PREFIX):
+        is_static = self.assets.allows(path)
+        if not path.startswith(PREFIX) and not is_static:
             raise BoundaryError(404, "unknown_route")
+        if is_static and scope["method"] != "GET":
+            raise BoundaryError(405, "method_refused")
+        if is_static and self.settings.mode == "privateSession":
+            return b""
         method = scope["method"]
         if method not in {"GET", "POST"}:
             raise BoundaryError(405, "method_refused")
@@ -217,9 +235,11 @@ def create_app(
     *,
     transport: httpx.AsyncBaseTransport | None = None,
     access: CloudflareAccessAuthenticator | None = None,
+    static_directory: Path | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
     sessions = Sessions(settings)
+    assets = Assets(static_directory)
     core = CoreClient(settings, transport) if settings.enabled else None
     if settings.enabled and settings.mode == "cloudflareAccess" and access is None:
         access = CloudflareAccessAuthenticator(
@@ -238,11 +258,22 @@ def create_app(
     app = FastAPI(
         docs_url=None, redoc_url=None, openapi_url=None, redirect_slashes=False, lifespan=lifespan
     )
-    app.add_middleware(BrowserBoundary, settings=settings, sessions=sessions, access=access)
+    app.add_middleware(
+        BrowserBoundary, settings=settings, sessions=sessions, access=access, assets=assets
+    )
 
     @app.exception_handler(BoundaryError)
     async def boundary_error(_: Request, error: BoundaryError) -> JSONResponse:
         return problem(error)
+
+    async def static_file(request: Request) -> Response:
+        return assets.serve(request, settings.mode)
+
+    for page in PAGES:
+        app.add_api_route(page, static_file, methods=["GET"], include_in_schema=False)
+    app.add_api_route(
+        "/dashboard/assets/{filename}", static_file, methods=["GET"], include_in_schema=False
+    )
 
     @app.get("/health/live")
     async def live() -> Response:
@@ -286,6 +317,8 @@ def create_app(
     async def session(request: Request) -> JSONResponse:
         if request.query_params:
             raise BoundaryError(422, "invalid_input")
+        if core is None:
+            raise BoundaryError(503, "disabled")
         identity: Identity = request.state.identity
         return JSONResponse(
             {
@@ -294,6 +327,7 @@ def create_app(
                 "expires_at": identity.expires,
                 "csrf_token": request.state.csrf,
                 "capabilities": [p for p in SCHEMAS if p != "capabilities"],
+                "max_page_size": await core.page_limit(),
             }
         )
 

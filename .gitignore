@@ -21,3 +21,9 @@ deploy/homelab/
 .agents/
 .aws/
 .codex/
+node_modules/
+playwright-report/
+test-results/
+web/coverage/
+dashboard/src/knowledge_vault_dashboard/static/
+.sites-runtime/

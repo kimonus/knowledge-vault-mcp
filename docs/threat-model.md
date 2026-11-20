@@ -68,7 +68,7 @@ not query text or a permanent click stream; counters cannot establish truth, rai
 drive deletion. Read-only retrieval tools may maintain incidental operational aggregates. They
 cannot change claim meaning, evidence or verification. Explicit actual-use reports require write.
 
-## Dashboard browser boundary (PR2)
+## Dashboard browser boundary
 
 The isolated, disabled-by-default [Dashboard BFF](runbooks/dashboard.md) holds only an issued
 inspection bearer and dashboard-local browser auth material. It has no database credentials,
@@ -81,13 +81,32 @@ Cookie tampering/expiry, wrong audience and revoked credential records fail clos
 or record removal requires BFF-only rollout; local logout cannot revoke a copied cookie.
 Exact Host/Origin, Fetch Metadata, JSON/custom-header requirements and logout CSRF protect the
 browser boundary. CSP/no-store/nosniff/no-referrer reduce stored-content and cache risks, but actual
-inert UI rendering/browser enforcement remains PR3 work. Optional Access validates each RS256
+inert UI rendering and browser enforcement are now covered in Chromium/Firefox. Optional Access validates each RS256
 assertion and has no private fallback. BFF compromise exposes all retained sensitivity classes
 through read authority; it does not imply selective secrecy or protect browser-visible data from
 a compromised browser. Rate budgets are bounded process-local memory and reset on restart.
 
 No dashboard Helm resource, ingress, public route, credential provisioning or deployment is
-included in PR2. Deployment/NetworkPolicy and actual browser verification remain PR4 gates.
+included in PR3. Deployment/NetworkPolicy and live ingress/Access browser verification remain PR4 gates.
+
+The frontend obtains public assets from named routes and private data only from same-origin BFF
+JSON operations. It never receives the core service bearer or upstream configuration. Stored
+HTML/Markdown, source fields and artifact chunks are rendered as text; links allow only HTTP(S)
+without embedded credentials. No preview fetch, unsafe HTML sink, external asset, browser storage
+or source map exists. CSP blocks inline scripts/styles and remote connections. Resource IDs and
+encoded topic names can appear in browser history; filter text and credentials stay out of URLs.
+Filters/cursors live in the authenticated component tree and are discarded on expiry/logout.
+Logout discards that tree before any network wait, cancels in-flight reads and uses a separate
+five-second CSRF-aware exchange. A generation guard prevents older session refreshes from
+restoring the discarded tree. Authenticated session bootstrap obtains the validated public
+page cap under the existing upstream concurrency/deadline budget; clients clamp page/history
+requests, while unpaged reads and artifact character offsets retain their separate semantics.
+The client aborts stale requests and treats edge redirects/non-JSON auth refusals as authentication
+failure, never returned HTML. A top-level named document GET may arrive cross-site for Access
+return navigation; this exemption never covers API or script reads and never bypasses Origin,
+Host or Access assertion checks. Public private-mode assets contain no knowledge or credentials.
+Compromised operator browser/extensions, copied cookies until expiry, process-local rate limits,
+all-sensitivity visibility and live-scan membership changes remain accepted limitations.
 
 The [independent PR2 review](reviews/pr128-independent-security.md) found anonymous readiness
 amplification/shared-slot starvation. Readiness now has a separate fixed admission budget,

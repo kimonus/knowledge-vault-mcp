@@ -10,6 +10,12 @@ stable release.
 
 ### Security
 
+- Address independent PR3 review: clear private views immediately when logout begins, abort
+  stale reads and bound the isolated logout exchange. Keep Sign out visible on narrow detail
+  screens and respect smaller advertised core page limits across Explorer, Portal and history.
+  Keep the initial applied Explorer view stable so draft edits do not amplify inspection reads.
+  No deployment or existing core-client action is required.
+
 - Address independent Dashboard PR2 review: bound anonymous readiness admission and dependency
   work with a separate probe budget, cached results, single-check admission and a short deadline.
   Clarify that Access edge expiry responses precede origin JSON handling and add PR3/PR4 client
@@ -28,6 +34,14 @@ stable release.
   PR1. No live image or deployment is changed by this source update.
 
 ### Added
+
+- Optional React/TypeScript Knowledge Explorer and deterministic Knowledge Portal, with all-status
+  exhaustive browsing, filters, complete paged provenance/artifacts/relationships, temporal
+  resolution and raw evidence. All stored content renders inertly through the same-origin BFF.
+  Add private/Access browser flows, accessible responsive navigation, locked frontend contracts,
+  component/browser security coverage and an independent non-root dashboard image. The image is
+  disabled by default; no existing core client upgrade action, deployment, live credential or
+  Helm resource change. PR4 must supply conditional deployment and release integration.
 
 - Core protocol-1 inspection API at `/api/v1/read`: exhaustive all-status/strict lexical browsing,
   deterministic catalogs, paged provenance/artifact/relationship/temporal inspection and bounded

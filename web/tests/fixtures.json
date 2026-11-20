@@ -1,0 +1,2574 @@
+{
+  "artifact": {
+    "artifact_id": "00000000-0000-0000-0000-0000000003e8",
+    "content": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+    "description": "Inert synthetic artifact",
+    "filename": "evidence.svg",
+    "media_type": "image/svg+xml",
+    "next_offset": 8000,
+    "offset": 0,
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "size_bytes": 16020,
+    "total_chars": 16020,
+    "untrusted_data": true
+  },
+  "artifacts": [
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-0.txt",
+      "id": "00000000-0000-0000-0000-0000000003e8",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-1.txt",
+      "id": "00000000-0000-0000-0000-0000000003e9",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-2.txt",
+      "id": "00000000-0000-0000-0000-0000000003ea",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-3.txt",
+      "id": "00000000-0000-0000-0000-0000000003eb",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-4.txt",
+      "id": "00000000-0000-0000-0000-0000000003ec",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-5.txt",
+      "id": "00000000-0000-0000-0000-0000000003ed",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-6.txt",
+      "id": "00000000-0000-0000-0000-0000000003ee",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-7.txt",
+      "id": "00000000-0000-0000-0000-0000000003ef",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-8.txt",
+      "id": "00000000-0000-0000-0000-0000000003f0",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-9.txt",
+      "id": "00000000-0000-0000-0000-0000000003f1",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-10.txt",
+      "id": "00000000-0000-0000-0000-0000000003f2",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-11.txt",
+      "id": "00000000-0000-0000-0000-0000000003f3",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-12.txt",
+      "id": "00000000-0000-0000-0000-0000000003f4",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-13.txt",
+      "id": "00000000-0000-0000-0000-0000000003f5",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-14.txt",
+      "id": "00000000-0000-0000-0000-0000000003f6",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-15.txt",
+      "id": "00000000-0000-0000-0000-0000000003f7",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-16.txt",
+      "id": "00000000-0000-0000-0000-0000000003f8",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-17.txt",
+      "id": "00000000-0000-0000-0000-0000000003f9",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-18.txt",
+      "id": "00000000-0000-0000-0000-0000000003fa",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-19.txt",
+      "id": "00000000-0000-0000-0000-0000000003fb",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-20.txt",
+      "id": "00000000-0000-0000-0000-0000000003fc",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    },
+    {
+      "description": "Synthetic inert text",
+      "filename": "evidence-21.txt",
+      "id": "00000000-0000-0000-0000-0000000003fd",
+      "media_type": "image/svg+xml",
+      "size_bytes": 16020
+    }
+  ],
+  "catalog": {
+    "consistency": "live",
+    "evaluated_at": "2026-11-19T12:00:00Z",
+    "grouping_version": "1",
+    "items": [
+      {
+        "assertion_count": 4,
+        "by_evidence_state": {
+          "reported": 3,
+          "unknown": 1
+        },
+        "by_kind": {
+          "configuration": 2,
+          "plan": 1,
+          "rejected_option": 1
+        },
+        "by_status": {
+          "current": 3,
+          "superseded": 1
+        },
+        "by_workflow_state": {
+          "proposed": 1,
+          "unspecified": 3
+        },
+        "key": "backups",
+        "label": "backups",
+        "stored_labels": ["backups", "backup"]
+      },
+      {
+        "assertion_count": 4,
+        "by_evidence_state": {
+          "reported": 3,
+          "unknown": 1
+        },
+        "by_kind": {
+          "configuration": 2,
+          "plan": 1,
+          "rejected_option": 1
+        },
+        "by_status": {
+          "current": 3,
+          "superseded": 1
+        },
+        "by_workflow_state": {
+          "proposed": 1,
+          "unspecified": 3
+        },
+        "key": null,
+        "label": "Uncategorized",
+        "stored_labels": []
+      }
+    ],
+    "next_cursor": null,
+    "page_size": 50,
+    "untrusted_data": true
+  },
+  "context": {
+    "aliases": ["Home infrastructure"],
+    "id": "00000000-0000-0000-0000-000000000384",
+    "name": "Homelab operations",
+    "untrusted_data": true
+  },
+  "details": [
+    {
+      "artifact_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-0.txt",
+            "id": "00000000-0000-0000-0000-0000000003e8",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-1.txt",
+            "id": "00000000-0000-0000-0000-0000000003e9",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-2.txt",
+            "id": "00000000-0000-0000-0000-0000000003ea",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-3.txt",
+            "id": "00000000-0000-0000-0000-0000000003eb",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-4.txt",
+            "id": "00000000-0000-0000-0000-0000000003ec",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-5.txt",
+            "id": "00000000-0000-0000-0000-0000000003ed",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-6.txt",
+            "id": "00000000-0000-0000-0000-0000000003ee",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-7.txt",
+            "id": "00000000-0000-0000-0000-0000000003ef",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-8.txt",
+            "id": "00000000-0000-0000-0000-0000000003f0",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-9.txt",
+            "id": "00000000-0000-0000-0000-0000000003f1",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-10.txt",
+            "id": "00000000-0000-0000-0000-0000000003f2",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-11.txt",
+            "id": "00000000-0000-0000-0000-0000000003f3",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-12.txt",
+            "id": "00000000-0000-0000-0000-0000000003f4",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-13.txt",
+            "id": "00000000-0000-0000-0000-0000000003f5",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-14.txt",
+            "id": "00000000-0000-0000-0000-0000000003f6",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-15.txt",
+            "id": "00000000-0000-0000-0000-0000000003f7",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-16.txt",
+            "id": "00000000-0000-0000-0000-0000000003f8",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-17.txt",
+            "id": "00000000-0000-0000-0000-0000000003f9",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-18.txt",
+            "id": "00000000-0000-0000-0000-0000000003fa",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          },
+          {
+            "description": "Synthetic inert text",
+            "filename": "evidence-19.txt",
+            "id": "00000000-0000-0000-0000-0000000003fb",
+            "media_type": "image/svg+xml",
+            "size_bytes": 16020
+          }
+        ],
+        "next_cursor": "20",
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "artifacts": [
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-0.txt",
+          "id": "00000000-0000-0000-0000-0000000003e8",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-1.txt",
+          "id": "00000000-0000-0000-0000-0000000003e9",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-2.txt",
+          "id": "00000000-0000-0000-0000-0000000003ea",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-3.txt",
+          "id": "00000000-0000-0000-0000-0000000003eb",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-4.txt",
+          "id": "00000000-0000-0000-0000-0000000003ec",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-5.txt",
+          "id": "00000000-0000-0000-0000-0000000003ed",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-6.txt",
+          "id": "00000000-0000-0000-0000-0000000003ee",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-7.txt",
+          "id": "00000000-0000-0000-0000-0000000003ef",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-8.txt",
+          "id": "00000000-0000-0000-0000-0000000003f0",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-9.txt",
+          "id": "00000000-0000-0000-0000-0000000003f1",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-10.txt",
+          "id": "00000000-0000-0000-0000-0000000003f2",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-11.txt",
+          "id": "00000000-0000-0000-0000-0000000003f3",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-12.txt",
+          "id": "00000000-0000-0000-0000-0000000003f4",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-13.txt",
+          "id": "00000000-0000-0000-0000-0000000003f5",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-14.txt",
+          "id": "00000000-0000-0000-0000-0000000003f6",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-15.txt",
+          "id": "00000000-0000-0000-0000-0000000003f7",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-16.txt",
+          "id": "00000000-0000-0000-0000-0000000003f8",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-17.txt",
+          "id": "00000000-0000-0000-0000-0000000003f9",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-18.txt",
+          "id": "00000000-0000-0000-0000-0000000003fa",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        },
+        {
+          "description": "Synthetic inert text",
+          "filename": "evidence-19.txt",
+          "id": "00000000-0000-0000-0000-0000000003fb",
+          "media_type": "image/svg+xml",
+          "size_bytes": 16020
+        }
+      ],
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content": "Nightly backup configuration retained from operator evidence.",
+      "context_id": "00000000-0000-0000-0000-000000000384",
+      "created_at": "2026-11-19T12:00:00Z",
+      "embedding_state": "disabled",
+      "evidence_state": "reported",
+      "facet": "configuration",
+      "id": "00000000-0000-0000-0000-000000000001",
+      "identity_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-001"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-002"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-003"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-004"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-005"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-006"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-007"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-008"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-009"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-010"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-011"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-012"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-013"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-014"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-015"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-016"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-017"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-018"
+          },
+          {
+            "property": "backup",
+            "scope": "personal",
+            "state_type": "configuration",
+            "subject": "homelab-019"
+          }
+        ],
+        "next_cursor": "20",
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "kind": "configuration",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "last_verified_at": null,
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "provenance": [
+        {
+          "conversation_id": null,
+          "kind": "command",
+          "locator": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+          "message_ids": [],
+          "observed_at": null,
+          "timestamp_basis": "source",
+          "timestamp_confidence": null,
+          "timestamp_precision": "day",
+          "title": "Synthetic provenance"
+        }
+      ],
+      "review_after": null,
+      "revision": 1,
+      "sensitivity": "normal",
+      "source_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+            "url": "javascript:window.__vault_xss=3"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 1",
+            "url": "https://example.test/source/001"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 2",
+            "url": "https://example.test/source/002"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 3",
+            "url": "https://example.test/source/003"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 4",
+            "url": "https://example.test/source/004"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 5",
+            "url": "https://example.test/source/005"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 6",
+            "url": "https://example.test/source/006"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 7",
+            "url": "https://example.test/source/007"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 8",
+            "url": "https://example.test/source/008"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 9",
+            "url": "https://example.test/source/009"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 10",
+            "url": "https://example.test/source/010"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 11",
+            "url": "https://example.test/source/011"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 12",
+            "url": "https://example.test/source/012"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 13",
+            "url": "https://example.test/source/013"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 14",
+            "url": "https://example.test/source/014"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 15",
+            "url": "https://example.test/source/015"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 16",
+            "url": "https://example.test/source/016"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 17",
+            "url": "https://example.test/source/017"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 18",
+            "url": "https://example.test/source/018"
+          },
+          {
+            "publisher": "Synthetic source",
+            "retrieved_at": "2026-11-19T12:00:00Z",
+            "title": "Evidence source 19",
+            "url": "https://example.test/source/019"
+          }
+        ],
+        "next_cursor": "20",
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "sources": [
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+          "url": "javascript:window.__vault_xss=3"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 1",
+          "url": "https://example.test/source/001"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 2",
+          "url": "https://example.test/source/002"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 3",
+          "url": "https://example.test/source/003"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 4",
+          "url": "https://example.test/source/004"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 5",
+          "url": "https://example.test/source/005"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 6",
+          "url": "https://example.test/source/006"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 7",
+          "url": "https://example.test/source/007"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 8",
+          "url": "https://example.test/source/008"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 9",
+          "url": "https://example.test/source/009"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 10",
+          "url": "https://example.test/source/010"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 11",
+          "url": "https://example.test/source/011"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 12",
+          "url": "https://example.test/source/012"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 13",
+          "url": "https://example.test/source/013"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 14",
+          "url": "https://example.test/source/014"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 15",
+          "url": "https://example.test/source/015"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 16",
+          "url": "https://example.test/source/016"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 17",
+          "url": "https://example.test/source/017"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 18",
+          "url": "https://example.test/source/018"
+        },
+        {
+          "publisher": "Synthetic source",
+          "retrieved_at": "2026-11-19T12:00:00Z",
+          "title": "Evidence source 19",
+          "url": "https://example.test/source/019"
+        }
+      ],
+      "status": "current",
+      "supersedes_id": "00000000-0000-0000-0000-000000000002",
+      "temporal_identities": [
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-001"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-002"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-003"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-004"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-005"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-006"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-007"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-008"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-009"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-010"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-011"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-012"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-013"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-014"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-015"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-016"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-017"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-018"
+        },
+        {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab-019"
+        }
+      ],
+      "temporal_identities_truncated": true,
+      "temporal_role": "ongoing",
+      "topics": ["backups", "homelab"],
+      "untrusted_data": true,
+      "updated_at": "2026-11-19T12:00:00Z",
+      "usage": {
+        "available": false,
+        "explicit_fetch_count": 0,
+        "last_explicit_fetch_at": null,
+        "last_retrieved_at": null,
+        "last_used_at": null,
+        "retrieval_count": 0,
+        "use_count": 0
+      },
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    {
+      "artifact_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "artifacts": [],
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content": "Earlier backup configuration, retained as historical evidence.",
+      "context_id": "00000000-0000-0000-0000-000000000384",
+      "created_at": "2026-11-19T12:00:00Z",
+      "embedding_state": "disabled",
+      "evidence_state": "reported",
+      "facet": "configuration",
+      "id": "00000000-0000-0000-0000-000000000002",
+      "identity_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "kind": "configuration",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "last_verified_at": null,
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "provenance": [
+        {
+          "conversation_id": null,
+          "kind": "command",
+          "locator": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+          "message_ids": [],
+          "observed_at": null,
+          "timestamp_basis": "source",
+          "timestamp_confidence": null,
+          "timestamp_precision": "day",
+          "title": "Synthetic provenance"
+        }
+      ],
+      "review_after": null,
+      "revision": 1,
+      "sensitivity": "normal",
+      "source_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "sources": [],
+      "status": "superseded",
+      "supersedes_id": null,
+      "temporal_identities": [],
+      "temporal_identities_truncated": false,
+      "temporal_role": "historical",
+      "topics": ["backups", "homelab"],
+      "untrusted_data": true,
+      "updated_at": "2026-11-19T12:00:00Z",
+      "usage": {
+        "available": false,
+        "explicit_fetch_count": 0,
+        "last_explicit_fetch_at": null,
+        "last_retrieved_at": null,
+        "last_used_at": null,
+        "retrieval_count": 0,
+        "use_count": 0
+      },
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    {
+      "artifact_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "artifacts": [],
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content": "Rejected option: public database access was rejected.",
+      "context_id": "00000000-0000-0000-0000-000000000384",
+      "created_at": "2026-11-19T12:00:00Z",
+      "embedding_state": "disabled",
+      "evidence_state": "reported",
+      "facet": null,
+      "id": "00000000-0000-0000-0000-000000000003",
+      "identity_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "kind": "rejected_option",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "last_verified_at": null,
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "provenance": [
+        {
+          "conversation_id": null,
+          "kind": "command",
+          "locator": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+          "message_ids": [],
+          "observed_at": null,
+          "timestamp_basis": "source",
+          "timestamp_confidence": null,
+          "timestamp_precision": "day",
+          "title": "Synthetic provenance"
+        }
+      ],
+      "review_after": null,
+      "revision": 1,
+      "sensitivity": "normal",
+      "source_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "sources": [],
+      "status": "current",
+      "supersedes_id": null,
+      "temporal_identities": [],
+      "temporal_identities_truncated": false,
+      "temporal_role": "ongoing",
+      "topics": ["backups", "homelab"],
+      "untrusted_data": true,
+      "updated_at": "2026-11-19T12:00:00Z",
+      "usage": {
+        "available": false,
+        "explicit_fetch_count": 0,
+        "last_explicit_fetch_at": null,
+        "last_retrieved_at": null,
+        "last_used_at": null,
+        "retrieval_count": 0,
+        "use_count": 0
+      },
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    {
+      "artifact_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "artifacts": [],
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content": "Proposed plan: rehearse the restore procedure.",
+      "context_id": "00000000-0000-0000-0000-000000000384",
+      "created_at": "2026-11-19T12:00:00Z",
+      "embedding_state": "disabled",
+      "evidence_state": "unknown",
+      "facet": null,
+      "id": "00000000-0000-0000-0000-000000000004",
+      "identity_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "kind": "plan",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "last_verified_at": null,
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "provenance": [
+        {
+          "conversation_id": null,
+          "kind": "command",
+          "locator": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+          "message_ids": [],
+          "observed_at": null,
+          "timestamp_basis": "source",
+          "timestamp_confidence": null,
+          "timestamp_precision": "day",
+          "title": "Synthetic provenance"
+        }
+      ],
+      "review_after": null,
+      "revision": 1,
+      "sensitivity": "normal",
+      "source_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "sources": [],
+      "status": "current",
+      "supersedes_id": null,
+      "temporal_identities": [],
+      "temporal_identities_truncated": false,
+      "temporal_role": "ongoing",
+      "topics": ["backups", "homelab"],
+      "untrusted_data": true,
+      "updated_at": "2026-11-19T12:00:00Z",
+      "usage": {
+        "available": false,
+        "explicit_fetch_count": 0,
+        "last_explicit_fetch_at": null,
+        "last_retrieved_at": null,
+        "last_used_at": null,
+        "retrieval_count": 0,
+        "use_count": 0
+      },
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": "proposed"
+    },
+    {
+      "artifact_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "artifacts": [],
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content": "Uncertain note: keyboard preference needs confirmation.",
+      "context_id": null,
+      "created_at": "2026-11-19T12:00:00Z",
+      "embedding_state": "disabled",
+      "evidence_state": "unknown",
+      "facet": null,
+      "id": "00000000-0000-0000-0000-000000000005",
+      "identity_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "kind": "user_fact",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "last_verified_at": null,
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "provenance": [
+        {
+          "conversation_id": null,
+          "kind": "command",
+          "locator": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+          "message_ids": [],
+          "observed_at": null,
+          "timestamp_basis": "source",
+          "timestamp_confidence": null,
+          "timestamp_precision": "day",
+          "title": "Synthetic provenance"
+        }
+      ],
+      "review_after": null,
+      "revision": 1,
+      "sensitivity": "normal",
+      "source_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "sources": [],
+      "status": "uncertain",
+      "supersedes_id": null,
+      "temporal_identities": [],
+      "temporal_identities_truncated": false,
+      "temporal_role": "ongoing",
+      "topics": [],
+      "untrusted_data": true,
+      "updated_at": "2026-11-19T12:00:00Z",
+      "usage": {
+        "available": false,
+        "explicit_fetch_count": 0,
+        "last_explicit_fetch_at": null,
+        "last_retrieved_at": null,
+        "last_used_at": null,
+        "retrieval_count": 0,
+        "use_count": 0
+      },
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    {
+      "artifact_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "artifacts": [],
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content": "Disputed report: competing evidence is retained.",
+      "context_id": null,
+      "created_at": "2026-11-19T12:00:00Z",
+      "embedding_state": "disabled",
+      "evidence_state": "reported",
+      "facet": null,
+      "id": "00000000-0000-0000-0000-000000000006",
+      "identity_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "kind": "external_fact",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "last_verified_at": null,
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "provenance": [
+        {
+          "conversation_id": null,
+          "kind": "command",
+          "locator": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+          "message_ids": [],
+          "observed_at": null,
+          "timestamp_basis": "source",
+          "timestamp_confidence": null,
+          "timestamp_precision": "day",
+          "title": "Synthetic provenance"
+        }
+      ],
+      "review_after": null,
+      "revision": 1,
+      "sensitivity": "normal",
+      "source_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "sources": [],
+      "status": "disputed",
+      "supersedes_id": null,
+      "temporal_identities": [],
+      "temporal_identities_truncated": false,
+      "temporal_role": "ongoing",
+      "topics": [],
+      "untrusted_data": true,
+      "updated_at": "2026-11-19T12:00:00Z",
+      "usage": {
+        "available": false,
+        "explicit_fetch_count": 0,
+        "last_explicit_fetch_at": null,
+        "last_retrieved_at": null,
+        "last_used_at": null,
+        "retrieval_count": 0,
+        "use_count": 0
+      },
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    {
+      "artifact_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "artifacts": [],
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content": "Operator prefers reproducible evidence.",
+      "context_id": null,
+      "created_at": "2026-11-19T12:00:00Z",
+      "embedding_state": "disabled",
+      "evidence_state": "verified",
+      "facet": null,
+      "id": "00000000-0000-0000-0000-000000000007",
+      "identity_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "kind": "preference",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "last_verified_at": "2026-11-19T12:00:00Z",
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "provenance": [
+        {
+          "conversation_id": null,
+          "kind": "command",
+          "locator": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+          "message_ids": [],
+          "observed_at": null,
+          "timestamp_basis": "source",
+          "timestamp_confidence": null,
+          "timestamp_precision": "day",
+          "title": "Synthetic provenance"
+        }
+      ],
+      "review_after": null,
+      "revision": 1,
+      "sensitivity": "private",
+      "source_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "sources": [],
+      "status": "current",
+      "supersedes_id": null,
+      "temporal_identities": [],
+      "temporal_identities_truncated": false,
+      "temporal_role": "ongoing",
+      "topics": [],
+      "untrusted_data": true,
+      "updated_at": "2026-11-19T12:00:00Z",
+      "usage": {
+        "available": false,
+        "explicit_fetch_count": 0,
+        "last_explicit_fetch_at": null,
+        "last_retrieved_at": null,
+        "last_used_at": null,
+        "retrieval_count": 0,
+        "use_count": 0
+      },
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    {
+      "artifact_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "artifacts": [],
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content": "Considered option: an alternative archive format.",
+      "context_id": null,
+      "created_at": "2026-11-19T12:00:00Z",
+      "embedding_state": "disabled",
+      "evidence_state": "inferred",
+      "facet": null,
+      "id": "00000000-0000-0000-0000-000000000008",
+      "identity_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "kind": "considered_option",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "last_verified_at": null,
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "provenance": [
+        {
+          "conversation_id": null,
+          "kind": "command",
+          "locator": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+          "message_ids": [],
+          "observed_at": null,
+          "timestamp_basis": "source",
+          "timestamp_confidence": null,
+          "timestamp_precision": "day",
+          "title": "Synthetic provenance"
+        }
+      ],
+      "review_after": null,
+      "revision": 1,
+      "sensitivity": "normal",
+      "source_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "sources": [],
+      "status": "current",
+      "supersedes_id": null,
+      "temporal_identities": [],
+      "temporal_identities_truncated": false,
+      "temporal_role": "ongoing",
+      "topics": [],
+      "untrusted_data": true,
+      "updated_at": "2026-11-19T12:00:00Z",
+      "usage": {
+        "available": false,
+        "explicit_fetch_count": 0,
+        "last_explicit_fetch_at": null,
+        "last_retrieved_at": null,
+        "last_used_at": null,
+        "retrieval_count": 0,
+        "use_count": 0
+      },
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    {
+      "artifact_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "artifacts": [],
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+      "context_id": null,
+      "created_at": "2026-11-19T12:00:00Z",
+      "embedding_state": "disabled",
+      "evidence_state": "unknown",
+      "facet": null,
+      "id": "00000000-0000-0000-0000-000000000009",
+      "identity_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "kind": "artifact_observation",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "last_verified_at": null,
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "provenance": [
+        {
+          "conversation_id": null,
+          "kind": "command",
+          "locator": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+          "message_ids": [],
+          "observed_at": null,
+          "timestamp_basis": "source",
+          "timestamp_confidence": null,
+          "timestamp_precision": "day",
+          "title": "Synthetic provenance"
+        }
+      ],
+      "review_after": null,
+      "revision": 1,
+      "sensitivity": "sensitive",
+      "source_page": {
+        "consistency": "live",
+        "evaluated_at": "2026-11-19T12:00:00Z",
+        "items": [],
+        "next_cursor": null,
+        "page_size": 20,
+        "untrusted_data": true
+      },
+      "sources": [],
+      "status": "current",
+      "supersedes_id": null,
+      "temporal_identities": [],
+      "temporal_identities_truncated": false,
+      "temporal_role": "ongoing",
+      "topics": [],
+      "untrusted_data": true,
+      "updated_at": "2026-11-19T12:00:00Z",
+      "usage": {
+        "available": false,
+        "explicit_fetch_count": 0,
+        "last_explicit_fetch_at": null,
+        "last_retrieved_at": null,
+        "last_used_at": null,
+        "retrieval_count": 0,
+        "use_count": 0
+      },
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    }
+  ],
+  "evidence": {
+    "assertion": {
+      "artifact_ids": [],
+      "confidence": 1.0,
+      "content": "Retained synthetic backup evidence.",
+      "context_id": null,
+      "evidence_state": "reported",
+      "facet": null,
+      "kind": "configuration",
+      "last_verified_at": null,
+      "observed_at": null,
+      "origin": "user",
+      "provenance": [],
+      "review_after": null,
+      "sensitivity": "normal",
+      "sources": [],
+      "status": "current",
+      "supersedes_id": null,
+      "temporal": {
+        "corrects_key": null,
+        "evidence_key": "backup-000",
+        "identity": {
+          "property": "backup",
+          "scope": "personal",
+          "state_type": "configuration",
+          "subject": "homelab"
+        },
+        "legacy_supersession_reason": "unknown",
+        "mode": "snapshot",
+        "observation_basis": "source",
+        "observed_precision": "day",
+        "transition_assertion_id": null,
+        "valid_from_precision": "month",
+        "valid_to_precision": "instant",
+        "value": "nightly"
+      },
+      "temporal_role": "unspecified",
+      "topics": [],
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    "assertion_id": "00000000-0000-0000-0000-000000000001",
+    "evidence_key": "backup-000",
+    "recorded_at": "2026-11-19T12:00:00Z",
+    "retired": false
+  },
+  "identities": [
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-001"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-002"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-003"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-004"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-005"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-006"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-007"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-008"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-009"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-010"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-011"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-012"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-013"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-014"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-015"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-016"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-017"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-018"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-019"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-020"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-021"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-022"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-023"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-024"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-025"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-026"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-027"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-028"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-029"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-030"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-031"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-032"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-033"
+    },
+    {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab-034"
+    }
+  ],
+  "identity": {
+    "property": "backup",
+    "scope": "personal",
+    "state_type": "configuration",
+    "subject": "homelab"
+  },
+  "now": "2026-11-19T12:00:00Z",
+  "page": {
+    "consistency": "live",
+    "evaluated_at": "2026-11-19T12:00:00Z",
+    "items": [
+      {
+        "confidence": 0.85,
+        "confirmation_count": 3,
+        "content_truncated": false,
+        "context_id": "00000000-0000-0000-0000-000000000384",
+        "created_at": "2026-11-19T12:00:00Z",
+        "evidence_state": "reported",
+        "excerpt": "Nightly backup configuration retained from operator evidence.",
+        "facet": "configuration",
+        "id": "00000000-0000-0000-0000-000000000001",
+        "kind": "configuration",
+        "last_confirmed_at": "2026-11-19T12:00:00Z",
+        "observed_at": "2026-11-19T12:00:00Z",
+        "origin": "user",
+        "revision": 1,
+        "sensitivity": "normal",
+        "status": "current",
+        "temporal_role": "ongoing",
+        "topics": ["backups", "homelab"],
+        "updated_at": "2026-11-19T12:00:00Z",
+        "valid_from": null,
+        "valid_to": null,
+        "workflow_state": null
+      },
+      {
+        "confidence": 0.85,
+        "confirmation_count": 3,
+        "content_truncated": false,
+        "context_id": "00000000-0000-0000-0000-000000000384",
+        "created_at": "2026-11-19T12:00:00Z",
+        "evidence_state": "reported",
+        "excerpt": "Earlier backup configuration, retained as historical evidence.",
+        "facet": "configuration",
+        "id": "00000000-0000-0000-0000-000000000002",
+        "kind": "configuration",
+        "last_confirmed_at": "2026-11-19T12:00:00Z",
+        "observed_at": "2026-11-19T12:00:00Z",
+        "origin": "user",
+        "revision": 1,
+        "sensitivity": "normal",
+        "status": "superseded",
+        "temporal_role": "historical",
+        "topics": ["backups", "homelab"],
+        "updated_at": "2026-11-19T12:00:00Z",
+        "valid_from": null,
+        "valid_to": null,
+        "workflow_state": null
+      }
+    ],
+    "next_cursor": "2",
+    "page_size": 50,
+    "untrusted_data": true
+  },
+  "resolution": {
+    "as_of": null,
+    "competing_keys": [],
+    "evidence_total": 23,
+    "history": [
+      {
+        "assertion": {
+          "artifact_ids": [],
+          "confidence": 1.0,
+          "content": "Retained synthetic backup evidence.",
+          "context_id": null,
+          "evidence_state": "reported",
+          "facet": null,
+          "kind": "configuration",
+          "last_verified_at": null,
+          "observed_at": null,
+          "origin": "user",
+          "provenance": [],
+          "review_after": null,
+          "sensitivity": "normal",
+          "sources": [],
+          "status": "current",
+          "supersedes_id": null,
+          "temporal": {
+            "corrects_key": null,
+            "evidence_key": "backup-000",
+            "identity": {
+              "property": "backup",
+              "scope": "personal",
+              "state_type": "configuration",
+              "subject": "homelab"
+            },
+            "legacy_supersession_reason": "unknown",
+            "mode": "snapshot",
+            "observation_basis": "source",
+            "observed_precision": "day",
+            "transition_assertion_id": null,
+            "valid_from_precision": "month",
+            "valid_to_precision": "instant",
+            "value": "nightly"
+          },
+          "temporal_role": "unspecified",
+          "topics": [],
+          "valid_from": null,
+          "valid_to": null,
+          "workflow_state": null
+        },
+        "assertion_id": "00000000-0000-0000-0000-000000000001",
+        "disposition": "supporting",
+        "evidence_key": "backup-000",
+        "ordering_at": null,
+        "ordering_basis": "unknown",
+        "recorded_at": "2026-11-19T12:00:00Z"
+      }
+    ],
+    "identity": {
+      "property": "backup",
+      "scope": "personal",
+      "state_type": "configuration",
+      "subject": "homelab"
+    },
+    "known_at": null,
+    "next_history_after": "backup-000",
+    "outcome": "resolved",
+    "reasons": ["supporting_evidence"],
+    "resolver_version": "1",
+    "supporting_keys": ["backup-000"],
+    "untrusted_data": true,
+    "values": ["nightly"]
+  },
+  "sources": [
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+      "url": "javascript:window.__vault_xss=3"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 1",
+      "url": "https://example.test/source/001"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 2",
+      "url": "https://example.test/source/002"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 3",
+      "url": "https://example.test/source/003"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 4",
+      "url": "https://example.test/source/004"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 5",
+      "url": "https://example.test/source/005"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 6",
+      "url": "https://example.test/source/006"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 7",
+      "url": "https://example.test/source/007"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 8",
+      "url": "https://example.test/source/008"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 9",
+      "url": "https://example.test/source/009"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 10",
+      "url": "https://example.test/source/010"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 11",
+      "url": "https://example.test/source/011"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 12",
+      "url": "https://example.test/source/012"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 13",
+      "url": "https://example.test/source/013"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 14",
+      "url": "https://example.test/source/014"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 15",
+      "url": "https://example.test/source/015"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 16",
+      "url": "https://example.test/source/016"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 17",
+      "url": "https://example.test/source/017"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 18",
+      "url": "https://example.test/source/018"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 19",
+      "url": "https://example.test/source/019"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 20",
+      "url": "https://example.test/source/020"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 21",
+      "url": "https://example.test/source/021"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 22",
+      "url": "https://example.test/source/022"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 23",
+      "url": "https://example.test/source/023"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 24",
+      "url": "https://example.test/source/024"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 25",
+      "url": "https://example.test/source/025"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 26",
+      "url": "https://example.test/source/026"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 27",
+      "url": "https://example.test/source/027"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 28",
+      "url": "https://example.test/source/028"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 29",
+      "url": "https://example.test/source/029"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 30",
+      "url": "https://example.test/source/030"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 31",
+      "url": "https://example.test/source/031"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 32",
+      "url": "https://example.test/source/032"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 33",
+      "url": "https://example.test/source/033"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 34",
+      "url": "https://example.test/source/034"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 35",
+      "url": "https://example.test/source/035"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 36",
+      "url": "https://example.test/source/036"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 37",
+      "url": "https://example.test/source/037"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 38",
+      "url": "https://example.test/source/038"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 39",
+      "url": "https://example.test/source/039"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 40",
+      "url": "https://example.test/source/040"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 41",
+      "url": "https://example.test/source/041"
+    },
+    {
+      "publisher": "Synthetic source",
+      "retrieved_at": "2026-11-19T12:00:00Z",
+      "title": "Evidence source 42",
+      "url": "https://example.test/source/042"
+    }
+  ],
+  "summaries": [
+    {
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content_truncated": false,
+      "context_id": "00000000-0000-0000-0000-000000000384",
+      "created_at": "2026-11-19T12:00:00Z",
+      "evidence_state": "reported",
+      "excerpt": "Nightly backup configuration retained from operator evidence.",
+      "facet": "configuration",
+      "id": "00000000-0000-0000-0000-000000000001",
+      "kind": "configuration",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "revision": 1,
+      "sensitivity": "normal",
+      "status": "current",
+      "temporal_role": "ongoing",
+      "topics": ["backups", "homelab"],
+      "updated_at": "2026-11-19T12:00:00Z",
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    {
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content_truncated": false,
+      "context_id": "00000000-0000-0000-0000-000000000384",
+      "created_at": "2026-11-19T12:00:00Z",
+      "evidence_state": "reported",
+      "excerpt": "Earlier backup configuration, retained as historical evidence.",
+      "facet": "configuration",
+      "id": "00000000-0000-0000-0000-000000000002",
+      "kind": "configuration",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "revision": 1,
+      "sensitivity": "normal",
+      "status": "superseded",
+      "temporal_role": "historical",
+      "topics": ["backups", "homelab"],
+      "updated_at": "2026-11-19T12:00:00Z",
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    {
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content_truncated": false,
+      "context_id": "00000000-0000-0000-0000-000000000384",
+      "created_at": "2026-11-19T12:00:00Z",
+      "evidence_state": "reported",
+      "excerpt": "Rejected option: public database access was rejected.",
+      "facet": null,
+      "id": "00000000-0000-0000-0000-000000000003",
+      "kind": "rejected_option",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "revision": 1,
+      "sensitivity": "normal",
+      "status": "current",
+      "temporal_role": "ongoing",
+      "topics": ["backups", "homelab"],
+      "updated_at": "2026-11-19T12:00:00Z",
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    {
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content_truncated": false,
+      "context_id": "00000000-0000-0000-0000-000000000384",
+      "created_at": "2026-11-19T12:00:00Z",
+      "evidence_state": "unknown",
+      "excerpt": "Proposed plan: rehearse the restore procedure.",
+      "facet": null,
+      "id": "00000000-0000-0000-0000-000000000004",
+      "kind": "plan",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "revision": 1,
+      "sensitivity": "normal",
+      "status": "current",
+      "temporal_role": "ongoing",
+      "topics": ["backups", "homelab"],
+      "updated_at": "2026-11-19T12:00:00Z",
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": "proposed"
+    },
+    {
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content_truncated": false,
+      "context_id": null,
+      "created_at": "2026-11-19T12:00:00Z",
+      "evidence_state": "unknown",
+      "excerpt": "Uncertain note: keyboard preference needs confirmation.",
+      "facet": null,
+      "id": "00000000-0000-0000-0000-000000000005",
+      "kind": "user_fact",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "revision": 1,
+      "sensitivity": "normal",
+      "status": "uncertain",
+      "temporal_role": "ongoing",
+      "topics": [],
+      "updated_at": "2026-11-19T12:00:00Z",
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    {
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content_truncated": false,
+      "context_id": null,
+      "created_at": "2026-11-19T12:00:00Z",
+      "evidence_state": "reported",
+      "excerpt": "Disputed report: competing evidence is retained.",
+      "facet": null,
+      "id": "00000000-0000-0000-0000-000000000006",
+      "kind": "external_fact",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "revision": 1,
+      "sensitivity": "normal",
+      "status": "disputed",
+      "temporal_role": "ongoing",
+      "topics": [],
+      "updated_at": "2026-11-19T12:00:00Z",
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    {
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content_truncated": false,
+      "context_id": null,
+      "created_at": "2026-11-19T12:00:00Z",
+      "evidence_state": "verified",
+      "excerpt": "Operator prefers reproducible evidence.",
+      "facet": null,
+      "id": "00000000-0000-0000-0000-000000000007",
+      "kind": "preference",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "revision": 1,
+      "sensitivity": "private",
+      "status": "current",
+      "temporal_role": "ongoing",
+      "topics": [],
+      "updated_at": "2026-11-19T12:00:00Z",
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    {
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content_truncated": false,
+      "context_id": null,
+      "created_at": "2026-11-19T12:00:00Z",
+      "evidence_state": "inferred",
+      "excerpt": "Considered option: an alternative archive format.",
+      "facet": null,
+      "id": "00000000-0000-0000-0000-000000000008",
+      "kind": "considered_option",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "revision": 1,
+      "sensitivity": "normal",
+      "status": "current",
+      "temporal_role": "ongoing",
+      "topics": [],
+      "updated_at": "2026-11-19T12:00:00Z",
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    },
+    {
+      "confidence": 0.85,
+      "confirmation_count": 3,
+      "content_truncated": false,
+      "context_id": null,
+      "created_at": "2026-11-19T12:00:00Z",
+      "evidence_state": "unknown",
+      "excerpt": "<script>window.__vault_xss=1</script><img src=\"https://attack.invalid/pixel\" onerror=\"window.__vault_xss=2\">",
+      "facet": null,
+      "id": "00000000-0000-0000-0000-000000000009",
+      "kind": "artifact_observation",
+      "last_confirmed_at": "2026-11-19T12:00:00Z",
+      "observed_at": "2026-11-19T12:00:00Z",
+      "origin": "user",
+      "revision": 1,
+      "sensitivity": "sensitive",
+      "status": "current",
+      "temporal_role": "ongoing",
+      "topics": [],
+      "updated_at": "2026-11-19T12:00:00Z",
+      "valid_from": null,
+      "valid_to": null,
+      "workflow_state": null
+    }
+  ]
+}
