@@ -511,6 +511,26 @@ print("PASS: Dashboard egress core positive control, DB and external denial")
         run([*k, "label", "pod/lab-probe", "lab=probe", "--overwrite"])
 
 
+def canary_metadata(deployment: dict[str, Any], name: str) -> dict[str, Any]:
+    # A matching orphan Pod can be adopted/deleted by the real ReplicaSet. Retain the
+    # workload's policy labels but give this test Pod an explicit live Deployment owner;
+    # ReplicaSets must not claim a Pod controlled by a different owner UID.
+    return {
+        "name": name,
+        "labels": deployment["spec"]["template"]["metadata"]["labels"],
+        "ownerReferences": [
+            {
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "name": deployment["metadata"]["name"],
+                "uid": deployment["metadata"]["uid"],
+                "controller": True,
+                "blockOwnerDeletion": False,
+            }
+        ],
+    }
+
+
 def missing_secret_probe(k: list[str], apply: Any) -> None:
     deployment = json.loads(run([*k, "get", "deployment", f"{NAME}-dashboard", "-o", "json"]))
     template = deployment["spec"]["template"]
@@ -522,7 +542,7 @@ def missing_secret_probe(k: list[str], apply: Any) -> None:
         {
             "apiVersion": "v1",
             "kind": "Pod",
-            "metadata": {"name": "lab-missing-secret", "labels": template["metadata"]["labels"]},
+            "metadata": canary_metadata(deployment, "lab-missing-secret"),
             "spec": template["spec"],
         }
     )
@@ -567,7 +587,7 @@ def invalid_service_probe(k: list[str], apply: Any, browser: str, service: str) 
         {
             "apiVersion": "v1",
             "kind": "Pod",
-            "metadata": {"name": "lab-invalid-service", "labels": template["metadata"]["labels"]},
+            "metadata": canary_metadata(deployment, "lab-invalid-service"),
             "spec": template["spec"],
         }
     )
