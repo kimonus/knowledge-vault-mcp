@@ -13,6 +13,7 @@ stable release.
 - Address independent PR3 review: clear private views immediately when logout begins, abort
   stale reads and bound the isolated logout exchange. Keep Sign out visible on narrow detail
   screens and respect smaller advertised core page limits across Explorer, Portal and history.
+  Keep the initial applied Explorer view stable so draft edits do not amplify inspection reads.
   No deployment or existing core-client action is required.
 
 - Address independent Dashboard PR2 review: bound anonymous readiness admission and dependency

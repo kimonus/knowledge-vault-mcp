@@ -98,20 +98,28 @@ and prevents stale refresh restoration. Header controls reflow at 320px. Session
 the validated public page cap under the existing upstream budget; page/history reads respect it,
 while unpaged reads and artifact character limits remain separate.
 
-Post-remediation checks: 694 core tests, 164 installed BFF tests and 50 frontend tests pass.
+Post-remediation checks: 694 core tests, 164 installed BFF tests and 51 frontend tests pass.
 Frontend coverage is 97.81% statements / 91.68% branches; BFF is 98.08% / 94.02%.
 The independent reviewer also confirmed and corrected a Low artifact-range display defect:
 non-BMP text now uses the same Unicode character count as core offsets. Content and paging were
 never truncated by that label defect.
-The independent reviewer authored 26 adversarial browser runs across both engines, two
+An additional Medium refetch defect was independently reproduced: seven unapplied Topic
+keystrokes sent seven unwanted knowledge-query POSTs. The initial applied Explorer spec is now
+memoized by the advertised limit; draft edits retain that spec and only Apply starts a new read.
+This is a request-budget and UI stability correction, not an authentication change or a claim
+that Firefox's underlying native fault has been identified.
+The independent reviewer authored 28 adversarial browser runs across both engines, two
 actual-core/pgvector flows and two low-capability flows, and independently assessed production
 image inspection. All passed on the corrected runtime. These regressions are retained in CI,
 including both browsers against the actual core and a separate low-capability fixture. The
-full publication suite includes 52 browser cases after the Unicode regression. Functional
+full publication suite includes 54 browser cases after the Unicode and draft-filter regressions.
+Functional
 fixture rate-budget isolation and atomic source-page snapshots preserve deterministic tests
 without changing production limits, weakening assertions or enabling retries.
-The unchanged original Firefox Axe sequence runs in a dedicated fresh browser worker after
-controlled comparisons associated native crashes with prior browser-process history. The
-underlying native cause is unconfirmed; no accessibility rules or production behavior changed.
+The original Firefox Axe assertions run in a dedicated fresh browser worker. The shared helper
+waits for loading, fonts and two animation frames; login waits for all 50 record cards before
+the preserved heading assertion. Controlled comparisons and their failures are recorded in the
+independent report. The underlying native cause is unconfirmed; no accessibility rules, corpus,
+browser preferences or production behavior changed for this test-order stabilization.
 Final CI, exact published SHA and independent approval are recorded in PR #130; this historical
 author record is not a substitute for that verdict. PR4 requirements above remain unchanged.

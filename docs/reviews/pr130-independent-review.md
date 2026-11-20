@@ -5,9 +5,10 @@ exclusive worktree. Review requested by [maintainer comment 7023515262](https://
 Initial subject: `dea435a8739a45bffce053cd9b09544fcd146d0a`; PR base:
 `d329d4c0569bb9ae13be666478aa890f4c114e61`.
 
-**Verdict: PASS for corrected runtime `c790ce3c8871c30a5db1149cd06b7c7786aa5319`.**
-All three reproduced medium findings and the additional low finding are resolved and independently retested; no unresolved
-blocking finding remains in PR3's component scope. The original head required changes.
+**Runtime verdict: PASS for `ace3882ab07306eb863ce0e4e00da0f57a299a81`, with reviewed test-only readiness/order changes through `71084d64582ddb22de138737ca0381c28cce3247`; publication approval pending final gates.**
+All four reproduced medium findings and the low finding are resolved and independently retested.
+Mandatory exact-publication-head browser and CI verification remain separate requirements; no
+claim that the underlying Firefox native implementation has been repaired follows from this verdict.
 The final publication commit will add review artifacts and CI wiring; its exact SHA and final
 browser/CI binding must be recorded in the PR comment after that commit is available.
 This is an independent agent verdict, not a same-account GitHub approving review. No merge, live
@@ -124,6 +125,26 @@ The otherwise unchanged implementation now passes the focused regression in both
 Firefox; raw result `/tmp/pr130-independent-unicode-fixed.log` (2 passed). The rebuilt source's
 build result is `/tmp/pr130-unicode-reviewed-build.log`.
 
+### R5 — Medium: unapplied draft edits repeatedly reissue the active query
+
+Original location: `web/src/explorer.tsx:83`, the fallback object supplied to
+`useMemory("explorerApplied", ...)`. Before any explicit Apply operation, this fallback is a new
+object on every Explorer render. Draft field updates use Workspace memory, rerender Explorer,
+and change the applied-spec reference consumed by the query loader, even though the operator
+has not applied those edits. The reviewer captured seven additional `assertions/query` POST
+requests while typing seven Topic characters in both Chromium and Firefox. Expected: zero
+knowledge-query requests until Apply. This produces unnecessary reads/loading churn and can
+consume the shared read budget; it is not an authorization bypass or a confirmed native-crash cause.
+
+Evidence: `/tmp/pr130-filter-draft.log`, two original-runtime browser failures with
+`UNAPPLIED_DRAFT_QUERY_COUNT 7`. Remedy: preserve the initial applied-spec object's identity
+across unrelated draft renders, while updating it when the advertised maximum changes.
+**Disposition: resolved in `ace3882ab07306eb863ce0e4e00da0f57a299a81`.** The reviewer inspected
+the exact commit and `useMemo` dependency on the advertised maximum. The rebuilt actual app now
+issues zero additional knowledge-query requests for those seven keystrokes in both Chromium
+and Firefox. Raw corrected evidence: `/tmp/pr130-filter-draft-fixed.log` (2 passed, both counts 0).
+No authentication, authority, server budget or maximum-page validation was weakened.
+
 ## Corrected-runtime verification and verdict evidence
 
 The reviewer checked `git rev-parse HEAD` and inspected the complete remediation diff at
@@ -157,11 +178,11 @@ The script now also verifies advertised cap 10 and a safe 503 during core bootst
 The intermediate image-script failure and an overly broad resolver-badge test selector were
 review-harness mistakes, corrected and rerun; neither was classified as an application defect.
 
-The evidence supports approval of this corrected PR3 runtime within the accepted component
-scope. Required final-head CI, maintainer merge authority and the deferred deployment/operator
-verification boundaries below remain separate gates.
+This evidence supported the earlier R1–R4 runtime approval before R5 was identified. The current
+verdict is stated above. Required final-head CI, maintainer merge authority and the deferred
+deployment/operator verification boundaries below remain separate gates.
 
-The final runtime verdict extends the above evidence to
+That earlier runtime verdict extended the above evidence to
 `c790ce3c8871c30a5db1149cd06b7c7786aa5319`: subsequent changes are retained review/CI artifacts,
 the isolated functional fixture budget and source-page synchronization described below, plus R4's
 single code-point-count expression. The reviewer inspected this cumulative boundary and the R4
@@ -229,15 +250,76 @@ cause, an application vulnerability or that DOM settling fixes it. Raw evidence:
 `/tmp/pr130-firefox-access-axe.log`, `/tmp/pr130-firefox-control-axe.log` and
 `/tmp/pr130-firefox-fresh-axe.log`.
 
-The reviewer inspected and accepts the resulting harness mitigation: run exactly the original
+The reviewer inspected the initial harness mitigation attempt: run exactly the original
 Firefox desktop/Portal/mobile Axe case in a dedicated fresh-worker/browser project, while
 retaining its code, tags, rules and assertions unchanged. Only that case is excluded from the
 ordinary Firefox project; the independent 320px Axe/keyboard/reflow checks remain there.
 The independent-suite configuration selects its two intended browser projects explicitly.
 The collected suite still contains 50 default cases plus two low-capability cases (52 total),
-with zero retries and unchanged browser security options. This isolates the observed test-tool
-interaction without weakening application behavior or accessibility coverage. The final
-mitigation commit still requires its own complete browser and CI run before exact-head approval.
+with zero retries and unchanged browser security options. Subsequent CI on
+`caef4bfc833b0fd87582e4c69f9936df484c4c77` nevertheless reproduced the native crash in that fresh
+project. Thus process isolation alone was insufficient and was not classified as a native fix.
+That CI also exposed a similar non-atomic observation in the 205-record test (155 observed):
+the reviewer strengthened all affected observation loops to capture complete, disjoint records
+and status badges together, preserving the 205-unique and all-status assertions, and likewise
+preserving/strengthening the 103-relation, 1003-evidence and 43-source assertions.
+
+A further controlled experiment used the library's documented last-resort legacy `axe.run`
+path only for Firefox, with explicit one-frame and zero iframe/frame-DOM preconditions and
+unchanged tags/rules/assertions. It also crashed in two of five Access→Axe pairs, this time
+inside `runLegacy`, with a content process exiting on signal 11. Therefore the ineffective
+legacy selection was removed rather than presented as a successful mitigation. These were
+test-runner experiments, not application fixes.
+
+A bounded GDB capture of owned Firefox descendants subsequently confirmed an actual content-process
+SIGSEGV: PID 3393417 attempted a byte write to address zero inside stripped `libxul` at
+`0x7bcb13488f14` (`movb $0x1,(%r15)`, `si_addr=0`). The same fault was captured twice before that
+process terminated. This establishes a native fault rather than an Axe assertion or timeout;
+the stripped trace does not identify its cause or prove that it is an ordinary null dereference
+rather than an intentional native assertion. No host core policy, external crash upload or
+production setting changed. Raw evidence: `/tmp/pr130-native-gdb-v2.log` and
+`/tmp/pr130-native-capture/gdb-3393142.log`.
+
+An experimental JIT-disabled comparison still crashed in three of ten Access→Axe pairs
+(`/tmp/pr130-nojit-access-axe.log`); these experimental preferences are not retained. A control
+using the actual Page size 50 and Apply operation passed all five pairs without reducing the
+rendered corpus, changing the engine or omitting Axe rules (`/tmp/pr130-firefox-apply50.log`).
+That operation also persists the applied spec and waits for its query/render to finish, so it
+does not isolate the cause. After the independent R5 fix, the unchanged original no-Apply
+sequence still crashed in seven of ten pairs (`/tmp/pr130-stable-default-access-axe.log`).
+R5 is therefore a confirmed functional correction, explicitly not a native-crash remedy.
+The reviewer then held the default 50-card corpus, engine, JIT, Axe implementation and rules
+constant, omitted Apply, and waited for no loading indicator, `document.fonts.ready` and two
+animation frames before each scan. All five Access→three-scan pairs passed (10 cases, 15 scans)
+on the reviewed R5 runtime (`/tmp/pr130-firefox-noapply-settled.log`). This supports adopting
+observable render readiness in the shared test helper; it does not establish the native cause.
+The original test cases with that helper and the final full suite/CI must still pass before
+publication approval.
+The exact seven-line readiness helper was then committed as
+`560117ce825fa4797e743af688f0c0a6b2896d7a` and tested in the original unchanged test cases.
+Four of ten subsequent Axe cases still crashed (16 of 20 total cases passed;
+`/tmp/pr130-ready-original-access-axe.log`), so readiness alone is insufficient. The conditional
+full-suite run did not execute after that failure. Differences between the original and
+diagnostic case, including a pre-scan role-based heading assertion, remain hypotheses to test;
+no application or Firefox repair is claimed from the earlier five passing diagnostic pairs.
+Adding the original heading-role visibility assertion before record readiness to that diagnostic
+reproduced one native failure in five pairs (`/tmp/pr130-firefox-heading-settled.log`). Keeping
+the same assertion but placing it after all 50 cards were ready passed ten of ten pairs and
+all 30 default Axe scans (`/tmp/pr130-firefox-late-heading-settled.log`). This supports a minimal
+test-order correction: wait for the loaded record set before querying heading accessibility,
+retain that exact heading assertion, and retain the shared pre-audit render readiness. No
+assertion, rule, record, browser setting or production code is removed or weakened. The
+original-case comparison and complete exact-head suite/CI are still required; this is measured
+test-order stabilization, not a claim about the native implementation's cause or repair.
+The reviewer inspected exact `71084d64582ddb22de138737ca0381c28cce3247`: its entire delta from
+the corrected application runtime is seven readiness lines plus moving the 50-card wait before
+the unchanged heading assertion. In the actual original Access and accessibility test cases,
+all ten paired repetitions then passed (20 cases, 30 default Axe scans;
+`/tmp/pr130-late-original-access-axe.log`). This verifies the proposed ordering in the original
+flow, rather than substituting the diagnostic scenario. The complete 54-case suite and final
+publication-head CI remain mandatory independent gates; neither is inferred from those pairs.
+Native diagnosis and final exact-head browser/CI verification remain open publication gates;
+all five confirmed application findings remain resolved.
 
 ## Accepted limitations and remaining boundaries
 

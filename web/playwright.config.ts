@@ -34,8 +34,8 @@ export default defineConfig({
       use: { ...devices["Desktop Firefox"] },
     },
     {
-      // Keep the unchanged Axe sequence in a fresh Firefox process: repeated controlled
-      // Access→Axe runs crash natively, while fresh-process scans pass. No rules/retries change.
+      // Run the complete original Axe scenario in a dedicated Firefox worker. Native-crash
+      // comparisons and render-readiness ordering are documented; no rules/retries change.
       name: "firefox-accessibility",
       testMatch: "**/dashboard.spec.ts",
       grep: /desktop and mobile views pass WCAG checks and keyboard navigation/,

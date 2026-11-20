@@ -178,8 +178,9 @@ The Explorer defaults to **All retained**, including every status. Exact text br
 uses exhaustive keyset pages; ranked search is explicitly a bounded candidate set. Filters cover
 topics, context IDs, kinds, status, sensitivity, evidence, workflow, origins, temporal role,
 confidence and available dates. Unclassified topic/context/facet filters apply to exhaustive
-browsing, not ranked search. Reset and applying new filters reset the cursor. Previous pages
-retain at most 100 cursor boundaries in session memory. A live scan is not a snapshot: concurrent
+browsing, not ranked search. Reset and applying new filters reset the cursor. Explorer retains
+the applied view while draft fields are edited; edits alone send no knowledge query. Previous
+pages retain at most 100 cursor boundaries in session memory. A live scan is not a snapshot: concurrent
 changes can affect membership and order. Always follow the returned continuation even when a
 byte-limited page contains fewer rows than requested.
 
