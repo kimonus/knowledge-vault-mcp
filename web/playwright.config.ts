@@ -25,10 +25,20 @@ export default defineConfig({
     },
     {
       name: "firefox",
+      grepInvert:
+        /desktop and mobile views pass WCAG checks and keyboard navigation/,
       testIgnore: [
         "**/real-core.spec.ts",
         "**/independent-low-capabilities.spec.ts",
       ],
+      use: { ...devices["Desktop Firefox"] },
+    },
+    {
+      // Keep the unchanged Axe sequence in a fresh Firefox process: repeated controlled
+      // Access→Axe runs crash natively, while fresh-process scans pass. No rules/retries change.
+      name: "firefox-accessibility",
+      testMatch: "**/dashboard.spec.ts",
+      grep: /desktop and mobile views pass WCAG checks and keyboard navigation/,
       use: { ...devices["Desktop Firefox"] },
     },
     {

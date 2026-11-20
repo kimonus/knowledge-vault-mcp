@@ -212,6 +212,33 @@ legacy mode enabled, retries added or browser security defaults changed. Raw dia
 `/tmp/pr130-final-head-browser-v2.log`. Final publication-head CI remains an explicit gate rather
 than treating a previous passing SHA as its substitute.
 
+The native crash later recurred during that same original Axe case in a full local run on
+`9ffde9aeb32a03cb8fd27925e6360e0718c55cdc` (49 other default cases passed), although that commit's
+[complete CI run](https://github.com/kimonus/knowledge-vault-mcp/actions/runs/44709352257)
+passed all six jobs and all 52 browser cases. The reviewer verified the commit/run association,
+job conclusions and dashboard-web logs directly through GitHub, rather than relying on the
+implementation agent's status report.
+
+A controlled comparison then used the unchanged original test cases and actual reviewed source:
+five fresh Firefox processes each ran the Access scenario followed by the original three-scan
+Axe scenario. All five Access cases passed; two of the five subsequent Axe cases crashed
+natively. In the matched configuration, the Axe case alone passed in all five fresh processes.
+An additional original-configuration fresh control also passed three of three runs. This is
+measured association with preceding browser-process history; it does not establish the native
+cause, an application vulnerability or that DOM settling fixes it. Raw evidence:
+`/tmp/pr130-firefox-access-axe.log`, `/tmp/pr130-firefox-control-axe.log` and
+`/tmp/pr130-firefox-fresh-axe.log`.
+
+The reviewer inspected and accepts the resulting harness mitigation: run exactly the original
+Firefox desktop/Portal/mobile Axe case in a dedicated fresh-worker/browser project, while
+retaining its code, tags, rules and assertions unchanged. Only that case is excluded from the
+ordinary Firefox project; the independent 320px Axe/keyboard/reflow checks remain there.
+The independent-suite configuration selects its two intended browser projects explicitly.
+The collected suite still contains 50 default cases plus two low-capability cases (52 total),
+with zero retries and unchanged browser security options. This isolates the observed test-tool
+interaction without weakening application behavior or accessibility coverage. The final
+mitigation commit still requires its own complete browser and CI run before exact-head approval.
+
 ## Accepted limitations and remaining boundaries
 
 - Base64url topic paths are sensitive, reversible resource names, visible in browser history and

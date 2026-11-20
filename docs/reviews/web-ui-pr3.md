@@ -110,5 +110,8 @@ including both browsers against the actual core and a separate low-capability fi
 full publication suite includes 52 browser cases after the Unicode regression. Functional
 fixture rate-budget isolation and atomic source-page snapshots preserve deterministic tests
 without changing production limits, weakening assertions or enabling retries.
+The unchanged original Firefox Axe sequence runs in a dedicated fresh browser worker after
+controlled comparisons associated native crashes with prior browser-process history. The
+underlying native cause is unconfirmed; no accessibility rules or production behavior changed.
 Final CI, exact published SHA and independent approval are recorded in PR #130; this historical
 author record is not a substitute for that verdict. PR4 requirements above remain unchanged.
