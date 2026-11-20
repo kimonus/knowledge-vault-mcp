@@ -31,13 +31,25 @@ test("independent: a compatible ten-item core cap supports Explorer and Portal",
   );
   await expect(page.locator(".assertion-content")).toBeVisible();
   await page.getByRole("button", { name: "Sources", exact: true }).click();
+  const sources = new Set<string>();
   for (const [n, count] of [10, 10, 10, 10, 3].entries()) {
-    await expect(page.locator(".child-list .sub-card")).toHaveCount(count);
+    let current: string[] = [];
+    await expect
+      .poll(async () => {
+        current = await page.locator(".child-list .locator").allTextContents();
+        return (
+          current.length === count &&
+          current.every((source) => !sources.has(source))
+        );
+      })
+      .toBe(true);
+    for (const source of current) sources.add(source);
     if (n < 4)
       await page
         .getByRole("button", { name: "Next page", exact: true })
         .click();
   }
+  expect(sources.size).toBe(43);
   await page
     .getByRole("button", { name: "Relationships", exact: true })
     .click();

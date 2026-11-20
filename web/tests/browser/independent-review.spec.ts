@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
+import { auditAccessibility } from "./accessibility";
 import fixtures from "../fixtures.json" with { type: "json" };
 
 const ORIGIN = "https://localhost:9443";
@@ -263,18 +263,29 @@ test("independent: all statuses are traversed once and catalog counts equal full
   const statuses = new Set<string>();
   for (let n = 1; n <= 5; n++) {
     await expect(page.locator(".pager")).toContainText(`Page ${n}`);
-    for (const href of await page
-      .locator(".record-card h3 a")
-      .evaluateAll((links) =>
-        links.map((link) => link.getAttribute("href")!),
-      )) {
+    let records: { href: string; status: string }[] = [];
+    await expect
+      .poll(async () => {
+        records = await page.locator(".record-card").evaluateAll((cards) =>
+          cards.map((card) => ({
+            href: card.querySelector("h3 a")?.getAttribute("href") ?? "",
+            status:
+              card
+                .querySelector(".record-top .badge:first-child")
+                ?.textContent?.trim() ?? "",
+          })),
+        );
+        return (
+          records.length === (n < 5 ? 50 : 5) &&
+          records.every((record) => record.href && !ids.has(record.href))
+        );
+      })
+      .toBe(true);
+    for (const { href, status } of records) {
       expect(ids.has(href)).toBe(false);
       ids.add(href);
-    }
-    for (const status of await page
-      .locator(".record-card .record-top .badge:first-child")
-      .allTextContents())
       statuses.add(status);
+    }
     if (n < 5)
       await page
         .getByRole("button", { name: "Next page", exact: true })
@@ -427,10 +438,17 @@ test("independent: relations preserve direction, conflict/supersession and reach
   ).toBeVisible();
   const cards: string[] = [];
   for (const count of [50, 50, 3]) {
-    await expect(page.locator(".child-list .sub-card")).toHaveCount(count);
-    cards.push(
-      ...(await page.locator(".child-list .sub-card").allTextContents()),
-    );
+    let current: string[] = [];
+    await expect
+      .poll(async () => {
+        current = await page.locator(".child-list .sub-card").allTextContents();
+        return (
+          current.length === count &&
+          current.every((card) => !cards.includes(card))
+        );
+      })
+      .toBe(true);
+    cards.push(...current);
     if (cards.length < 103)
       await page
         .getByRole("button", { name: "Next page", exact: true })
@@ -467,7 +485,21 @@ test("independent: recoverable service errors and all resolver outcomes retain r
       await expect(
         page.getByText(/State unresolved: evidence limit/),
       ).toBeVisible();
+      const summaries = new Set<string>();
       for (let n = 1; n <= 21; n++) {
+        let current: string[] = [];
+        await expect
+          .poll(async () => {
+            current = await page
+              .locator(".raw-evidence summary")
+              .allTextContents();
+            return (
+              current.length === (n < 21 ? 50 : 3) &&
+              current.every((summary) => !summaries.has(summary))
+            );
+          })
+          .toBe(true);
+        for (const summary of current) summaries.add(summary);
         await expect(page.locator(".raw-evidence .pager")).toContainText(
           `Page ${n}`,
         );
@@ -477,6 +509,7 @@ test("independent: recoverable service errors and all resolver outcomes retain r
             .getByRole("button", { name: "Next page", exact: true })
             .click();
       }
+      expect(summaries.size).toBe(1003);
       await expect(page.locator(".raw-evidence details")).toHaveCount(3);
       await expect(page.locator(".raw-evidence")).toContainText("backup-1002");
     } else
@@ -494,13 +527,7 @@ test("independent: detail and temporal pages have accessible mobile controls and
   for (const path of ["/assertions/" + fixtures.details[0].id, "/state"]) {
     await page.goto(ORIGIN + "/dashboard" + path);
     await expect(page.locator("h1")).toBeVisible();
-    expect(
-      (
-        await new AxeBuilder({ page })
-          .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
-          .analyze()
-      ).violations,
-    ).toEqual([]);
+    expect((await auditAccessibility(page)).violations).toEqual([]);
     const layout = await page.evaluate(() => ({
       width: innerWidth,
       scroll: document.documentElement.scrollWidth,

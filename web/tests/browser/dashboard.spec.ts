@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
+import { auditAccessibility } from "./accessibility";
 import fixtures from "../fixtures.json" with { type: "json" };
 
 const CREDENTIAL = "browser-fixture-credential-0000000000000000";
@@ -383,25 +383,13 @@ test("desktop and mobile views pass WCAG checks and keyboard navigation", async 
   page,
 }) => {
   await signIn(page);
-  expect(
-    (
-      await new AxeBuilder({ page })
-        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
-        .analyze()
-    ).violations,
-  ).toEqual([]);
+  expect((await auditAccessibility(page)).violations).toEqual([]);
   await page.keyboard.press("Tab");
   await page.getByRole("link", { name: "Portal", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Knowledge Portal" }),
   ).toBeVisible();
-  expect(
-    (
-      await new AxeBuilder({ page })
-        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
-        .analyze()
-    ).violations,
-  ).toEqual([]);
+  expect((await auditAccessibility(page)).violations).toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Navigation", exact: true }).click();
   await expect(
@@ -418,13 +406,7 @@ test("desktop and mobile views pass WCAG checks and keyboard navigation", async 
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  expect(
-    (
-      await new AxeBuilder({ page })
-        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
-        .analyze()
-    ).violations,
-  ).toEqual([]);
+  expect((await auditAccessibility(page)).violations).toEqual([]);
   await page.screenshot({
     path: "/tmp/knowledge-vault-pr3-mobile.png",
     fullPage: true,
