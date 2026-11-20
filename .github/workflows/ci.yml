@@ -172,6 +172,12 @@ jobs:
       - run: docker build --pull=false -f dashboard/Dockerfile -t knowledge-vault-dashboard:ci .
       - run: sh scripts/ci/test_backup_restore.sh knowledge-vault-backup:ci
       - run: sh scripts/ci/test_dashboard_image.sh knowledge-vault-dashboard:ci
+      - name: Independent dashboard image security regression
+        run: >-
+          docker run --rm --network none --read-only --cap-drop ALL
+          --security-opt no-new-privileges --pids-limit 64 --memory 256m
+          --volume "$PWD/web/tests/browser/independent_image_inspect.py:/review.py:ro"
+          --entrypoint python knowledge-vault-dashboard:ci /review.py
       - run: |
           "$RUNNER_TEMP/bin/trivy" image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL knowledge-vault:ci
       - run: |

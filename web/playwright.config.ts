@@ -17,12 +17,18 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      testIgnore: "**/real-core.spec.ts",
+      testIgnore: [
+        "**/real-core.spec.ts",
+        "**/independent-low-capabilities.spec.ts",
+      ],
       use: { ...devices["Desktop Chrome"], channel: "chromium" },
     },
     {
       name: "firefox",
-      testIgnore: "**/real-core.spec.ts",
+      testIgnore: [
+        "**/real-core.spec.ts",
+        "**/independent-low-capabilities.spec.ts",
+      ],
       use: { ...devices["Desktop Firefox"] },
     },
     {
@@ -33,6 +39,11 @@ export default defineConfig({
         channel: "chromium",
         baseURL: "https://localhost:9445",
       },
+    },
+    {
+      name: "real-core-firefox",
+      testMatch: "**/real-core.spec.ts",
+      use: { ...devices["Desktop Firefox"], baseURL: "https://localhost:9445" },
     },
   ],
   webServer: [

@@ -16,7 +16,7 @@
     "format:check": "prettier --check .",
     "build": "npm run check:contract && npm run typecheck && vite build && node scripts/package-assets.mjs",
     "test": "vitest run --coverage",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test && playwright test --config=playwright.independent-lowcap.config.ts"
   },
   "dependencies": {
     "react": "19.3.1",

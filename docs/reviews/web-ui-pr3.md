@@ -2,8 +2,9 @@
 
 Date: 2026-11-19. Base: PR2 merge `d329d4c0569bb9ae13be666478aa890f4c114e61`.
 Scope: ADR 0009 PR3, Explorer/Portal, frontend contracts and independent dashboard image.
-This is the implementation author's verification record, **not independent approval**.
-Maintainer review is required before merge. No merge, deployment, credential provisioning,
+This is the implementation author's verification record, **not independent approval**. The
+[independent review](pr130-independent-review.md) records the separate review and dispositions;
+its exact final-head verdict is also published in PR #130. No merge, deployment, credential provisioning,
 DNS/Access/ingress change or Helm dashboard resource is included.
 
 ## Boundary and behavior assessment
@@ -22,7 +23,7 @@ and document/navigation Fetch Metadata, so Access return links can open the shel
 exempts API or script reads, wrong Origin/Host, or Access assertion validation. In private mode
 the public shell contains only compiled code and the public authentication-mode enum.
 
-## Verification evidence
+## Original implementation verification evidence
 
 Local checks were run against synthetic data and disposable resources:
 
@@ -84,5 +85,24 @@ least-privilege ingress/egress and resource/security controls, signed dashboard 
 publication, disabled/enabled/removal isolation rehearsals and explicitly authorized browser
 verification through the real ingress and Access edge. It must expire a real provider session
 and verify non-JSON denial/redirect recovery. Local JWT/edge tests cannot substitute for that.
-The existing live deployment was not used as a browser fixture. Independent PR3 review remains
-pending; this record does not authorize merge or enablement.
+The existing live deployment was not used as a browser fixture. This author record does not
+authorize merge or enablement; see the independent report and exact-head PR review disposition.
+
+## Independent review remediation — 2026-11-20
+
+The fresh-context reviewer independently reproduced three Medium findings: stalled logout
+retaining private DOM, mobile detail-header overflow hiding Sign out, and supported smaller
+core page caps breaking reads. Commit `65eb15b6e56965a8d1829ad0481d2c5236dea80f` fixes all three.
+Logout immediately discards private state and aborts reads, uses a detached five-second exchange
+and prevents stale refresh restoration. Header controls reflow at 320px. Session bootstrap exposes
+the validated public page cap under the existing upstream budget; page/history reads respect it,
+while unpaged reads and artifact character limits remain separate.
+
+Post-remediation checks: 694 core tests, 164 installed BFF tests and 50 frontend tests pass.
+Frontend coverage is 97.81% statements / 91.68% branches; BFF is 98.08% / 94.02%.
+The independent reviewer authored 24 adversarial browser cases across both engines, two
+actual-core/pgvector flows and two low-capability flows, and independently assessed production
+image inspection. All passed on the corrected runtime. These regressions are retained in CI,
+including both browsers against the actual core and a separate low-capability fixture.
+Final CI, exact published SHA and independent approval are recorded in PR #130; this historical
+author record is not a substitute for that verdict. PR4 requirements above remain unchanged.
