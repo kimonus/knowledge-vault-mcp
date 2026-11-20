@@ -117,6 +117,9 @@ async def serve(url, records, pepper):
         auth_issuer_url="https://core-private.test",
         embeddings_enabled=False,
         usage_tracking_enabled=True,
+        # Four browser flows share this synthetic inspection principal. Functional tests
+        # must not exhaust its aggregate budget; dedicated adversarial tests cover 429.
+        rate_read_per_minute=1000,
     )
     container = build_container(settings)
     await seed(container)
