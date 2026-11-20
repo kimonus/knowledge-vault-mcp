@@ -100,9 +100,15 @@ while unpaged reads and artifact character limits remain separate.
 
 Post-remediation checks: 694 core tests, 164 installed BFF tests and 50 frontend tests pass.
 Frontend coverage is 97.81% statements / 91.68% branches; BFF is 98.08% / 94.02%.
-The independent reviewer authored 24 adversarial browser cases across both engines, two
+The independent reviewer also confirmed and corrected a Low artifact-range display defect:
+non-BMP text now uses the same Unicode character count as core offsets. Content and paging were
+never truncated by that label defect.
+The independent reviewer authored 26 adversarial browser runs across both engines, two
 actual-core/pgvector flows and two low-capability flows, and independently assessed production
 image inspection. All passed on the corrected runtime. These regressions are retained in CI,
-including both browsers against the actual core and a separate low-capability fixture.
+including both browsers against the actual core and a separate low-capability fixture. The
+full publication suite includes 52 browser cases after the Unicode regression. Functional
+fixture rate-budget isolation and atomic source-page snapshots preserve deterministic tests
+without changing production limits, weakening assertions or enabling retries.
 Final CI, exact published SHA and independent approval are recorded in PR #130; this historical
 author record is not a substitute for that verdict. PR4 requirements above remain unchanged.

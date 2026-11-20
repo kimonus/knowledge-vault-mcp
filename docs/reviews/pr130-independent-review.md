@@ -5,8 +5,8 @@ exclusive worktree. Review requested by [maintainer comment 7023515262](https://
 Initial subject: `dea435a8739a45bffce053cd9b09544fcd146d0a`; PR base:
 `d329d4c0569bb9ae13be666478aa890f4c114e61`.
 
-**Verdict: PASS for corrected runtime `65eb15b6e56965a8d1829ad0481d2c5236dea80f`.**
-All three reproduced medium findings are resolved and independently retested; no unresolved
+**Verdict: PASS for corrected runtime `c790ce3c8871c30a5db1149cd06b7c7786aa5319`.**
+All three reproduced medium findings and the additional low finding are resolved and independently retested; no unresolved
 blocking finding remains in PR3's component scope. The original head required changes.
 The final publication commit will add review artifacts and CI wiring; its exact SHA and final
 browser/CI binding must be recorded in the PR comment after that commit is available.
@@ -104,6 +104,26 @@ verify Explorer, Portal, unpaged detail, all 43 sources over ten-item pages, rel
 resolution/raw evidence against the small-cap actual BFF fixture. This is a confirmed functional
 compatibility defect, not an authority bypass.
 
+### R4 — Low: artifact character ranges count UTF-16 units instead of server characters
+
+Original location: `web/src/detail.tsx:483`. A retained text artifact containing one non-BMP
+Unicode character, such as `🙂`, has server `total_chars=1` and offset 0. PostgreSQL/Python
+character offsets count that character once, while JavaScript `content.length` counts two
+UTF-16 code units. The original UI consequently displays **Characters 0–2 of 1**. The text itself
+is intact and navigation follows server `next_offset`; this is a display-fidelity defect, not
+XSS, text loss or an authorization issue.
+
+The reviewer independently added a Chromium/Firefox browser regression using an otherwise valid
+artifact response with that one-character body. Both original-runtime runs fail the expected
+**Characters 0–1 of 1** assertion. Raw evidence:
+`/tmp/pr130-independent-unicode-artifact.log`. Remedy: count Unicode code points for the label
+while retaining server offsets and continuation. **Disposition: resolved in
+`c790ce3c8871c30a5db1149cd06b7c7786aa5319`.** The reviewer checked the exact SHA and one-line
+runtime diff: only the displayed end-character calculation changes to Unicode code-point count.
+The otherwise unchanged implementation now passes the focused regression in both Chromium and
+Firefox; raw result `/tmp/pr130-independent-unicode-fixed.log` (2 passed). The rebuilt source's
+build result is `/tmp/pr130-unicode-reviewed-build.log`.
+
 ## Corrected-runtime verification and verdict evidence
 
 The reviewer checked `git rev-parse HEAD` and inspected the complete remediation diff at
@@ -141,6 +161,13 @@ The evidence supports approval of this corrected PR3 runtime within the accepted
 scope. Required final-head CI, maintainer merge authority and the deferred deployment/operator
 verification boundaries below remain separate gates.
 
+The final runtime verdict extends the above evidence to
+`c790ce3c8871c30a5db1149cd06b7c7786aa5319`: subsequent changes are retained review/CI artifacts,
+the isolated functional fixture budget and source-page synchronization described below, plus R4's
+single code-point-count expression. The reviewer inspected this cumulative boundary and the R4
+focused passing results. Final publication-head full browser/CI binding follows separately; the
+earlier passing runtime and CI evidence is not presented as execution on a later commit.
+
 ## Initial verification observations
 
 After correcting two mistakes in the independent test harness, original-head synthetic results
@@ -164,6 +191,26 @@ two public JS/CSS assets, no source maps/fixture corpus, no Node/npm/core/SQLAlc
 sentence-transformers modules, shell/asset security headers, anonymous API refusal, unknown-route
 refusal and private cookie login using ephemeral credentials. Raw logs:
 `/tmp/pr130-independent-image-build.log`, `/tmp/pr130-independent-image-inspect.log`.
+
+## Publication-gate diagnostic follow-up
+
+Running all browser flows together exposed two test-harness issues: the four actual-core flows
+shared a production-sized read budget, and equal-sized source pages could be mistaken for a
+completed page transition. The functional fixture now explicitly supplies a larger synthetic
+read budget; production defaults and dedicated 429 tests are unchanged. The reviewer's source
+loop now captures complete, disjoint pages atomically and still requires all 43 unique URLs.
+
+A Firefox content-process crash occurred during the original author's default Axe scan in both
+an earlier local run and an earlier CI run. Its native cause remains unconfirmed; it was not
+classified as an application vulnerability or attributed to local resource pressure. The reviewer
+authored an isolated diagnostic replay of the three-scan desktop/Portal/mobile sequence, comparing
+original waits with DOM/font/frame settling. All six cases (18 default Axe scans) passed, with
+no focus-induced session refresh observed during scans. The subsequent complete default browser
+suite and CI on `723e0f27e3899ad18c8c884b7ec088c5c071ea7a` also passed. No Axe rules were disabled,
+legacy mode enabled, retries added or browser security defaults changed. Raw diagnostics:
+`/tmp/pr130-independent-axe-diagnosis.log`, `/tmp/pr130-ci-B-dashboard-web.log` and
+`/tmp/pr130-final-head-browser-v2.log`. Final publication-head CI remains an explicit gate rather
+than treating a previous passing SHA as its substitute.
 
 ## Accepted limitations and remaining boundaries
 
