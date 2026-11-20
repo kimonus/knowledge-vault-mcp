@@ -42,9 +42,11 @@ digest=${subject##*@sha256:}
 export COSIGN_PASSWORD=
 cosign generate-key-pair --output-key-prefix "$work/key" > /dev/null
 sh scripts/ci/dashboard_sbom.sh "$subject" "$work/sbom"
-cosign sign --yes --key "$work/key.key" --tlog-upload=false "$subject" > /dev/null
+cosign sign --yes --key "$work/key.key" --use-signing-config=false \
+  --tlog-upload=false "$subject" > /dev/null
 for inventory in runtime frontend; do
-  cosign attest --yes --key "$work/key.key" --tlog-upload=false --type cyclonedx \
+  cosign attest --yes --key "$work/key.key" --use-signing-config=false \
+    --tlog-upload=false --type cyclonedx \
     --predicate "$work/sbom/$inventory.sbom.cdx.json" "$subject" > /dev/null
 done
 cosign verify --key "$work/key.pub" --insecure-ignore-tlog "$subject" > "$work/signature.json"
