@@ -160,6 +160,37 @@ test("independent: artifact HTML is text and CSP blocks scripts, connections, fr
   );
 });
 
+test("independent: artifact character ranges use the server's Unicode character offsets", async ({
+  page,
+}) => {
+  await login(page);
+  await page.route("**/api/v1/artifacts/*", async (route) => {
+    const response = await route.fetch();
+    const data = await response.json();
+    await route.fulfill({
+      response,
+      json: {
+        ...data,
+        content: "🙂",
+        total_chars: 1,
+        offset: 0,
+        next_offset: null,
+        size_bytes: 4,
+      },
+    });
+  });
+  await page.goto(ORIGIN + "/dashboard/assertions/" + fixtures.details[0].id);
+  await page.getByRole("button", { name: "Artifacts", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Read text", exact: true })
+    .first()
+    .click();
+  await expect(page.getByLabel("Artifact text")).toHaveText("🙂");
+  await expect(
+    page.getByText("Characters 0–1 of 1", { exact: true }),
+  ).toBeVisible();
+});
+
 test("independent: anonymous API and undeclared documents/assets fail closed", async ({
   request,
 }) => {

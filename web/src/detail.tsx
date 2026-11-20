@@ -480,7 +480,7 @@ function ArtifactText({
     <>
       <p className="small muted">
         Characters {result.data!.offset}–
-        {result.data!.offset + result.data!.content.length} of{" "}
+        {result.data!.offset + [...result.data!.content].length} of{" "}
         {result.data!.total_chars}
       </p>
       <pre className="artifact-text" tabIndex={0} aria-label="Artifact text">
