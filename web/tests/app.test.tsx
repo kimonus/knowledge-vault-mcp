@@ -22,6 +22,23 @@ async function ready(path = "/explorer") {
 }
 
 describe("Explorer with actual protocol shapes", () => {
+  it("keeps the initial applied view stable while editing unapplied filters", async () => {
+    const mock = api();
+    await ready();
+    await screen.findByRole("link", { name: fixtures.summaries[0].excerpt });
+    const reads = () =>
+      mock.mock.calls.filter(([url]) =>
+        String(url).includes("assertions/query"),
+      ).length;
+    const initial = reads();
+    await user().type(
+      screen.getByLabelText("Topic", { exact: true }),
+      "backups",
+    );
+    expect(reads()).toBe(initial);
+    await user().click(screen.getByRole("button", { name: "Apply filters" }));
+    expect(reads()).toBe(initial + 1);
+  });
   it("makes unsupported unclassified filters visibly unavailable to ranked search", async () => {
     api();
     await ready();

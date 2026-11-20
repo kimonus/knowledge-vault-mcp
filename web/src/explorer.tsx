@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import type { FormEvent } from "react";
 import { useAuth } from "./auth";
 import { useMemory } from "./workspace";
@@ -80,11 +80,18 @@ export function Explorer() {
     {},
   );
   const [limit, setLimit] = useMemory("explorerLimit", maximum);
-  const [applied, setApplied] = useMemory<BrowseSpec>("explorerApplied", {
-    mode: "all",
-    filters: { statuses: [] },
-    limit: maximum,
-  });
+  const defaults = useMemo<BrowseSpec>(
+    () => ({
+      mode: "all",
+      filters: { statuses: [] },
+      limit: maximum,
+    }),
+    [maximum],
+  );
+  const [applied, setApplied] = useMemory<BrowseSpec>(
+    "explorerApplied",
+    defaults,
+  );
   const [, clearPage] = useMemory<unknown>("pagination:browse-explorer", null);
   const field = (name: string, value: string) =>
     setFilters((current) => ({ ...current, [name]: value }));
