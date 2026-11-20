@@ -284,9 +284,21 @@ do not replace those errors with a privileged credential.
 The chart's enabled-only values and Secret key names are documented in
 [`values.yaml`](../../charts/knowledge-vault/values.yaml). Set the dashboard image to a verified
 published digest; verify the signature and release SBOM using [RELEASING](../../RELEASING.md).
+The [private profile](../../charts/knowledge-vault/values-dashboard-private.yaml) is a starting
+point for review, not ready-to-apply operator configuration. Required references are
+`dashboard.serviceTokenSecret.name/key` (default key `service-token`),
+`dashboard.privateSession.existingSecret` (`pepperKey: pepper`, `recordsKey: records`) and the
+distinct `dashboard.privateSession.signingSecret` (`signingKey: signing-key`). Set
+`dashboard.host`, `dashboard.coreHost` and `dashboard.image.digest`. Access mode instead requires
+`dashboard.mode: cloudflareAccess` and `dashboard.access.issuerUrl`, `audience`, `allowedEmails`
+and reviewed public `jwksEgressCidrs`; leave both private Secret references empty. An optional
+Ingress requires `dashboard.ingress.enabled`, `className`, `tlsSecret` and explicit
+`dashboard.networkPolicy.ingressFrom`. `dashboard.networkPolicy.allowCloudflared` requires
+Access mode and the separately enabled existing tunnel; it grants only Pod connectivity.
+`dashboard.secretRevision` is the explicit BFF-only rollout marker for externally changed Secrets.
 Review the rendered public JSON ConfigMap: it must contain file references, never credentials.
-Set the fixed core URL to this release's API ClusterIP DNS name and its actual service port.
-The HTTP suffix must be `.svc.cluster.local`; the separately configured core Host must be the
+Helm derives the fixed core URL from this release's API ClusterIP DNS name and service port.
+The HTTP suffix is `.svc.cluster.local`; the separately configured core Host must be the
 private authenticated core hostname. Do not send a public MCP Host from BFF to core. In Access
 mode configure the dashboard's own issuer/audience/exact-email list and no private login keys.
 
@@ -447,3 +459,39 @@ MCP application's session or revoke a shared identity to accelerate this test.
 Production acceptance remains pending if this procedure, private-ingress browser proof, enforced
 network isolation, signed publication or restored-core browser proof has not actually run. A
 review-ready source PR may describe those authorization limits; it must not label them passed.
+
+## Disposable lifecycle harness
+
+`scripts/ci/test_dashboard_lifecycle.py` accepts only context/cluster `kv-dashboard-pr4` and
+refuses an existing fixture namespace. Start that independent Minikube profile with Calico,
+preserve the operator's current context (`--keep-context`), build/load the three review images,
+and obtain the loaded dashboard manifest digest from containerd. Run from the repository root:
+
+```bash
+python scripts/ci/test_dashboard_lifecycle.py --context kv-dashboard-pr4 \
+  --dashboard-image knowledge-vault-dashboard@sha256:<loaded-manifest-digest> \
+  --core-image knowledge-vault:pr4-review --backup-image knowledge-vault-backup:pr4-review
+```
+
+The harness creates lab-only Secrets in memory and sends them over stdin, never argv/output.
+It installs a synthetic core/pgvector fixture, tests default-off/enabled/upgrade/rollback/recovery/
+removal, compares all non-dashboard rendered documents and core Pod UIDs/restarts, calls the
+actual BFF/core with separate identities, and checks enforced policy positive/negative controls.
+All commands use explicit context/namespace and bounded deadlines. Failed state remains in that
+disposable profile for content-free diagnosis. Remove the entire **named disposable profile**
+after reviewing results; never use this cleanup procedure against the live cluster. The harness
+also captures API/BFF logs after authenticated operations, refuses any generated raw credential
+or the exact synthetic assertion text in logs, and reports only safe verdicts/restart counts.
+
+For a fresh disposable profile with Minikube's nginx ingress addon, add `--verify-ingress
+--browser-script /absolute/path/to/verification.mjs`. The harness generates a one-day fixture
+certificate/Secret, enables only the chart's dashboard TLS ingress and admits the combined
+ingress-nginx namespace/controller Pod selector. While BFF is enabled, it invokes Node with
+JSON on stdin: `url`, `host`, `ingress_address`, `browser_credential`, `ca_certificate` (public
+PEM), and `tls_spki_sha256` (base64 SHA-256 of the fixture public key's DER SPKI). The callback
+must resolve only the fixture hostname to that ingress address, narrowly trust its lab certificate
+or public key, and fail on browser/routing/authentication errors. Do not disable all certificate
+verification. A nonzero callback fails the rehearsal; credentials and callback output are never
+printed. This proves only the disposable ingress path when actually run. It cannot establish
+real Access expiry, image publication, live deployment trust or browser operation after backup
+restore; those acceptance results must be recorded separately.

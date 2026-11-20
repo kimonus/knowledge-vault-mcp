@@ -16,6 +16,7 @@
     "format:check": "prettier --check .",
     "build": "npm run check:contract && npm run typecheck && vite build && node scripts/package-assets.mjs",
     "test": "vitest run --coverage",
+    "test:sbom": "node --test --test-isolation=none scripts/frontend-sbom.test.mjs",
     "test:browser": "playwright test && playwright test --config=playwright.independent-lowcap.config.ts"
   },
   "dependencies": {

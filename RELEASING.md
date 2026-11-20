@@ -137,8 +137,10 @@ images do not contain it. Its package/frontend versions are independently mainta
 image tag follows the repository release version and the OCI metadata action labels that version.
 
 The runtime SBOM inventories Python and OS packages. The frontend inventory is extracted from
-the exact image being published; it inventories locked production npm dependencies compiled into
-the bundle. Both must contain the expected packages or the release fails. A runtime image scan
+the exact image being published; it inventories the full installed dependency graph restricted
+to the closure of exact production package pins, including shared runtime peers and their
+transitive dependencies. Development-only roots are excluded; ambiguous/missing pins and dangling
+graph references fail the build. Both inventories must contain the expected packages or the release fails. A runtime image scan
 does not replace `npm audit`, which also runs on the locked frontend before publication.
 
 Before deploying the optional image, verify its digest signature using the command above with
@@ -151,7 +153,7 @@ cosign verify-attestation --type cyclonedx \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/kimonus/knowledge-vault-mcp-dashboard@sha256:DASHBOARD_DIGEST \
   > dashboard-attestations.jsonl
-jq -sr '[.[] | .payload | @base64d | fromjson] |
+jq -esr '[.[] | .payload | @base64d | fromjson] |
   any(.[]; any(.predicate.components[]; .name == "fastapi")) and
   any(.[]; any(.predicate.components[]; .name == "react"))' dashboard-attestations.jsonl
 ```

@@ -137,6 +137,7 @@ jobs:
           npm run lint
           npm run format:check
           npm test
+          npm run test:sbom
           npm audit
           npm run build
       - name: Install Chromium and Firefox
@@ -156,7 +157,7 @@ jobs:
 
   supply-chain:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
       - run: sh scripts/ci/install_security_tools.sh "$RUNNER_TEMP/bin"
@@ -203,6 +204,45 @@ jobs:
             knowledge-vault*.sbom.json
             ${{ runner.temp }}/dashboard-sbom/*.json
           if-no-files-found: error
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.1.0
+        with:
+          node-version: "24.15.0"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install isolated deployment verification tools
+        run: |
+          sh scripts/ci/install_kubernetes_tools.sh "$RUNNER_TEMP/bin"
+          sh scripts/ci/install_minikube.sh "$RUNNER_TEMP/bin"
+          npm ci --prefix web
+          cd web
+          npx playwright install --with-deps --no-shell chromium
+      - name: Rehearse Dashboard lifecycle, TLS ingress and NetworkPolicy enforcement
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          minikube start -p kv-dashboard-pr4 --driver=docker --container-runtime=containerd \
+            --cni=calico --cpus=2 --memory=4096 --kubernetes-version=v1.36.4 --keep-context
+          minikube -p kv-dashboard-pr4 addons enable ingress
+          minikube -p kv-dashboard-pr4 image load knowledge-vault:ci knowledge-vault-dashboard:ci
+          # Register the actual imported manifest by immutable digest, never a fabricated value.
+          image_ref=docker.io/library/knowledge-vault-dashboard:ci
+          digest="$(minikube -p kv-dashboard-pr4 ssh -- sudo ctr -n k8s.io images ls |
+            awk -v ref="$image_ref" '$1 == ref {print $3}')"
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          dashboard_ref="docker.io/library/knowledge-vault-dashboard@$digest"
+          minikube -p kv-dashboard-pr4 ssh -- sudo ctr -n k8s.io images tag \
+            "$image_ref" "$dashboard_ref"
+          kubectl --context kv-dashboard-pr4 -n ingress-nginx rollout status \
+            deployment/ingress-nginx-controller --timeout=300s
+          python3 scripts/ci/test_dashboard_lifecycle.py --context kv-dashboard-pr4 \
+            --core-image knowledge-vault:ci --backup-image knowledge-vault-backup:ci \
+            --dashboard-image "$dashboard_ref" --verify-ingress \
+            --browser-script "$PWD/web/scripts/test-deployed-dashboard.mjs"
+      - name: Remove only the disposable PR4 profile
+        if: always()
+        run: minikube delete -p kv-dashboard-pr4
 
   kubernetes:
     runs-on: ubuntu-24.04
