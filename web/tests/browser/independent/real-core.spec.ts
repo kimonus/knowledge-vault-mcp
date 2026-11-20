@@ -44,12 +44,22 @@ test("independent real core: records, Portal status counts, complete sources and
   await page.getByRole("button", { name: "Sources", exact: true }).click();
   const sources = new Set<string>();
   for (const count of [20, 20, 3]) {
-    await expect(page.locator(".child-list .sub-card")).toHaveCount(count);
-    for (const href of await page
-      .locator(".child-list h3 a")
-      .evaluateAll((links) =>
-        links.map((link) => link.getAttribute("href")!),
-      )) {
+    // Equal page sizes cannot identify a completed transition. Capture a complete,
+    // disjoint page atomically so loading/previous DOM never counts as the new page.
+    let hrefs: string[] = [];
+    await expect
+      .poll(async () => {
+        hrefs = await page
+          .locator(".child-list h3 a")
+          .evaluateAll((links) =>
+            links.map((link) => link.getAttribute("href")!),
+          );
+        return (
+          hrefs.length === count && hrefs.every((href) => !sources.has(href))
+        );
+      })
+      .toBe(true);
+    for (const href of hrefs) {
       expect(sources.has(href)).toBe(false);
       sources.add(href);
     }
