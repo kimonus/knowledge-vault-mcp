@@ -8,6 +8,16 @@ stable release.
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-21
+
+### Fixed
+
+- Preserve exhaustive Dashboard browsing of compressed Unicode assertions on PostgreSQL 17.8.
+  Materialize retained text inside the database before taking its 400-character excerpt,
+  avoiding upstream TOAST substring regression #19406 without changing stored knowledge,
+  pagination, response bounds or database schema. Upgrade the core image before enabling
+  Dashboard; no database restart, credential change or frontend update is required.
+
 ## [0.8.0] - 2026-11-21
 
 Dashboard remains disabled on upgrade. Existing HTTP/MCP clients need no credential changes.

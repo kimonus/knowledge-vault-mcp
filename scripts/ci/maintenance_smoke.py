@@ -37,7 +37,7 @@ async def probe(args: argparse.Namespace) -> None:
         ClientSession(streams[0], streams[1]) as client,
     ):
         initialized = await client.initialize()
-        assert initialized.server_info.version == "0.8.0"
+        assert initialized.server_info.version == "0.8.1"
 
         async def call(name, values=None):
             result = await client.call_tool(name, values or {})
