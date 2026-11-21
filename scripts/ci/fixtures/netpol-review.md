@@ -1,6 +1,6 @@
 # Synthetic policy-only compatibility rehearsal
 
-This branch-only manual CI job is an operational experiment, not a Dashboard dependency or
+This branch-only manual CI rehearsal is an operational experiment, not a Dashboard dependency or
 production deployment. It refuses other contexts/nodes and existing fixture namespaces. It uses
 no production credentials, database, source URLs or operator knowledge. Existing application CI
 jobs remain unchanged and run alongside it.
@@ -20,8 +20,15 @@ under the fixed HIGH/CRITICAL gate. Its separately compiled CNI helpers and BGP 
 fixable Go vulnerabilities. The review Dockerfile omits those unused executables and flattens the
 final filesystem so their vulnerable files/layers are absent. It preserves the actual controller
 and packet tools and is scanned independently. No vulnerability exclusion or VEX waiver is used.
-The artifact is built locally for review only; this workflow does not publish it, sign a production
-artifact or authorize installing it. A deployment needs a reviewed published immutable digest,
+The artifact is built for review by default. A separate owner-only manual publication input is
+disabled by default; it requires an explicitly named immutable reviewed commit and all seven
+verification jobs. It publishes to a separate infrastructure package and keylessly signs its
+digest and runtime inventory. It downloads the exact tested image from the same workflow run and
+attempt, checks its source revision, and never rebuilds it for publication. Tags include the
+source commit, run ID and attempt so a retry never replaces an earlier published image. The
+agent does not invoke this publication input: the maintainer
+owns publication. The default experiment never publishes or authorizes installation. A deployment
+needs a reviewed published immutable digest,
 trusted signatures/inventory and operator approval for the cluster-wide policy effect.
 
 The test uses bridge/portmap/firewall, existing synthetic API/database Pods, controlled HTTP/HTTPS
@@ -35,3 +42,11 @@ chain and ipset, DNS and post-rollback connectivity must survive. Reserved chain
 be absent before installation; malformed snapshots fail closed. Only newly created reserved
 policy ipsets are destroyed after their chains disappear. A production deployment still needs
 a controller image trusted for that environment.
+
+The optional publisher authenticates to GHCR only in its own job, with scoped package/OIDC
+permissions; no credential enters a build layer. Verify the certificate identity against this
+exact workflow/operational branch and its GitHub workflow SHA extension against the reviewed
+commit, alongside the digest and runtime SBOM. The first GHCR package may be private: its owner
+must explicitly make it publicly pullable or approve a dedicated image-pull credential before
+any deployment. This package is independent of the three application release images and never
+changes their tags, the release version, core manifests, DNS, Secrets or a Kubernetes cluster.
