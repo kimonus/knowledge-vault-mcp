@@ -187,7 +187,9 @@ class BrowseService:
         statement = statement.with_only_columns(
             AssertionRow.id.label("_key"),
             *(getattr(AssertionRow, field) for field in SUMMARY_FIELDS),
-            func.left(AssertionRow.content, 400).label("excerpt"),
+            # PostgreSQL 17.8 can reject a partial UTF-8 character in an unused
+            # TOAST slice. Materialize text before truncating (upstream bug #19406).
+            func.left(AssertionRow.content + "", 400).label("excerpt"),
             (func.length(AssertionRow.content) > 400).label("content_truncated"),
         )
         return await self._page(

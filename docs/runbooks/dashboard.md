@@ -132,6 +132,14 @@ then a BFF-only Secret rollout, then retirement of the old core record.
 
 ## Limits and failures
 
+PostgreSQL 17.8 has upstream regression #19406: a substring of valid, compressed Unicode text
+can fail with SQLSTATE `22021`. The core materializes text in PostgreSQL before selecting its
+400-character inspection excerpt, preserving page/response bounds and avoiding a database
+restart or data rewrite. Verify complete keyset traversal during rollout; ASCII-only fixtures
+do not exercise this failure. If traversal fails, disable only Dashboard against the compatible
+core baseline while investigating. See the [regression record](../reviews/dashboard-unicode-readiness.md)
+and [PostgreSQL 17.9 release notes](https://www.postgresql.org/docs/17/release-17-9.html).
+
 Requests have a 128 KB body cap and ten-second upload deadline, including chunked bodies.
 The core client has four concurrent slots, a two-second connect/pool timeout and a 60-second
 absolute budget including queueing, capability checking and streamed JSON. Responses are capped

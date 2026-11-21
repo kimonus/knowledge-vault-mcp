@@ -135,6 +135,61 @@ async def test_exhaustive_and_strict_lexical_enumeration_beyond_ranking_limit(
         await browse.assertions(BrowseRequest(limit=51), CTX)
 
 
+@pytest.mark.parametrize("character", ["…", "界", "Ж", "🚀"])
+async def test_toasted_unicode_excerpts_preserve_http_keyset_traversal(
+    integration_container, reader_token, character
+):
+    container = integration_container
+    ids = await seed(container, 3)
+    content = "matchword " + character * 4000
+    async with container.database.sessions.begin() as session:
+        await session.execute(
+            update(AssertionRow)
+            .where(AssertionRow.id == ids[1])
+            .values(
+                content=content,
+                normalized_content=content,
+                content_hash=hashlib.sha256(content.encode()).hexdigest(),
+            )
+        )
+        # Exercise a compressed PostgreSQL datum rather than a short inline literal.
+        stored_bytes, original_bytes = (
+            await session.execute(
+                select(
+                    func.pg_column_size(AssertionRow.content),
+                    func.octet_length(AssertionRow.content),
+                ).where(AssertionRow.id == ids[1])
+            )
+        ).one()
+        assert stored_bytes < original_bytes
+
+    container.settings.inspection_principals = "reader"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(create_app(container)),
+        base_url="https://private.example",
+        headers={"Authorization": "Bearer " + reader_token},
+    ) as client:
+        for mode in ("all", "lexical"):
+            request = {"mode": mode, "limit": 1, "filters": {"statuses": []}}
+            if mode == "lexical":
+                request["query"] = "matchword"
+            retained = []
+            while True:
+                response = await client.post("/api/v1/read/assertions/query", json=request)
+                assert response.status_code == 200
+                page = response.json()
+                retained.extend(page["items"])
+                if page["next_cursor"] is None:
+                    break
+                assert len(retained) < 3
+                request["cursor"] = page["next_cursor"]
+            assert [item["id"] for item in retained] == [str(identifier) for identifier in ids]
+            assert retained[1]["excerpt"] == content[:400]
+            assert retained[1]["content_truncated"] is True
+            assert len(retained[0]["excerpt"]) < 400
+            assert retained[0]["content_truncated"] is False
+
+
 async def test_catalog_counts_contexts_facets_aliases_nulls_and_prefix(integration_container):
     container = integration_container
     ids = await seed(container, 12)
