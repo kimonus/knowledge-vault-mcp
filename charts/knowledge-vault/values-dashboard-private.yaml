@@ -1,0 +1,23 @@
+# Explicit opt-in reference. Replace example hostnames, digest and Secret names locally.
+# The chart never creates these Secrets or provisions DNS/TLS/inspection credentials.
+dashboard:
+  enabled: true
+  host: dashboard.example.test
+  coreHost: mcp-lan.example.test
+  image:
+    # Placeholder only: replace with the verified signed Dashboard image digest.
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  serviceTokenSecret: {name: dashboard-core-read}
+  privateSession:
+    existingSecret: dashboard-browser
+    signingSecret: dashboard-session
+  ingress:
+    enabled: true
+    className: private
+    tlsSecret: dashboard-tls
+  networkPolicy:
+    ingressFrom:
+      - namespaceSelector:
+          matchLabels: {kubernetes.io/metadata.name: ingress-system}
+        podSelector:
+          matchLabels: {app: ingress-controller}

@@ -1,5 +1,40 @@
 replicaCount: 1
 
+# Independent optional browser BFF/SPA. Secret values never belong in Helm values.
+dashboard:
+  enabled: false
+  image:
+    repository: ghcr.io/kimonus/knowledge-vault-mcp-dashboard
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+  host: ""
+  coreHost: ""
+  mode: privateSession
+  serviceTokenSecret: {name: "", key: service-token}
+  privateSession:
+    existingSecret: ""
+    pepperKey: pepper
+    recordsKey: records
+    signingSecret: ""
+    signingKey: signing-key
+  access:
+    issuerUrl: ""
+    audience: ""
+    allowedEmails: []
+    # Operator-reviewed public ranges for the team's JWKS endpoint.
+    jwksEgressCidrs: []
+  # Bump after changing an externally managed Secret to roll only Dashboard Pods.
+  secretRevision: "1"
+  ingress: {enabled: false, className: "", tlsSecret: ""}
+  networkPolicy:
+    # Explicit ingress controller/tunnel peers; empty denies all Pod ingress.
+    ingressFrom: []
+    allowCloudflared: false
+  resources:
+    requests: {cpu: 25m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+
 image:
   repository: ghcr.io/kimonus/knowledge-vault-mcp
   tag: "0.7.0"

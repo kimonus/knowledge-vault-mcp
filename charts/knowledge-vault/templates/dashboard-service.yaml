@@ -1,0 +1,18 @@
+{{- if .Values.dashboard.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-dashboard
+  labels: {{- include "knowledge-vault.dashboard.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-dashboard
+  labels: {{- include "knowledge-vault.dashboard.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports: [{name: http, port: 8080, targetPort: http, protocol: TCP}]
+  selector: {{- include "knowledge-vault.dashboard.selector" . | nindent 4 }}
+{{- end }}

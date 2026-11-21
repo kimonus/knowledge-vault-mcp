@@ -64,7 +64,7 @@ def test_release_workflow_publishes_no_latest_tag() -> None:
     workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
     steps = re.split(r"\n      - ", workflow)
     metadata_steps = [step for step in steps if "docker/metadata-action@" in step]
-    assert len(metadata_steps) == 2, "expected one metadata step per published image"
+    assert len(metadata_steps) == 3, "expected one metadata step per published image"
     for step in metadata_steps:
         assert "flavor: latest=false" in step, step
         assert "type=raw" not in step and "latest=true" not in step, step

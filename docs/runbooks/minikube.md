@@ -238,8 +238,13 @@ underlying storage until an encrypted off-host backup has been restored successf
 disposable PostgreSQL instance. Follow [backup-restore.md](backup-restore.md) before claiming a
 deployment is production-ready.
 
-## Dashboard staging
+## Optional Dashboard deployment
 
-The [Dashboard](dashboard.md) now includes Explorer/Portal and a separate image, disabled by default. It has no Helm
-resources in this stage. Do not add it to core Pods or mount DB/core auth/model Secrets into it.
-Conditional deployment and TLS/browser proof belong to ADR 0009 PR4; no live change is implied.
+The [Dashboard runbook](dashboard.md) covers conditional Helm resources, private TLS, separate
+Secret provisioning and actual browser verification. `dashboard.enabled=false` renders no
+Dashboard resources. Enablement needs its own approved hostname, image digest, exact-read service
+credential and browser-auth material. Never mount DB/core auth/model Secrets into dashboard.
+Rehearse on a disposable Minikube profile with an enforcing CNI and synthetic data. Render-compare
+all core resources before dashboard-only `helm upgrade --no-hooks`; ordinary core/schema upgrades
+retain migration hooks. Disabling removes dashboard-owned resources, not core or external Secrets.
+No live deployment, public routing or infrastructure change is authorized by these instructions.

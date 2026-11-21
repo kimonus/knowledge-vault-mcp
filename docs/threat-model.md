@@ -86,8 +86,15 @@ assertion and has no private fallback. BFF compromise exposes all retained sensi
 through read authority; it does not imply selective secrecy or protect browser-visible data from
 a compromised browser. Rate budgets are bounded process-local memory and reset on restart.
 
-No dashboard Helm resource, ingress, public route, credential provisioning or deployment is
-included in PR3. Deployment/NetworkPolicy and live ingress/Access browser verification remain PR4 gates.
+Dashboard resources are conditional and absent by default. The enabled workload uses non-root,
+read-only execution, dropped capabilities, RuntimeDefault seccomp, limits/probes and no mounted
+service-account token. Dedicated policies admit only explicit ingress peers, DNS and core API;
+the database component allowlist excludes dashboard. Access adds only reviewed JWKS HTTPS ranges.
+Policies require an enforcing CNI, and L3 policies cannot restrict HTTP paths or authenticate
+JWKS hostnames. Core route/credential confinement and origin JWT checks remain mandatory.
+Dashboard-only values/checksums do not enter core resources; external Secrets survive removal.
+Real ingress/Access browser verification requires separate operator-authorized deployment;
+simulated edge tests do not prove provider expiry. See the [acceptance procedure](runbooks/dashboard.md).
 
 The frontend obtains public assets from named routes and private data only from same-origin BFF
 JSON operations. It never receives the core service bearer or upstream configuration. Stored

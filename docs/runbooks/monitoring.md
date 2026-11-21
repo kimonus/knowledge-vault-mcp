@@ -120,9 +120,13 @@ The separate [BFF](dashboard.md) has process liveness and authenticated protocol
 readiness probes. Disabled/incompatible/unavailable-core readiness is 503/502/504; these statuses
 disclose no credentials or payload. Core readiness never depends on the BFF. No new background
 duty or heartbeat exists. Use the shipped entrypoint to disable access/URL logs; do not enable
-request headers, bodies or query-string logging. PR4 supplies deployment monitoring resources.
+request headers, bodies or query-string logging. The conditional Deployment uses internal
+startup/liveness/readiness probes; public ingress routes only `/dashboard`. Monitor dashboard
+availability/restart counts independently of core. After browser verification, read safe API/BFF
+logs and compare core Pod UIDs/restarts before and after enablement, upgrade, rollback and removal.
+Readiness/rollout status alone does not prove authenticated ingress/browser operation.
 Uncached readiness dependency checks are limited separately to 60/minute; cache hits keep their
 known health result without consuming admission. Exhausted dependency admission returns 429. Dependency
 success/failure is cached for five seconds, and only one check can run with a two-second deadline.
 A concurrent check returns 503 promptly. These short bounded probes cannot occupy all browser
-upstream slots. Liveness remains dependency-free; restrict probe paths at future ingress.
+upstream slots. Liveness remains dependency-free; keep probe paths internal at ingress/tunnel.

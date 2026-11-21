@@ -101,3 +101,6 @@ The [Dashboard image](dashboard.md), including Explorer/Portal, has no model loa
 Ranked queries use the core inspection API and its existing embedder. Browse/catalogs require no
 model. The BFF has no database fallback or second Container, and its removal does not affect the
 API/worker model lifecycle.
+Helm never mounts `modelCache.existingClaim` into dashboard. A dashboard-only upgrade/removal
+must preserve core Pod UIDs and their existing model instances; verify concurrent first ranked
+browser reads through the deployed path before claiming that model behavior is proven.

@@ -5,7 +5,10 @@ COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web ./
 COPY dashboard/src/knowledge_vault_dashboard/contract.json /app/dashboard/src/knowledge_vault_dashboard/contract.json
-RUN npm run build && npm sbom --omit=dev --sbom-format=cyclonedx > /app/web/frontend.sbom.json
+RUN npm run build \
+    && npm run test:sbom \
+    && npm sbom --sbom-format=cyclonedx > /app/web/full.sbom.json \
+    && node scripts/frontend-sbom.mjs full.sbom.json package.json frontend.sbom.json
 
 FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
 FROM python:3.12.15-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70 AS python-base

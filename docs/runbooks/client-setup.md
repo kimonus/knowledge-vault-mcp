@@ -209,11 +209,13 @@ See [maintenance examples](../knowledge-maintenance.md) for evidence, context, r
 ## Dashboard browser credentials
 
 Explorer/Portal login and read views are implemented in the separate dashboard image, which
-remains disabled pending PR4 deployment. The browser never calls MCP or the core HTTP API.
+remains disabled by default. Operator-approved Helm deployment and TLS/browser verification
+follow the [Dashboard runbook](dashboard.md). The browser never calls MCP or the core HTTP API.
 Private mode exchanges a transient credential; Access mode uses top-level provider authentication
 with same-origin AJAX requests. No client bearer or credential belongs in browser storage.
 
 The [Dashboard BFF](dashboard.md) uses separate browser credential records/pepper and session
 cookies. These never authenticate core HTTP/MCP, and the core inspection service bearer must
-never be pasted into browser login. PR2 supplies the disabled BFF boundary only; browser UI and
-deployment follow in PR3/PR4. Existing MCP client configuration is unchanged.
+never be pasted into browser login. Use a distinct dashboard hostname and verified TLS, never
+a browser storage entry or a URL parameter for credentials. Existing MCP client configuration
+is unchanged by enabling, upgrading or removing the optional dashboard.

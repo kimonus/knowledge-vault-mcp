@@ -1,0 +1,10 @@
+{{- if .Values.dashboard.enabled }}
+{{- include "knowledge-vault.dashboard.requirements" . -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-dashboard
+  labels: {{- include "knowledge-vault.dashboard.labels" . | nindent 4 }}
+data:
+  config.json: {{ include "knowledge-vault.dashboard.config" . | quote }}
+{{- end }}

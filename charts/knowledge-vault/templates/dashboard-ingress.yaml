@@ -1,0 +1,22 @@
+{{- if and .Values.dashboard.enabled .Values.dashboard.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "knowledge-vault.fullname" . }}-dashboard
+  labels: {{- include "knowledge-vault.dashboard.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.dashboard.ingress.className | quote }}
+  tls:
+    - hosts: [{{ .Values.dashboard.host | quote }}]
+      secretName: {{ .Values.dashboard.ingress.tlsSecret | quote }}
+  rules:
+    - host: {{ .Values.dashboard.host | quote }}
+      http:
+        paths:
+          - path: /dashboard
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "knowledge-vault.fullname" . }}-dashboard
+                port: {name: http}
+{{- end }}
