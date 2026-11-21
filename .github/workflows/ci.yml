@@ -14,6 +14,51 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  policy-only-compatibility:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'ops/dashboard-netpol-rehearsal'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: "0.13.7"
+      - name: Install locked synthetic-rehearsal tools
+        run: |
+          uv sync --locked
+          sh scripts/ci/install_kubernetes_tools.sh "$RUNNER_TEMP/bin"
+          sh scripts/ci/install_minikube.sh "$RUNNER_TEMP/bin"
+          sh scripts/ci/install_security_tools.sh "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Build and scan minimal policy-only review artifact
+        run: |
+          hadolint scripts/ci/fixtures/Dockerfile.netpol-only
+          docker build --pull=false -f scripts/ci/fixtures/Dockerfile.netpol-only -t kv-netpol-only:review .
+          trivy image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL kv-netpol-only:review
+          syft kv-netpol-only:review -o cyclonedx-json=netpol-review.sbom.json
+      - name: Start a separate bridge CNI profile and load pinned fixtures
+        run: |
+          minikube start -p kv-policy-only --driver=docker --container-runtime=containerd \
+            --cni=bridge --cpus=2 --memory=4096 --kubernetes-version=v1.36.4 --keep-context
+          docker pull python:3.12.15-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70
+          minikube -p kv-policy-only image load kv-netpol-only:review
+          minikube -p kv-policy-only image load python:3.12.15-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70
+      - name: Prove enforcement, unchanged CNI and bounded scoped rollback
+        run: uv run python scripts/ci/rehearse_netpol_only.py
+      - name: Content-free synthetic failure diagnostics
+        if: failure()
+        run: |
+          kubectl --context kv-policy-only get pods -A -o wide || true
+          kubectl --context kv-policy-only -n kube-system logs -l k8s-app=kube-router --tail=80 || true
+      - name: Remove only the owned synthetic profile
+        if: always()
+        run: minikube delete -p kv-policy-only
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: policy-only-review-inventory
+          path: netpol-review.sbom.json
+
   quality:
     runs-on: ubuntu-24.04
     timeout-minutes: 35

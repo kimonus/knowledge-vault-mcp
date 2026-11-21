@@ -1,0 +1,15 @@
+# syntax=docker/dockerfile:1.11
+# Synthetic operational rehearsal artifact; not published or deployed by this test.
+FROM cloudnativelabs/kube-router:v2.12.0@sha256:29034446e59a9e984a8a720c03f2ba1ce4e61ebb938d1a88c8f40b08bdb06c78 AS runtime
+# These independently compiled helpers carry fixable Go CVEs. Policy-only mode never
+# installs CNI or executes the BGP debug CLI; omit them from the final flattened image.
+RUN rm -rf /usr/libexec/cni /usr/local/bin/gobgp
+
+FROM scratch
+# Flattening deliberately excludes vulnerable unused files from every final layer.
+# hadolint ignore=DL3067
+COPY --from=runtime / /
+ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+LABEL org.opencontainers.image.title="Policy-only network enforcement rehearsal" \
+      org.opencontainers.image.version="2.12.0-policy-only-review"
+ENTRYPOINT ["/usr/local/bin/kube-router"]
