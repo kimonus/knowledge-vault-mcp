@@ -474,6 +474,9 @@ refuses an existing fixture namespace. Start that independent Minikube profile w
 preserve the operator's current context (`--keep-context`), build/load the three review images,
 and obtain the loaded dashboard manifest digest from containerd. Run from the repository root:
 
+Its existing-client probe uses the official MCP client as well as the HTTP adapter to write
+synthetic assertions and read them back before/after BFF upgrades, rollback and removal.
+
 ```bash
 python scripts/ci/test_dashboard_lifecycle.py --context kv-dashboard-pr4 \
   --dashboard-image knowledge-vault-dashboard@sha256:<loaded-manifest-digest> \

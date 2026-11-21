@@ -39,6 +39,15 @@ def run(args: list[str], data: str | None = None, timeout: int = 360) -> str:
     )
     if result.returncode:
         # Never echo captured payloads, arguments, logs or runtime error text.
+        if args[0] == "node":
+            stage = re.search(
+                r"^DASHBOARD_CHECK_FAILED:(input|tls-home|tls-isolation|browser-launch|"
+                r"browser-login|cookie|detail|portal|requests|logout)$",
+                result.stderr,
+                re.MULTILINE,
+            )
+            if stage:
+                raise RuntimeError(f"browser verification failed at {stage[1]}")
         raise RuntimeError(f"{args[0]} failed with exit code {result.returncode}")
     return result.stdout
 
@@ -443,6 +452,31 @@ call(core, "/api/v1/flushes/"+batch_id+"/parts/1", 200, {"assertions":[{
     "kind":"external_fact", "origin":"external_source", "topics":["pr4-lab"]}]},
     method="PUT", headers=writer)
 call(core, "/api/v1/flushes/"+batch_id+"/commit", 200, {}, headers=writer)
+# Use the official client through the deployed MCP mount, not only its HTTP adapter.
+import asyncio, httpx2
+from mcp.client.session import ClientSession
+from mcp.client.streamable_http import streamable_http_client
+async def check_mcp():
+    async with httpx2.AsyncClient(headers=writer,timeout=30) as http:
+        async with streamable_http_client(core+"/mcp",http_client=http) as streams:
+            async with ClientSession(streams[0],streams[1]) as session:
+                await session.initialize()
+                async def tool(name, arguments):
+                    result=await session.call_tool(name,arguments)
+                    assert not result.is_error, "MCP operation failed: "+name
+                    assert result.structured_content is not None
+                    return result.structured_content
+                batch=await tool("begin_knowledge_flush",{
+                    "idempotency_key":str(uuid.uuid4()),"declared_parts":1,"declared_items":1})
+                content=("Disposable dashboard lifecycle synthetic assertion. MCP probe "
+                    +str(uuid.uuid4()))
+                await tool("append_knowledge",{"batch_id":batch["batch_id"],"part_number":1,
+                    "assertions":[{"content":content,"kind":"external_fact",
+                    "origin":"external_source","topics":["pr4-lab"]}]})
+                committed=await tool("commit_knowledge_flush",{"batch_id":batch["batch_id"]})
+                got=await tool("get_knowledge",{"assertion_id":committed["assertion_ids"][0]})
+                assert got["content"] == content
+asyncio.run(check_mcp())
 if p["dashboard"]:
     headers={"Host":"dashboard.example.test", "Origin":"https://dashboard.example.test",
         "X-Dashboard-Request":"1", "X-Requested-With":"XMLHttpRequest"}
@@ -461,7 +495,7 @@ if p["dashboard"]:
     call(bff, "/dashboard/api/v1/assertions/query", 403, {},
         headers={**headers,"Origin":"https://sibling.example.test"})
     call(bff, "/dashboard/api/v1/session/logout", 204, {}, headers=headers)
-print("PASS: actual ClusterIP auth/read/write confinement (not browser/TLS evidence)")
+print("PASS: actual ClusterIP HTTP/MCP reads/writes and confinement (not browser/TLS evidence)")
 """
     run(
         [*k, "exec", "-i", "lab-probe", "--", "python", "-c", code],
@@ -470,6 +504,7 @@ print("PASS: actual ClusterIP auth/read/write confinement (not browser/TLS evide
         ),
         timeout=120,
     )
+    print("PASS: deployed core HTTP/MCP reads and writes; inspection/BFF authority confined")
 
 
 def network_probe(k: list[str]) -> None:

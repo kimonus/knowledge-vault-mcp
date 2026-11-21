@@ -89,6 +89,17 @@ def test_runtime_failures_never_echo_captured_secrets(
     assert "synthetic-sensitive" not in str(exc.value)
 
 
+def test_browser_failure_exposes_only_fixed_stage(monkeypatch: pytest.MonkeyPatch) -> None:
+    def failed(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            ["node"], 1, "sensitive response", "sensitive token\nDASHBOARD_CHECK_FAILED:portal\n"
+        )
+
+    monkeypatch.setattr(lifecycle.subprocess, "run", failed)
+    with pytest.raises(RuntimeError, match=r"^browser verification failed at portal$"):
+        lifecycle.run(["node", "/fixture.js"], "sensitive input")
+
+
 @pytest.mark.parametrize(
     "logged", ["fixture-only-secret", "Disposable dashboard lifecycle synthetic assertion."]
 )

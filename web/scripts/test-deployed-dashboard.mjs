@@ -4,6 +4,8 @@ import https from "node:https";
 import { X509Certificate, createHash } from "node:crypto";
 import { chromium, expect } from "@playwright/test";
 
+let stage = "input";
+
 async function verify() {
   let input = "";
   for await (const chunk of process.stdin) input += chunk;
@@ -45,7 +47,9 @@ async function verify() {
       request.on("error", reject);
     });
   }
+  stage = "tls-home";
   assert.equal(await get("/dashboard/"), 200);
+  stage = "tls-isolation";
   for (const path of [
     "/health/ready",
     "/health/live",
@@ -55,7 +59,9 @@ async function verify() {
     assert.equal(await get(path), 404);
   assert.equal(await get("/dashboard/", "unconfigured.example.test"), 404);
 
+  stage = "browser-launch";
   const browser = await chromium.launch({
+    channel: "chromium",
     args: [
       `--host-resolver-rules=MAP ${config.host} ${config.ingress_address}`,
       `--ignore-certificate-errors-spki-list=${spki}`,
@@ -68,6 +74,7 @@ async function verify() {
     const page = await context.newPage();
     const traffic = [];
     page.on("request", (request) => traffic.push(new URL(request.url())));
+    stage = "browser-login";
     await page.goto(config.url);
     await page
       .getByLabel("Dashboard read-only credential")
@@ -77,6 +84,7 @@ async function verify() {
     await expect(page.locator(".record-card").first()).toContainText(
       "Disposable dashboard lifecycle synthetic assertion.",
     );
+    stage = "cookie";
     const cookies = await context.cookies();
     const session = cookies.find(
       (cookie) => cookie.name === "__Host-kv_dashboard",
@@ -85,14 +93,17 @@ async function verify() {
       session?.secure && session.httpOnly && session.sameSite === "Strict",
     );
     assert.equal(session.path, "/");
+    stage = "detail";
     await page.locator(".record-card h3 a").first().click();
     await expect(
       page.getByRole("heading", { name: "Knowledge & evidence" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Sources", exact: true }).click();
+    stage = "portal";
     await page.getByRole("link", { name: "Portal", exact: true }).click();
     await page.getByRole("link", { name: "pr4-lab", exact: true }).click();
     await expect(page.locator(".record-card").first()).toBeVisible();
+    stage = "requests";
     assert.ok(
       traffic.every((url) => url.origin === "https://dashboard.example.test"),
     );
@@ -102,6 +113,7 @@ async function verify() {
         (url) => url.pathname === "/dashboard/api/v1/assertions/query",
       ),
     );
+    stage = "logout";
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(
       page.getByLabel("Dashboard read-only credential"),
@@ -119,6 +131,6 @@ try {
   await verify();
 } catch {
   // Browser diagnostics can contain credentials or response bodies. Never print them.
-  console.error("FAIL: isolated Dashboard ingress/browser verification");
+  console.error(`DASHBOARD_CHECK_FAILED:${stage}`);
   process.exitCode = 1;
 }
