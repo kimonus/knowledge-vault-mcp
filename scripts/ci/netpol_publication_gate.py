@@ -12,7 +12,11 @@ def validate(environment: dict[str, str]) -> None:
     if any(environment.get(key) != value for key, value in required.items()):
         raise ValueError("Publication requires the dedicated manual operational workflow")
     owner = environment.get("GITHUB_REPOSITORY_OWNER")
-    if not owner or environment.get("GITHUB_ACTOR") != owner:
+    if (
+        not owner
+        or environment.get("GITHUB_ACTOR") != owner
+        or environment.get("GITHUB_TRIGGERING_ACTOR") != owner
+    ):
         raise ValueError("Only the repository owner may publish the operational artifact")
     expected = environment.get("EXPECTED_POLICY_SHA", "")
     if not re.fullmatch("[a-f0-9]{40}", expected) or environment.get("GITHUB_SHA") != expected:

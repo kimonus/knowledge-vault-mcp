@@ -16,6 +16,7 @@ def valid_environment() -> dict[str, str]:
         "GITHUB_REF": "refs/heads/ops/dashboard-netpol-rehearsal",
         "GITHUB_REPOSITORY_OWNER": "owner",
         "GITHUB_ACTOR": "owner",
+        "GITHUB_TRIGGERING_ACTOR": "owner",
         "GITHUB_SHA": "a" * 40,
         "EXPECTED_POLICY_SHA": "a" * 40,
     }
@@ -31,6 +32,8 @@ def test_owner_must_name_the_exact_reviewed_source() -> None:
         ("GITHUB_EVENT_NAME", "pull_request"),
         ("GITHUB_REF", "refs/heads/main"),
         ("GITHUB_ACTOR", "another-collaborator"),
+        ("GITHUB_TRIGGERING_ACTOR", "rerun-by-another-collaborator"),
+        ("GITHUB_TRIGGERING_ACTOR", ""),
         ("GITHUB_REPOSITORY_OWNER", ""),
         ("GITHUB_SHA", "b" * 40),
         ("EXPECTED_POLICY_SHA", ""),

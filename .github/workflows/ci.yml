@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   publish-policy-only-image:
-    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'ops/dashboard-netpol-rehearsal' && inputs.publish_policy_image && github.actor == github.repository_owner
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'ops/dashboard-netpol-rehearsal' && inputs.publish_policy_image && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     needs: [policy-only-compatibility, quality, dashboard, dashboard-web, supply-chain, kubernetes, inspector]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
