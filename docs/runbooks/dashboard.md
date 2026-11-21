@@ -409,7 +409,7 @@ browser version, target context and whether TLS trust was private-lab or real de
 
 ## Real Cloudflare Access provider verification
 
-This is an operator-approved manual acceptance procedure. It deliberately does not run against
+Obtain operator approval before executing this manual acceptance procedure. It does not run against
 the live provider in CI. Locally signed JWTs and simulated edge tests remain valuable regressions,
 but cannot establish provider session expiry, redirect or reauthentication behavior.
 
@@ -438,6 +438,10 @@ MCP application's session or revoke a shared identity to accelerate this test.
    editing a cookie. A dedicated short-lived lab policy can be used only after explicit approval
    and with its original settings recorded for restoration. Account for IdP/global/application
    session interaction; establish that Access, rather than just the BFF, rejected the session.
+   Record whether Cloudflare One Client authentication is enabled: its session duration takes
+   precedence over the other durations. Application expiry can cause a policy recheck while a
+   valid global session still permits SSO; verify application renewal and an actual IdP prompt
+   separately. See Cloudflare's [session management documentation](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/).
 4. While the expired page stays open, trigger an actual browser AJAX read with same-origin
    credentials, `X-Requested-With: XMLHttpRequest`, BFF custom header and CSRF. Record only the
    HTTP status, content type, redirect/no-redirect, safe destination origin and which layer
@@ -445,6 +449,9 @@ MCP application's session or revoke a shared identity to accelerate this test.
    observed non-JSON 401/403 and redirect/network-denial behavior; the client must clear private
    DOM/state and never render returned login HTML. If a behavior cannot be made to occur safely
    on the approved provider configuration, record it as unverified instead of simulating proof.
+   Cloudflare documents the AJAX header and expired-session 401 behavior in its
+   [401 response guidance](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/4xx-client-error/error-401/);
+   that documented expectation is not evidence that this installation produced it.
 5. Use the UI's top-level reauthentication action. Verify navigation returns only to a named
    dashboard document on the original HTTPS hostname, the provider authenticates the intended
    identity, a fresh read succeeds, stale private state never reappears and another wrong

@@ -21,6 +21,18 @@ from typing import Any
 NAME = "kv-dashboard-pr4"
 
 
+def rendered_core(manifest: str) -> list[str]:
+    # Helm starts its stream with '---'. Adding an earlier-sorted Dashboard resource
+    # moves that separator away from the first core object; it is not a core change.
+    documents = re.split(r"(?:\A|\n)---(?:\n|\Z)", manifest)
+    return sorted(
+        part.strip()
+        for part in documents
+        if "# Source:" in part
+        and not re.search(r"^# Source: [^\n]+/templates/dashboard", part, re.MULTILINE)
+    )
+
+
 def run(args: list[str], data: str | None = None, timeout: int = 360) -> str:
     result = subprocess.run(  # noqa: S603  # explicit operator CLI, argv only; no shell
         args, input=data, text=True, capture_output=True, check=False, timeout=timeout
@@ -219,13 +231,6 @@ def main() -> None:
 
         def write_values() -> None:
             value_file.write_text(json.dumps(values))
-
-        def rendered_core(manifest: str) -> list[str]:
-            return sorted(
-                part.strip()
-                for part in manifest.split("\n---\n")
-                if "# Source:" in part and "/templates/dashboard" not in part
-            )
 
         def render() -> str:
             write_values()

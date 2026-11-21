@@ -17,6 +17,25 @@ spec.loader.exec_module(lifecycle)
 DIGEST = "knowledge-vault-dashboard@sha256:" + "a" * 64
 
 
+def test_dashboard_inserted_before_core_does_not_change_core_comparison() -> None:
+    core = "# Source: knowledge-vault/templates/serviceaccounts.yaml\nkind: ServiceAccount\n"
+    dashboard = "# Source: knowledge-vault/templates/dashboard-service.yaml\nkind: Service\n"
+    assert lifecycle.rendered_core("---\n" + core) == lifecycle.rendered_core(
+        "---\n" + dashboard + "---\n" + core
+    )
+
+
+def test_core_comparison_preserves_changes_and_dashboard_text_in_config() -> None:
+    core = (
+        "# Source: knowledge-vault/templates/configmap.yaml\nkind: ConfigMap\n"
+        "data:\n  example: /templates/dashboard\n  revision: one\n"
+    )
+    assert lifecycle.rendered_core("---\n" + core)
+    assert lifecycle.rendered_core("---\n" + core) != lifecycle.rendered_core(
+        "---\n" + core.replace("revision: one", "revision: two")
+    )
+
+
 @pytest.mark.parametrize("context", ["minikube", "production", "", "kv-dashboard-pr4-other"])
 def test_unapproved_context_never_invokes_kubernetes(
     monkeypatch: pytest.MonkeyPatch, context: str
