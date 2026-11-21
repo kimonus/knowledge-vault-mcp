@@ -11,6 +11,10 @@ def owned_chain(name: str) -> bool:
     } or name.startswith(("KUBE-POD-FW-", "KUBE-NWPLCY-"))
 
 
+def owned_set(name: str) -> bool:
+    return name == "kube-router-local-pods" or name.startswith(("KUBE-SRC-", "KUBE-DST-"))
+
+
 def cleanup_transaction(snapshot: str) -> str | None:
     """Detach only jumps into reserved netpol chains, then delete those chains atomically.
 

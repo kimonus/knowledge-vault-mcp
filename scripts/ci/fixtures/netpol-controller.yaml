@@ -29,7 +29,7 @@ spec:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
           runAsUser: 0
-          capabilities: {drop: [ALL], add: [NET_ADMIN]}
+          capabilities: {drop: [ALL], add: [NET_ADMIN, NET_RAW]}
           seccompProfile: {type: RuntimeDefault}
         imagePullPolicy: IfNotPresent
         env:

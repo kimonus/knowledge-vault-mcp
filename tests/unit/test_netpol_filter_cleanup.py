@@ -12,6 +12,16 @@ spec.loader.exec_module(module)
 cleanup_transaction = module.cleanup_transaction
 
 
+@pytest.mark.parametrize("name", ["CNI-FORWARD", "KUBE-CLUSTER-IP", "KV-POLICY-SENTINEL"])
+def test_unrelated_ipsets_are_never_owned(name: str) -> None:
+    assert not module.owned_set(name)
+
+
+@pytest.mark.parametrize("name", ["KUBE-SRC-ABC", "KUBE-DST-ABC", "kube-router-local-pods"])
+def test_policy_ipsets_are_explicitly_scoped(name: str) -> None:
+    assert module.owned_set(name)
+
+
 def test_rehearsal_refuses_an_unrelated_context_before_mutation(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "netpol_filter_cleanup", module)
     rehearsal_spec = importlib.util.spec_from_file_location(

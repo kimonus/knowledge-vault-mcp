@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 import yaml
-from netpol_filter_cleanup import cleanup_transaction
+from netpol_filter_cleanup import cleanup_transaction, owned_set
 
 PROFILE = "kv-policy-only"
 NS = "kv-policy-synthetic"
@@ -193,6 +193,18 @@ def main() -> None:
         ]
         for namespace, name in [(NS, "api"), (NS, "database"), (PEER, "ingress")]
     }
+    for name, port in (("api", 8000), ("database", 5432)):
+        apply(
+            {
+                "apiVersion": "v1",
+                "kind": "Service",
+                "metadata": {"name": name, "namespace": NS},
+                "spec": {"selector": {"role": name}, "ports": [{"port": port, "targetPort": port}]},
+            }
+        )
+        addresses[name + "_service"] = json.loads(
+            run([*K, "get", "service", name, "-n", NS, "-o", "json"])
+        )["spec"]["clusterIP"]
     wait_assertion(
         lambda: probe(NS, "untrusted", addresses["api"], 8000), "pre-enforcer API positive control"
     )
@@ -274,7 +286,7 @@ def main() -> None:
                         "securityContext": {
                             "allowPrivilegeEscalation": False,
                             "readOnlyRootFilesystem": True,
-                            "capabilities": {"drop": ["ALL"], "add": ["NET_ADMIN"]},
+                            "capabilities": {"drop": ["ALL"], "add": ["NET_ADMIN", "NET_RAW"]},
                         },
                         "resources": {
                             "requests": {"cpu": "10m", "memory": "32Mi"},
@@ -306,8 +318,13 @@ def main() -> None:
     before = inspector("iptables-save", "-t", "filter")
     if cleanup_transaction(before):
         raise RuntimeError("Reserved chains already exist")
+    before_sets = set(inspector("ipset", "list", "-name").splitlines())
+    if any(owned_set(name) for name in before_sets):
+        raise RuntimeError("Reserved policy ipsets already exist")
     inspector("iptables", "-N", "KV-POLICY-SENTINEL")
     inspector("iptables", "-A", "KV-POLICY-SENTINEL", "-j", "RETURN")
+    inspector("ipset", "create", "KV-POLICY-SENTINEL", "hash:ip")
+    inspector("ipset", "add", "KV-POLICY-SENTINEL", "192.0.2.1")
     for doc in docs:
         apply(doc)
     run([*K, "rollout", "status", "daemonset/kube-router", "-n", "kube-system", "--timeout=180s"])
@@ -316,16 +333,54 @@ def main() -> None:
     )
     checks = [
         (NS, "dashboard", "api", 8000, True),
+        (NS, "dashboard", "api_service", 8000, True),
         (PEER, "ingress", "api", 8000, True),
         (NS, "ingress", "api", 8000, False),
         (NS, "api", "database", 5432, True),
+        (NS, "api", "database_service", 5432, True),
         (NS, "dashboard", "database", 5432, False),
+        (NS, "dashboard", "database_service", 5432, False),
         (NS, "dashboard", "ingress", 443, False),
         (NS, "dashboard", "ingress", 8080, False),
     ]
     for namespace, name, target, port, expected in checks:
         if probe(namespace, name, addresses[target], port) != expected:
             raise RuntimeError(f"Policy assertion failed: {name}->{target}:{port}")
+    api_egress = [
+        {
+            "to": [
+                {
+                    "namespaceSelector": {
+                        "matchLabels": {"kubernetes.io/metadata.name": "kube-system"}
+                    },
+                    "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}},
+                }
+            ],
+            "ports": [{"protocol": "UDP", "port": 53}, {"protocol": "TCP", "port": 53}],
+        },
+        {
+            "to": [{"podSelector": {"matchLabels": {"role": "database"}}}],
+            "ports": [{"protocol": "TCP", "port": 5432}],
+        },
+        {
+            "to": [{"ipBlock": {"cidr": nodes[0]["spec"]["podCIDR"]}}],
+            "ports": [{"protocol": "TCP", "port": 443}],
+        },
+    ]
+    policy(NS, "api-egress", {"role": "api"}, policyTypes=["Egress"], egress=api_egress)
+    wait_assertion(
+        lambda: probe(NS, "api", addresses["ingress"], 443), "CIDR egress positive control"
+    )
+    api_egress[2]["to"][0]["ipBlock"]["except"] = [addresses["ingress"] + "/32"]
+    policy(NS, "api-egress", {"role": "api"}, policyTypes=["Egress"], egress=api_egress)
+    wait_assertion(
+        lambda: not probe(NS, "api", addresses["ingress"], 443), "CIDR exception blocks destination"
+    )
+    del api_egress[2]["to"][0]["ipBlock"]["except"]
+    policy(NS, "api-egress", {"role": "api"}, policyTypes=["Egress"], egress=api_egress)
+    wait_assertion(
+        lambda: probe(NS, "api", addresses["ingress"], 443), "CIDR exception removal recovers"
+    )
     run(
         [
             *K,
@@ -388,7 +443,13 @@ def main() -> None:
     remaining = inspector("iptables-save", "-t", "filter")
     if cleanup_transaction(remaining):
         raise RuntimeError("Reserved chains remain after cleanup")
+    for name in sorted(set(inspector("ipset", "list", "-name").splitlines()) - before_sets):
+        if owned_set(name):
+            inspector("ipset", "destroy", name)
+    if any(owned_set(name) for name in inspector("ipset", "list", "-name").splitlines()):
+        raise RuntimeError("Reserved ipsets remain after cleanup")
     inspector("iptables", "-C", "KV-POLICY-SENTINEL", "-j", "RETURN")
+    inspector("ipset", "test", "KV-POLICY-SENTINEL", "192.0.2.1")
     # Never call the broad --cleanup-config / IPVS flush.
     for namespace, name, target, port, _ in checks:
         wait_assertion(
