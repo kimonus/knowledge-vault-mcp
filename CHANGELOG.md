@@ -8,6 +8,24 @@ stable release.
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-21
+
+### Fixed
+
+- Preserve exhaustive Dashboard browsing of compressed Unicode assertions on PostgreSQL 17.8.
+  Materialize retained text inside the database before taking its 400-character excerpt,
+  avoiding upstream TOAST substring regression #19406 without changing stored knowledge,
+  pagination, response bounds or database schema. Upgrade the core image before enabling
+  Dashboard; no database restart, credential change or frontend update is required.
+
+## [0.8.0] - 2026-11-21
+
+Dashboard remains disabled on upgrade. Existing HTTP/MCP clients need no credential changes.
+Dashboard enablement requires a compatible core, separately provisioned exact-read inspection
+identity and browser credentials, a dedicated private TLS hostname, verified signed image digests
+and enforced NetworkPolicies. Upgrade core with Dashboard disabled before a BFF-only rollout;
+see `docs/runbooks/dashboard.md`. Dashboard adds no database migration or persistent storage.
+
 ### Security
 
 - Address independent PR3 review: clear private views immediately when logout begins, abort
@@ -24,8 +42,8 @@ stable release.
 - Add an isolated, disabled-by-default Dashboard BFF with exact-read inspection adapter,
   separate browser HMAC credentials, absolute 30-minute signed sessions, per-request revocation,
   optional origin-validated Access identity, Host/Origin/CSRF/CSP controls and bounded HTTP.
-  No live credentials, cloud changes, UI assets, image or Helm resources. No upgrade action is
-  required for existing core clients. See `docs/runbooks/dashboard.md` before future enablement.
+  No credentials or cloud changes are provisioned by an upgrade. No upgrade action is required
+  for existing core clients. See `docs/runbooks/dashboard.md` before optional enablement.
 - Bound shared Access JWKS downloads to 128 KB and an absolute timeout; disable environment
   proxy inheritance. Core and dashboard use the same pure auth source, bundled independently.
 
@@ -47,8 +65,8 @@ stable release.
   resolution and raw evidence. All stored content renders inertly through the same-origin BFF.
   Add private/Access browser flows, accessible responsive navigation, locked frontend contracts,
   component/browser security coverage and an independent non-root dashboard image. The image is
-  disabled by default; no existing core client upgrade action, deployment, live credential or
-  Helm resource change. PR4 must supply conditional deployment and release integration.
+  disabled by default; no existing core client credential action or automatic enablement.
+  Conditional Helm deployment and signed image/SBOM publication ship with this release.
 
 - Core protocol-1 inspection API at `/api/v1/read`: exhaustive all-status/strict lexical browsing,
   deterministic catalogs, paged provenance/artifact/relationship/temporal inspection and bounded
