@@ -1,0 +1,41 @@
+name: Standalone Docker lifecycle
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  standalone-docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: "0.13.7"
+      - run: uv sync --locked
+      - name: Build local immutable candidates and provision pinned dependencies
+        run: |
+          docker build --pull=false -t knowledge-vault:standalone-test .
+          docker build --pull=false -f Dockerfile.backup -t knowledge-vault-backup:standalone-test .
+          docker pull pgvector/pgvector@sha256:137f044b0efe3d57f39b972b9b53641b1f2045b99d879e298bbf514a25787dcf
+          docker pull ghcr.io/nginxinc/nginx-unprivileged@sha256:8ff43bb0bd15a960d4cce6bcdfabf97c6aeb29067e3ec401f5d0eb77e66d4f8c
+          echo "KV_DOCKER_TEST_APP_IMAGE=$(docker image inspect --format '{{.Id}}' knowledge-vault:standalone-test)" >> "$GITHUB_ENV"
+          echo "KV_DOCKER_TEST_BACKUP_IMAGE=$(docker image inspect --format '{{.Id}}' knowledge-vault-backup:standalone-test)" >> "$GITHUB_ENV"
+      - name: Generate tiny synthetic model without network access
+        run: |
+          mkdir -m 700 "$RUNNER_TEMP/model-fixture"
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --user "$(id -u):$(id -g)" --tmpfs /tmp:mode=1777,size=268435456 \
+            --mount "type=bind,src=$RUNNER_TEMP/model-fixture,dst=/fixture" \
+            --mount "type=bind,src=$PWD/scripts/ci/create_synthetic_embedding_model.py,dst=/run/create-model.py,readonly" \
+            --env HF_HUB_OFFLINE=1 --env TRANSFORMERS_OFFLINE=1 --env HF_HOME=/tmp/huggingface \
+            --entrypoint python "$KV_DOCKER_TEST_APP_IMAGE" /run/create-model.py
+          echo "KV_DOCKER_TEST_MODEL_DIR=$RUNNER_TEMP/model-fixture/model" >> "$GITHUB_ENV"
+          echo "KV_DOCKER_TEST_MODEL_MANIFEST=$RUNNER_TEMP/model-fixture/model.json" >> "$GITHUB_ENV"
+      - name: Verify managed lifecycle, token rotation, offline search and recovery
+        run: uv run pytest tests/integration/test_standalone_docker_lifecycle.py -q

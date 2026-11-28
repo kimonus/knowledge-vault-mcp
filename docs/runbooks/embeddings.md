@@ -1,8 +1,18 @@
 # Embedding model cache, migration, and rebuild
 
+For [standalone Docker](docker-standalone.md#offline-semantic-search), initialize with a verified
+local snapshot via `--model-dir`; use the controller's schema-guarded `reembed` command to enqueue
+existing lexical assertions. Downloads remain disabled. API and worker each use one model copy
+and their own memory limit; the Kubernetes cache/PVC instructions below remain independent.
+
 Inspection ranked search shares the existing API embedding-provider object and its single-load/
 single-encode discipline. Exhaustive browse, lexical enumeration and catalogs never call the
 embedder. Core inspection adds no model process/cache/PVC, and a future BFF must not load one.
+
+When `KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED=false`, the worker still runs scheduled cleanup and
+records its heartbeat, but does not load a model or claim existing embedding jobs. Pending jobs
+remain queued for a worker started with embeddings enabled. Roll out the worker after changing
+the setting. The explicit re-embedding command remains a separate operator action.
 
 Every vector records the model that produced it. The schema uses 384 dimensions. Changing
 dimensions requires a reviewed database migration; changing only the model at the same dimension

@@ -3,13 +3,18 @@ set -eu
 
 image="${1:-knowledge-vault-backup:ci}"
 work_dir="$(mktemp -d)"
-database_container="knowledge-vault-backup-test-$$"
+database_container_name="knowledge-vault-backup-test-$$"
+database_container=""
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
 cleanup() {
   status=$?
   trap - EXIT INT TERM
-  docker rm --force "${database_container}" >/dev/null 2>&1 || true
+  # Only the exact ID returned by our successful creation; a name collision must not
+  # select or stop an unrelated container on a shared development Docker Engine.
+  if [ -n "${database_container}" ]; then
+    docker rm --force "${database_container}" >/dev/null 2>&1 || true
+  fi
   docker run --rm --user 0:0 \
     --volume "${work_dir}:/cleanup" \
     --entrypoint rm "${image}" \
@@ -26,12 +31,12 @@ chmod 0777 "${work_dir}/repository" "${work_dir}/restore"
 printf '%s\n' 'disposable-backup-password' >"${work_dir}/secrets/password"
 chmod 0444 "${work_dir}/secrets/password"
 
-docker run --detach --name "${database_container}" \
+database_container=$(docker run --detach --name "${database_container_name}" \
   --env POSTGRES_USER=knowledge_vault \
   --env POSTGRES_PASSWORD=disposable-database-password \
   --env POSTGRES_DB=knowledge_vault \
   pgvector/pgvector:0.8.1-pg17-trixie@sha256:137f044b0efe3d57f39b972b9b53641b1f2045b99d879e298bbf514a25787dcf \
-  >/dev/null
+  )
 
 sh "${script_dir}/wait_for_postgres_database.sh" \
   "${database_container}" knowledge_vault knowledge_vault

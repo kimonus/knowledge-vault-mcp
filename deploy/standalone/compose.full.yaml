@@ -1,0 +1,34 @@
+# Experimental offline embeddings override. Use with compose.yaml, not by itself.
+services:
+  api:
+    environment:
+      KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED: "true"
+      KNOWLEDGE_VAULT_EMBEDDING_ALLOW_DOWNLOAD: "false"
+      KNOWLEDGE_VAULT_EMBEDDING_MODEL: /models/${KV_MODEL_ID:?Set the verified manifest digest}
+      KNOWLEDGE_VAULT_EMBEDDING_MANIFEST_PATH: /model-manifest.json
+      KNOWLEDGE_VAULT_EMBEDDING_MANIFEST_SHA256: ${KV_MODEL_ID}
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HOME: /tmp/huggingface
+    volumes:
+      - ${KV_MODEL_DIR:?Set KV_MODEL_DIR to the verified snapshot}:/models/${KV_MODEL_ID}:ro
+      - ${KV_MODEL_MANIFEST:?Set KV_MODEL_MANIFEST}:/model-manifest.json:ro
+    tmpfs:
+      - /tmp:mode=1777,size=268435456
+    mem_limit: 3g
+  worker:
+    environment:
+      KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED: "true"
+      KNOWLEDGE_VAULT_EMBEDDING_ALLOW_DOWNLOAD: "false"
+      KNOWLEDGE_VAULT_EMBEDDING_MODEL: /models/${KV_MODEL_ID:?Set the verified manifest digest}
+      KNOWLEDGE_VAULT_EMBEDDING_MANIFEST_PATH: /model-manifest.json
+      KNOWLEDGE_VAULT_EMBEDDING_MANIFEST_SHA256: ${KV_MODEL_ID}
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HOME: /tmp/huggingface
+    volumes:
+      - ${KV_MODEL_DIR:?Set KV_MODEL_DIR to the verified snapshot}:/models/${KV_MODEL_ID}:ro
+      - ${KV_MODEL_MANIFEST:?Set KV_MODEL_MANIFEST}:/model-manifest.json:ro
+    tmpfs:
+      - /tmp:mode=1777,size=268435456
+    mem_limit: 3g

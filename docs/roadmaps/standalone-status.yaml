@@ -1,0 +1,68 @@
+schema_version: 1
+initiative: standalone-container-deployment
+state: task0018_remediation_pending_independent_rereview
+review:
+  task: TASK-0018
+  previous_verdict: CHANGES_REQUESTED
+  reviewed_patch_sha256: 355fd28d5e97229e5c256ff1eeb4a20a042851eaf57f4d929bdf067e84a209de
+  remediation_report: docs/reviews/task-0018-r3-remediation.md
+  r2_verdict: CHANGES_REQUESTED_R019
+  r2_manifest_commit: babf6ddf3870283a91a373bac686708a80088764
+  r2_patch_sha256: 608ee0b3c41897a9f4f509b6319f4b10874ad306983fb10fb99838bfa1776bfd
+  r3_state: verified_pending_independent_rereview
+remediation_verification:
+  findings_R011_through_R017: substantially_accepted_static_review_subject_to_R019
+  finding_R019: fixed_pending_independent_rereview
+  server_gate: passed_preserving_normalization_hash_compatibility
+  normalization_decision: docs/decisions/0011-normalization-hash-compatibility.md
+  server_tests_passed: 856
+  server_tests_failed: 0
+  controller_and_managed_docker_tests_passed: 89
+  server_statement_coverage_percent: 97.96
+  server_branch_coverage_percent: 92.94
+  controller_statement_coverage_percent: 94.05
+  controller_branch_coverage_percent: 86.41
+  production_knowledge_used: false
+  live_cluster_modified: false
+baseline:
+  branch: main
+  commit: 698811896dd294ed321fca78c905b3ad14b7d773
+implementation:
+  branch: feat/standalone-docker-completion
+  precursor_pr: https://github.com/kimonus/knowledge-vault-mcp/pull/120
+  runbook: docs/runbooks/docker-standalone.md
+owner_scope:
+  docker_implementation_and_isolated_tests: true
+  podman_same_initiative_verification_deferred: true
+  publish_release: false
+  merge: false
+  deploy_existing_homelab: false
+capabilities:
+  private_instance_and_uid_scoped_secret_volume: implemented
+  loopback_tls_and_origin_host_scope_guards: implemented
+  explicit_serialized_migration_and_schema_guard: implemented
+  lexical_maintenance_worker: implemented
+  offline_embedding_profile_and_guarded_reembed: implemented
+  persistence_after_force_recreate: implemented
+  encrypted_verified_backup_and_success_heartbeat: implemented
+  restore_only_to_new_engine_allocated_storage: implemented
+  new_credentials_on_recovery: implemented
+  backup_before_upgrade_and_stopped_writers_on_failure: implemented
+  token_rotation_with_overlap_and_retirement: implemented
+evidence:
+  - "Initial managed Docker lifecycle passed in 131.93 seconds. TLS/MCP and recovery of synthetic knowledge, artifacts, sources and history were verified."
+  - "Application regression suite: 757 passed; opt-in lifecycle checked separately. Statement coverage 98.08%, branch coverage 93.03%."
+  - "Final managed lifecycle: 2 passed in 262.72 seconds, including exact correction retry after recovery and the real offline model."
+  - "Helm, strict schema/number gates and 30 Dashboard renders passed. Application and backup fixed HIGH/CRITICAL scans passed."
+verified_platforms:
+  - {os: Linux, architecture: amd64, engine: Docker, engine_version: 29.1.3, compose_version: 5.8.1}
+deferred:
+  - "Podman Linux and Podman Machine/macOS: Compose provider, UID mappings, forwarding, complete E2E and recovery."
+  - "Rootless Docker and Docker Desktop/macOS: independent runtime and forwarding verification."
+  - "Native arm64 complete deployment and multi-platform release publication/trust verification."
+  - "Physical LAN reachability and loss of original storage: operator environment verification."
+  - "Optional Dashboard deployment in standalone: not included in the core MCP package."
+notes:
+  - "Local immutable source-build image IDs are supported; registry publication is not a Docker functionality prerequisite."
+  - "Historical PRs #99-#120 remain separate drafts; this consolidated branch integrates their implementation with current main."
+  - "This file is a handoff pointer. Executed tests and the review evidence record are the proof."

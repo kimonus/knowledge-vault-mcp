@@ -1,5 +1,9 @@
 # MCP client setup
 
+For a local Docker instance, use the [standalone runbook](docker-standalone.md#connect-a-local-mcp-client):
+the TLS loopback MCP endpoint, its private device token and the instance-specific trusted CA.
+The public/LAN instructions below describe the independent Kubernetes reference deployment.
+
 Dedicated [inspection principals](../http-inspection.md) cannot be used by any MCP client or
 ordinary HTTP retrieval: they are confined to `/api/v1/read`, including refusal of ordinary
 usage-recording reads. Keep existing MCP device records separate. No browser UI/login is provided

@@ -1,5 +1,9 @@
 # Backup, restore, and disaster recovery
 
+For standalone Docker, use [encrypted backup and fresh-instance recovery](docker-standalone.md#encrypted-backup-and-fresh-instance-recovery).
+It creates a separate target and new credentials, verifies the full repository and does not prune.
+The Kubernetes/reference-deployment procedure below keeps its existing retention behavior.
+
 The backup image runs `pg_dump --format=custom` into a temporary filesystem, sends it to an
 encrypted restic repository, applies retention, and executes `restic check --read-data-subset`.
 The Job runs with a read-only root filesystem; the dump and the restic cache live on its `/tmp`

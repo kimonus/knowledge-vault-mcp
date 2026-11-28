@@ -33,6 +33,24 @@ def test_normalize_content_multilingual(raw: str, expected: str) -> None:
     assert len(content_hash(expected)) == 64
 
 
+@pytest.mark.parametrize(
+    ("raw", "normalized", "digest"),
+    [
+        ("\u1e96", "h\u0331", "dfb14f4b37f4b5b677523ff90f819c14ccbe8bffd7744781d5175af3b70d152f"),
+        ("\u01f0", "j\u030c", "3651063ff416cf3bab997a840eabbb626ca7ed54de39dd3f7cd5bacdf74ad52c"),
+        (
+            "\u0390",
+            "\u03b9\u0308\u0301",
+            "0c31b0883f24b968306078773f91961415bb7636a9e7f8c14e186397449c523c",
+        ),
+    ],
+)
+def test_casefold_decomposition_preserves_persisted_hash(raw, normalized, digest):
+    assert normalize_content(raw) == normalized
+    assert normalize_content(normalized) == normalized
+    assert content_hash(normalize_content(raw)) == digest
+
+
 def test_topics_are_normalized_and_deduplicated() -> None:
     item = assertion()
     assert item.topics == ["ui", "personalization"]

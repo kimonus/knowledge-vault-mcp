@@ -57,6 +57,8 @@ def build_container(
             settings.embedding_model,
             settings.embedding_dimensions,
             allow_download=settings.embedding_allow_download,
+            manifest_path=settings.embedding_manifest_path,
+            manifest_sha256=settings.embedding_manifest_sha256,
         )
     ingestion = IngestionService(database.sessions, settings)
     search = SearchService(database.sessions, settings, effective_embedder)

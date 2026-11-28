@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from knowledge_vault.embeddings.base import EmbeddingsUnavailableError
+from knowledge_vault.embeddings.manifest import ModelManifestError, verify_model_manifest
 
 
 class SentenceTransformerProvider:
@@ -25,11 +26,15 @@ class SentenceTransformerProvider:
         *,
         allow_download: bool = False,
         retry_after_seconds: float = 60.0,
+        manifest_path: str = "",
+        manifest_sha256: str = "",
     ) -> None:
         self._model_id = model
         self._dimensions = dimensions
         self._allow_download = allow_download
         self._retry_after_seconds = retry_after_seconds
+        self._manifest_path = manifest_path
+        self._manifest_sha256 = manifest_sha256
         self._instance: Any | None = None
         self._unavailable_until = 0.0
         self._last_embed_failed = False
@@ -51,7 +56,26 @@ class SentenceTransformerProvider:
             return time.monotonic() < self._unavailable_until
         return self._last_embed_failed
 
+    def _verify_integrity(self) -> None:
+        if self._manifest_path or self._manifest_sha256:
+            try:
+                if not self._manifest_path or not self._manifest_sha256:
+                    raise ModelManifestError("Manifest configuration is incomplete")
+                if Path(self._model_id).name != self._manifest_sha256:
+                    raise ModelManifestError("Embedding identity differs from manifest")
+                verify_model_manifest(
+                    Path(self._model_id),
+                    Path(self._manifest_path),
+                    expected_digest=self._manifest_sha256,
+                    dimensions=self._dimensions,
+                )
+            except ModelManifestError:
+                raise EmbeddingsUnavailableError(
+                    "local model integrity verification failed"
+                ) from None
+
     def _load(self) -> Any:
+        self._verify_integrity()
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError as exc:
@@ -60,13 +84,15 @@ class SentenceTransformerProvider:
             ) from exc
         local_only = not self._allow_download or Path(self._model_id).exists()
         try:
-            self._instance = SentenceTransformer(
+            instance = SentenceTransformer(
                 self._model_id,
                 local_files_only=local_only,
             )
+            self._verify_integrity()
         except Exception as exc:
             raise EmbeddingsUnavailableError("local embedding model could not be loaded") from exc
-        return self._instance
+        self._instance = instance
+        return instance
 
     async def _model(self) -> Any:
         if self._instance is not None:

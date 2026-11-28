@@ -1,5 +1,9 @@
 # Cloudflare Tunnel and Managed OAuth
 
+The [standalone Docker profile](docker-standalone.md) uses loopback TLS and scoped device tokens;
+it does not enable this tunnel or publish a bearer endpoint. The profile below remains the
+independent Kubernetes/homelab path for hosted clients.
+
 This is the maintained **reference connectivity profile**, chosen for a homelab behind NAT and
 hosted clients that cannot enter a device-level private network. Cloudflare is not required by MCP
 or Knowledge Vault. Another deployment may use a different authenticated HTTPS gateway, overlay,
