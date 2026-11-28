@@ -66,3 +66,19 @@ Client ingestion guidance is trusted operator configuration delivered in MCP ini
 an authorization boundary. Keep it free of secrets and restrict ConfigMap/Helm edits. Fixed rules
 remain in code; server-side scopes, input validation and secret detection apply independently.
 Neither instructions nor readback can guarantee that a client has seen or extracted an entire chat.
+
+Standalone mode requires a nonempty exact Host allowlist; wildcards and malformed
+authorities fail configuration validation. Host checks are an additional boundary, not a
+substitute for authenticated TLS, server-side scopes, origin checks, or restricting origin access.
+
+Secret-file settings are an alternative to direct configuration for the database URL, token
+pepper and bootstrap records. They do not protect files from the host operator or other processes
+with access. Follow the [secret-file guidance](docs/runbooks/standalone-secret-files.md) for access,
+rotation and engine-specific permission checks. Never log settings dumps: they contain secret values.
+
+The [local Docker controller](docs/runbooks/docker-standalone.md) binds TLS only to loopback,
+keeps origin/database/metrics unpublished and assigns owner-only credential-volume files to service
+UIDs without re-owning host files. Its fresh-target restore allocates new storage and credentials;
+it cannot restore over an existing instance. Docker administrators, operator directories, reviewed
+images and backup SQL are trusted. Local image IDs are source-build inputs, not verified published
+releases. Podman, rootless Docker and VM port-forwarding boundaries require separate verification.

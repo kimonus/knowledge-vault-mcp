@@ -8,6 +8,61 @@ stable release.
 
 ## [Unreleased]
 
+### Security
+
+- Pin patched Debian PAM and Zstandard packages in application, backup and Dashboard images for
+  CVE-2025-6020 and CVE-2026-124851. Rebuild the images to pick up the fixes; no live deployment
+  is changed.
+
+### Added
+
+- Local standalone Docker lifecycle with loopback TLS, private per-service credential volumes,
+  scoped MCP/API authentication, durable PostgreSQL/pgvector storage, explicit serialized
+  migration, schema compatibility checks, restart and forced container recreation.
+- Lexical maintenance worker and offline local embedding profile with schema-guarded rebuilds.
+  Downloads stay disabled; models must be provisioned before startup.
+- Encrypted restic backup with full-data verification and a success heartbeat; recovery creates
+  a new isolated instance with new credentials and TLS, without overwriting a database.
+- Backup-before-upgrade workflow, stopped writers on upgrade failure, and token rotation with
+  overlap followed by retirement. See the [Docker runbook](docs/runbooks/docker-standalone.md).
+- Shared bounded secret-file settings for application and Alembic, retaining direct/file conflict
+  rejection and secret-safe diagnostics.
+- Docker lifecycle/recovery/security CI with synthetic offline weights, plus optional runtime
+  testing using an operator-provisioned real model. Existing Kubernetes behavior stays independent.
+- Podman image smoke, macOS preflight and a synthetic UID mapping probe are retained for later
+  verification. Podman/macOS support is not claimed. Multi-platform OCI rehearsal remains
+  nonpublishing and does not establish signature trust or deployment support.
+
+### Fixed
+
+- R-019: persist successful migration before gateway exposure and recover forward on the candidate
+  database after that boundary. Preserve acknowledged writes across interrupted verification;
+  refuse unsafe snapshot-rollback advice for ambiguous legacy interrupted upgrades.
+- Correct the Unicode property test to the persisted NFKC-then-casefold contract. Preserve
+  existing normalization and content hashes; add fixed Unicode vectors and PostgreSQL legacy-row
+  deduplication/replay verification. No data migration is required (ADR 0011).
+- TASK-0018: quiesce writers before the verified upgrade backup; persist crash-safe lifecycle
+  phases and immutable credential generation selection; lock before configuration reads;
+  bind offline embeddings to their verified manifest; coalesce concurrent schema checks;
+  require a fresh successful worker heartbeat for lifecycle acceptance.
+- With embeddings disabled, the worker continues cleanup and its heartbeat without claiming queued
+  embedding jobs. Roll out the worker after changing the setting; pending jobs resume with an
+  embeddings-enabled worker.
+- Backup smoke cleanup selects only the exact container ID returned by successful creation,
+  protecting unrelated containers if a test name collides.
+
+### Upgrade notes
+
+- Standalone clients resolve `credential-path` after rotation; the current token is in the selected
+  immutable generation. Interrupted operations require `recover` or a fresh-target restore as
+  directed by `status`. Older full-profile revision aliases require a manifest-bound fresh restore
+  and reembed; Kubernetes defaults and persistence schema remain compatible.
+- No schema migration or action is required for existing Kubernetes clients. Standalone mode is
+  opt-in and uses images built from this implementation; older released images lack its entrypoints
+  and configuration. Keep instance state and restic recovery credentials private and independently
+  recoverable. Do not adopt an existing database volume. Local source-build image IDs are supported;
+  publishing or installing a signed multi-platform release remains a separate operation.
+
 ## [0.8.1] - 2026-11-21
 
 ### Fixed

@@ -27,8 +27,9 @@ prohibition on publicly exposing the device-bearer endpoint.
   the PostgreSQL-backed worker; never add Redis for this queue.
 - Keep domain and service logic independent of MCP and FastAPI request objects. MCP and HTTP are
   adapters over the same services.
-- Deploy the real application to the existing single-node Minikube cluster. Do not substitute
-  Docker Compose for deployment or database validation.
+- The homelab reference deployment uses the existing single-node Minikube cluster. Standalone
+  Docker/Podman is a separate supported implementation effort; verify each engine independently.
+  Docker validation does not replace Kubernetes regression or homelab deployment validation.
 - Hosted-client endpoint: `https://PUBLIC_MCP_HOST/mcp` through an outbound-only Cloudflare
   Tunnel, protected by Cloudflare Access Managed OAuth and an exact-identity policy. ChatGPT web
   uses this public endpoint because the hosted connector cannot enter a device-level WireGuard
@@ -127,7 +128,9 @@ prohibition on publicly exposing the device-bearer endpoint.
   `git status` for untracked files that the code imports.
 - The MCP and HTTP adapters return the shared models in `domain/responses.py`. Add or change a
   response field there, never in one adapter only.
-- The Helm chart is the single deployment definition. Environment-specific objects (another
+- The Helm chart is the single Kubernetes deployment definition. Standalone services live in
+  `deploy/standalone/` and use the same application contracts and security invariants.
+  Environment-specific Kubernetes objects (another
   ingress controller, static volumes) go into a values file through `extraObjects`, not into
   separate hand-written manifests.
 - Background duties record a heartbeat on success (`services/operations.py`); a new duty that

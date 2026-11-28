@@ -1,5 +1,8 @@
 # Minikube deployment
 
+For a separate local Docker instance, follow the [standalone runbook](docker-standalone.md).
+It does not alter this Minikube deployment, its volumes, public Access endpoint or LAN credentials.
+
 The [core inspection API](../http-inspection.md) adds no dashboard workload or public routing.
 Its optional `KNOWLEDGE_VAULT_INSPECTION_PRINCIPALS` list is empty by default. When deliberately
 provisioning a service later, use the existing Secret token workflow with exact read scope and

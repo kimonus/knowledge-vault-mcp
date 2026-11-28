@@ -11,8 +11,13 @@ from knowledge_vault.services.ranking import reciprocal_rank_fusion
 
 @given(st.text(max_size=500))
 def test_normalization_is_idempotent(value: str) -> None:
-    assert normalize_content(normalize_content(value)) == normalize_content(value)
-    assert unicodedata.normalize("NFKC", normalize_content(value)) == normalize_content(value)
+    normalized = normalize_content(value)
+    assert normalize_content(normalized) == normalized
+    # Persisted normalization applies casefold AFTER compatibility normalization.
+    # Casefold can decompose a character (e.g. U+1E96); final NFKC is not the contract.
+    assert normalize_content(unicodedata.normalize("NFKC", value)) == normalized
+    assert normalized.casefold() == normalized
+    assert " ".join(normalized.split()) == normalized
 
 
 @given(

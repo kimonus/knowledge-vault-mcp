@@ -43,6 +43,11 @@ before operator-approved enablement. No public route is enabled by default.
 
 ## Quick start
 
+For a complete local container instance, use the [standalone Docker runbook](docs/runbooks/docker-standalone.md)
+with TLS, scoped authentication, durable volumes, explicit migrations and fresh-instance recovery.
+Docker and Podman are one initiative; Podman verification is deferred until hardware/engine access
+is available. The commands below are the separate development setup.
+
 Prerequisites: Python 3.12+, [uv](https://docs.astral.sh/uv/), Docker, and a Docker daemon.
 
 ```bash
@@ -161,6 +166,7 @@ Set `KNOWLEDGE_VAULT_EMBEDDINGS_ENABLED=false` for deterministic full-text-only 
 - [Threat model](docs/threat-model.md)
 - [MCP tool reference](docs/mcp-tools.md)
 - [Minikube deployment](docs/runbooks/minikube.md)
+- [Local standalone Docker deployment](docs/runbooks/docker-standalone.md)
 - [MCP client setup](docs/runbooks/client-setup.md)
 - [Cloudflare Tunnel and Managed OAuth](docs/runbooks/cloudflare-access.md)
 - [Token rotation](docs/runbooks/tokens.md)

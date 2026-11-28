@@ -5,6 +5,15 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      native_images:
+        description: Run native standalone image evidence jobs (public repositories only)
+        type: boolean
+        default: false
+      multiarch_archives:
+        description: Rehearse local multi-platform OCI archives (public repositories only)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -14,7 +23,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  dispatch-selection:
+    if: github.event_name == 'workflow_dispatch' && inputs.native_images && inputs.multiarch_archives && github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - run: |
+          echo 'Select only one optional image rehearsal.' >&2
+          exit 1
+
   quality:
+    if: github.event_name != 'workflow_dispatch' || (!inputs.native_images && !inputs.multiarch_archives)
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -156,6 +177,7 @@ jobs:
             web/test-results
 
   supply-chain:
+    if: github.event_name != 'workflow_dispatch' || (!inputs.native_images && !inputs.multiarch_archives)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -245,6 +267,7 @@ jobs:
         run: minikube delete -p kv-dashboard-pr4
 
   kubernetes:
+    if: github.event_name != 'workflow_dispatch' || (!inputs.native_images && !inputs.multiarch_archives)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -349,6 +372,7 @@ jobs:
           sh scripts/ci/check_rendered_numbers.sh "$RUNNER_TEMP"/rendered*.yaml
 
   inspector:
+    if: github.event_name != 'workflow_dispatch' || (!inputs.native_images && !inputs.multiarch_archives)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -401,3 +425,139 @@ jobs:
           test ! -f "$RUNNER_TEMP/server.pid" || kill "$(cat "$RUNNER_TEMP/server.pid")" || true
           docker stop inspector-postgres || true
           test ! -f "$RUNNER_TEMP/server.log" || tail -n 100 "$RUNNER_TEMP/server.log"
+  native-image:
+    # Standard hosted runners are free for public repositories; never schedule on a private one.
+    if: github.event_name == 'workflow_dispatch' && inputs.native_images && !inputs.multiarch_archives && github.event.repository.private == false
+    # Separate VMs for each image bound disk usage; no artifacts or images are published.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+            machine: x86_64
+            image: app
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            machine: aarch64
+            image: app
+          - runner: ubuntu-24.04
+            arch: amd64
+            machine: x86_64
+            image: backup
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            machine: aarch64
+            image: backup
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      TARGET_ARCH: ${{ matrix.arch }}
+      TARGET_MACHINE: ${{ matrix.machine }}
+      IMAGE_KIND: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Verify runner and daemon architecture
+        run: |
+          set -eu
+          echo "Runner $RUNNER_OS/$RUNNER_ARCH; kernel $(uname -sm)"
+          test "$(uname -m)" = "$TARGET_MACHINE"
+          case "$TARGET_ARCH:$RUNNER_ARCH" in amd64:X64|arm64:ARM64) ;; *) exit 1 ;; esac
+          daemon_arch=$(docker info --format '{{.Architecture}}')
+          case "$TARGET_ARCH:$daemon_arch" in amd64:x86_64|amd64:amd64|arm64:aarch64|arm64:arm64) ;; *) exit 1 ;; esac
+          docker version
+          df -h "$(docker info --format '{{.DockerRootDir}}')"
+      - name: Build and inspect native image
+        run: |
+          set -eu
+          dockerfile=Dockerfile
+          if [ "$IMAGE_KIND" = backup ]; then dockerfile=Dockerfile.backup; fi
+          docker build --platform "linux/$TARGET_ARCH" -f "$dockerfile" -t standalone-native:ci .
+          image_arch=$(docker image inspect --format '{{.Os}}/{{.Architecture}}' standalone-native:ci)
+          test "$image_arch" = "linux/$TARGET_ARCH"
+          docker image inspect --format 'Image ID {{.Id}} architecture {{.Os}}/{{.Architecture}} user {{.Config.User}}' standalone-native:ci
+      - name: Exercise dependencies without network or model downloads
+        run: |
+          set -eu
+          if [ "$IMAGE_KIND" = app ]; then
+            test "$(docker image inspect --format '{{.Config.User}}' standalone-native:ci)" = '10001:10001'
+            docker run --rm --pull=never --network=none --read-only --cap-drop=ALL \
+              --security-opt=no-new-privileges --pids-limit=256 --memory=4g \
+              --tmpfs /tmp:rw,nosuid,nodev,size=128m,mode=1777 \
+              --env HF_HUB_OFFLINE=1 --env TRANSFORMERS_OFFLINE=1 --env EXPECTED_MACHINE="$TARGET_MACHINE" \
+              --entrypoint /app/.venv/bin/python standalone-native:ci -c '
+          import importlib.metadata as metadata
+          import os, platform, tempfile, torch, sentence_transformers
+          assert os.geteuid() == 10001 and os.getegid() == 10001
+          assert platform.machine() == os.environ["EXPECTED_MACHINE"]
+          assert tempfile.gettempdir() == "/tmp"
+          with tempfile.TemporaryFile() as scratch:
+              scratch.write(b"scratch")
+          print("Runtime architecture:", platform.machine())
+          for name in ("torch", "sentence-transformers"):
+              dist = metadata.distribution(name)
+              print(name, dist.version, dist.read_text("WHEEL"))
+          value = torch.tensor([1.0, 2.0]).sum().item()
+          assert value == 3.0
+          print("Offline CPU tensor operation passed; no model inference performed")'
+          else
+            test "$(docker image inspect --format '{{.Config.User}}' standalone-native:ci)" = '999:999'
+            docker run --rm --pull=never --network=none --read-only --cap-drop=ALL \
+              --security-opt=no-new-privileges --pids-limit=64 --memory=512m --env EXPECTED_MACHINE="$TARGET_MACHINE" \
+              --entrypoint /bin/sh standalone-native:ci -c \
+              'set -e; test "$(id -u)" = 999; test "$(id -g)" = 999; test "$(uname -m)" = "$EXPECTED_MACHINE"; uname -m; pg_dump --version; restic version'
+          fi
+
+  multiarch-archive:
+    if: github.event_name == 'workflow_dispatch' && inputs.multiarch_archives && !inputs.native_images && github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [app, backup]
+    env:
+      IMAGE_KIND: ${{ matrix.image }}
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
+      DOCKER_BUILD_SUMMARY: "false"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        with:
+          version: v0.37.2
+          cache-binary: false
+          driver-opts: image=moby/buildkit@sha256:6eceb8971ce4fceb3daca562832642706238b7eea72941fcf9896c93c3c4a53e
+      - name: Build named OCI archive without publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          dockerfile=Dockerfile
+          if [[ "$IMAGE_KIND" == backup ]]; then dockerfile=Dockerfile.backup; fi
+          docker buildx version
+          docker buildx inspect --bootstrap
+          df -h "$(docker info --format '{{.DockerRootDir}}')"
+          docker buildx build --platform linux/amd64,linux/arm64 \
+            --file "$dockerfile" --tag "kv-standalone-${IMAGE_KIND}:probe" \
+            --provenance=mode=max \
+            --attest type=sbom,generator=docker.io/docker/buildkit-syft-scanner@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9 \
+            --output "type=oci,dest=$RUNNER_TEMP/${IMAGE_KIND}.oci.tar" .
+      - name: Check local archive with networking disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo unshare --net -- setpriv --reuid "$(id -u)" --regid "$(id -g)" \
+            --clear-groups --no-new-privs -- sh -eu -c '
+              test "$(id -u)" = "$1" && test "$(id -u)" != 0
+              test "$(id -g)" = "$2"
+              test "$(ip -o link show | wc -l)" -eq 1
+              ip -o link show lo | grep -q "state DOWN"
+              test -z "$(ip -4 route show)" && test -z "$(ip -6 route show)"
+              exec python3 -m scripts.ci.oci_archive "$3" "$4"
+            ' _ "$(id -u)" "$(id -g)" \
+            "$RUNNER_TEMP/${IMAGE_KIND}.oci.tar" "$RUNNER_TEMP/${IMAGE_KIND}-metadata"

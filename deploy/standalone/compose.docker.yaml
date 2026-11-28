@@ -1,0 +1,33 @@
+# Controller-managed Docker volumes. Keep the portable Compose base separate.
+services:
+  api:
+    environment:
+      KNOWLEDGE_VAULT_PUBLIC_BASE_URL: https://localhost:${KV_PORT:-8443}
+    volumes: !override
+      - credentials:/run/kv-secrets:ro
+  worker:
+    environment:
+      KNOWLEDGE_VAULT_PUBLIC_BASE_URL: https://localhost:${KV_PORT:-8443}
+      KNOWLEDGE_VAULT_MAINTENANCE_INTERVAL_SECONDS: "10"
+    volumes: !override
+      - credentials:/run/kv-secrets:ro
+  migrate:
+    volumes: !override
+      - credentials:/run/kv-secrets:ro
+  db:
+    volumes: !override
+      - database:/var/lib/postgresql/data
+      - credentials:/run/kv-secrets:ro
+  gateway:
+    ports: !override
+      - "127.0.0.1:${KV_PORT:-8443}:8443"
+    volumes: !override
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - credentials:/run/kv-secrets:ro
+volumes:
+  database:
+    external: true
+    name: ${KV_DATABASE_VOLUME:?Use the standalone controller}
+  credentials:
+    external: true
+    name: ${KV_CREDENTIAL_VOLUME:?Use the standalone controller}

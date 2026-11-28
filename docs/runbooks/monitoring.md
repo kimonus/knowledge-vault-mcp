@@ -1,5 +1,12 @@
 # Monitoring without a monitoring stack
 
+For [standalone Docker](docker-standalone.md), authenticated MCP/HTTP statistics expose the same
+worker and backup heartbeats. The maintenance worker runs in lexical and full profiles; the
+managed backup records success only after repository verification. Run backups from an operator
+timer and alert on a nonzero exit or stale heartbeat. Metrics stay unpublished. `docker.py verify`
+checks authenticated TLS and automatic restart counts, but does not establish backup freshness
+or recovery by itself. The Kubernetes watchdog deployment remains independent.
+
 Core inspection uses existing HTTP/read-rate/search/temporal metrics with fixed route labels
 under `/api/v1/read`; identifiers, source URLs, query text and cursor values are not metric labels.
 Inspection does not write usage counters or introduce a background duty/heartbeat. A future BFF

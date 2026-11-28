@@ -1,0 +1,30 @@
+name: Standalone Compose E2E
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  standalone-compose-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: "0.13.6"
+      - run: uv sync --locked
+      - name: Validate offline override merge
+        env:
+          KV_APP_IMAGE: registry.example/app@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          KV_GATEWAY_IMAGE: registry.example/gateway@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+          KV_SECRETS_DIR: /tmp/standalone-ci-secrets
+          KV_MODEL_DIR: /tmp/standalone-ci-model
+          KV_MODEL_MANIFEST: /tmp/standalone-ci-model.json
+          KV_MODEL_ID: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        run: docker compose -f deploy/standalone/compose.yaml -f deploy/standalone/compose.full.yaml config --quiet
+      - run: KV_TEST_REPLACEMENT=1 sh scripts/ci/standalone_compose_e2e.sh

@@ -1,5 +1,11 @@
 # Releasing
 
+The [local standalone Docker workflow](docs/runbooks/docker-standalone.md) also accepts complete
+local source-build image IDs. This permits offline functional verification without publishing a
+release or changing registry tags. Such IDs are not signed releases or evidence of multi-platform
+support. Registry-based installation continues to require the signature/digest checks below;
+the historical multi-platform design remains separate until its publication gates are implemented.
+
 Only the maintainer publishes releases. Releases use semantic version tags (`vMAJOR.MINOR.PATCH`)
 and are produced by the tag-driven GitHub Actions workflow.
 

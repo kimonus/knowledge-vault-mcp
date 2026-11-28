@@ -51,6 +51,7 @@ knowledge-vault-api = "knowledge_vault.main:run_api"
 knowledge-vault-worker = "knowledge_vault.worker.main:run_worker"
 knowledge-vault-reembed = "knowledge_vault.worker.main:run_reembed"
 knowledge-vault-watchdog = "knowledge_vault.watchdog:run_watchdog"
+knowledge-vault-migrate = "knowledge_vault.migration:run_migration"
 
 [build-system]
 requires = ["uv_build>=0.12,<0.14"]
