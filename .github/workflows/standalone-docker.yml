@@ -37,5 +37,7 @@ jobs:
             --entrypoint python "$KV_DOCKER_TEST_APP_IMAGE" /run/create-model.py
           echo "KV_DOCKER_TEST_MODEL_DIR=$RUNNER_TEMP/model-fixture/model" >> "$GITHUB_ENV"
           echo "KV_DOCKER_TEST_MODEL_MANIFEST=$RUNNER_TEMP/model-fixture/model.json" >> "$GITHUB_ENV"
-      - name: Verify managed lifecycle, token rotation, offline search and recovery
-        run: uv run pytest tests/integration/test_standalone_docker_lifecycle.py -q
+      - name: Verify managed lifecycle, token rotation, offline search and upgrade boundaries
+        run: >-
+          uv run pytest tests/integration/test_standalone_docker_lifecycle.py
+          tests/integration/test_standalone_upgrade_boundary.py -q
