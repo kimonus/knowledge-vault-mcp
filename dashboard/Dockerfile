@@ -15,6 +15,9 @@ FROM python:3.12.15-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends --only-upgrade \
       apt=2.6.2 libapt-pkg6.0=2.6.2 \
+      libpam-modules=1.5.2-6+deb12u3 libpam-modules-bin=1.5.2-6+deb12u3 \
+      libpam-runtime=1.5.2-6+deb12u3 libpam0g=1.5.2-6+deb12u3 \
+      libzstd1=1.5.4+dfsg2-5+deb12u1 \
       libssl3=3.0.22-1~deb12u2 openssl=3.0.22-1~deb12u2 \
     && rm -rf /var/lib/apt/lists/*
 

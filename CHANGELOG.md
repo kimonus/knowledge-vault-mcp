@@ -10,8 +10,9 @@ stable release.
 
 ### Security
 
-- Pin patched Debian PAM and Zstandard packages in application/backup images for CVE-2025-6020
-  and CVE-2026-124851. Rebuild both images to pick up the fixes; no live deployment is changed.
+- Pin patched Debian PAM and Zstandard packages in application, backup and Dashboard images for
+  CVE-2025-6020 and CVE-2026-124851. Rebuild the images to pick up the fixes; no live deployment
+  is changed.
 
 ### Added
 
